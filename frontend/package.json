@@ -1,0 +1,42 @@
+{
+  "name": "papermill-cmms-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@mantine/charts": "9.7.1",
+    "@mantine/core": "9.7.1",
+    "@mantine/dates": "9.7.1",
+    "@mantine/hooks": "9.7.1",
+    "@mantine/notifications": "9.7.1",
+    "@tabler/icons-react": "3.49.0",
+    "@tanstack/react-query": "5.104.1",
+    "dayjs": "1.11.23",
+    "i18next": "26.4.2",
+    "jsqr": "1.4.0",
+    "next": "16.4.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-i18next": "17.0.16",
+    "recharts": "3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.4.3",
+    "postcss": "8.5.6",
+    "postcss-preset-mantine": "1.18.0",
+    "postcss-simple-vars": "7.0.1",
+    "typescript": "5.9.3"
+  }
+}

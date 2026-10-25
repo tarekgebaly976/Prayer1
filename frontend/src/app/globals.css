@@ -1,0 +1,7 @@
+html, body { margin: 0; padding: 0; }
+body { background: var(--mantine-color-body); }
+.tap-target { min-height: 44px; }
+.gantt-row { position: relative; height: 26px; border-bottom: 1px solid var(--mantine-color-default-border); }
+.gantt-bar { position: absolute; top: 4px; height: 18px; border-radius: 4px; font-size: 11px; color: #fff; padding: 0 4px; overflow: hidden; white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+@media print { nav, header, .no-print { display: none !important; } }
