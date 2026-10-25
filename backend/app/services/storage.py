@@ -106,10 +106,10 @@ class S3Storage:
         self.client.upload_fileobj(data, self.bucket, key, ExtraArgs={"ContentType": content_type, "ServerSideEncryption": "AES256"})
 
     def open(self, key: str) -> BinaryIO:
-        return self.client.get_object(Bucket=self.bucket, Key=key)["Body"]  # type: ignore[no-any-return]
+        return self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
 
     def signed_url(self, key: str, filename: str) -> str | None:
-        return self.client.generate_presigned_url(  # type: ignore[no-any-return]
+        return self.client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self.bucket, "Key": key, "ResponseContentDisposition": f'attachment; filename="{filename}"'},
             ExpiresIn=self.ttl,

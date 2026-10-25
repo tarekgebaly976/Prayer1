@@ -103,7 +103,7 @@ def _get(db: Session, ctx: Ctx, asset_id: uuid.UUID) -> Asset:
     return a
 
 
-def _dept_filter(ctx: Ctx, q):  # type: ignore[no-untyped-def]
+def _dept_filter(ctx: Ctx, q):
     return q.where(Asset.department_id == ctx.department_id) if ctx.department_id else q
 
 

@@ -218,7 +218,9 @@ def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: 
         if s is None or s.plant_id != ctx.plant_id:
             raise HTTPException(422, "Shift not found")
     existing = db.execute(
-        select(RosterEntry).where(RosterEntry.user_id == body.user_id, RosterEntry.work_date == body.work_date).with_for_update(key_share=True)
+        select(RosterEntry)
+        .where(RosterEntry.user_id == body.user_id, RosterEntry.work_date == body.work_date)
+        .with_for_update(key_share=True)
     ).scalar_one_or_none()
     data = body.model_dump(exclude={"replace"})
     if existing is not None:
@@ -245,8 +247,8 @@ def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: 
         from zoneinfo import ZoneInfo
 
         tz = ZoneInfo(ctx.plant.timezone)
-        s = datetime.combine(body.work_date, time.min, tz)
-        for wo in svc.user_assignments_on(db, body.user_id, s, s + timedelta(days=1)):
+        day_start = datetime.combine(body.work_date, time.min, tz)
+        for wo in svc.user_assignments_on(db, body.user_id, day_start, day_start + timedelta(days=1)):
             warnings.append(f"Assigned to {wo.number} on this day — reassign")
     audit(db, "roster.set", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="roster", entity_id=entry.id, data=data)
     return {"id": entry.id, "warnings": warnings}

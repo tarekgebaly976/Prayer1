@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -59,14 +60,14 @@ class Part(Base, PlantScoped, Timestamped, Attributed):
     uom: Mapped[str] = mapped_column(String(16), default="EA")
     criticality: Mapped[Criticality] = enum_col(Criticality, default=Criticality.C)
     is_critical_spare: Mapped[bool] = mapped_column(Boolean, default=False)
-    min_qty: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    max_qty: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    safety_stock: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    reorder_point: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
+    min_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    max_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    safety_stock: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    reorder_point: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
     lead_time_days: Mapped[int | None] = mapped_column(Integer)
     preferred_supplier_id: Mapped[uuid.UUID | None] = fk("suppliers.id", nullable=True)
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 4), default=0)  # last purchase price
-    average_cost: Mapped[float] = mapped_column(Numeric(14, 4), default=0)  # moving-average valuation
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)  # last purchase price
+    average_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)  # moving-average valuation
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
     is_obsolete: Mapped[bool] = mapped_column(Boolean, default=False)
     last_issue_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -96,8 +97,8 @@ class StockLevel(Base, PlantScoped):
     part_id: Mapped[uuid.UUID] = fk("parts.id")
     warehouse_id: Mapped[uuid.UUID] = fk("warehouses.id")
     bin: Mapped[str | None] = mapped_column(String(40))
-    qty_on_hand: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    qty_reserved: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
+    qty_on_hand: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    qty_reserved: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
 
 
 class InventoryTransaction(Base, PlantScoped):
@@ -112,10 +113,10 @@ class InventoryTransaction(Base, PlantScoped):
     part_id: Mapped[uuid.UUID] = fk("parts.id", index=False)
     warehouse_id: Mapped[uuid.UUID] = fk("warehouses.id")
     type: Mapped[TxnType] = enum_col(TxnType)
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3))  # signed: + into stock, - out of stock
-    unit_cost: Mapped[float] = mapped_column(Numeric(14, 4))
-    total_cost: Mapped[float] = mapped_column(Numeric(16, 2))
-    balance_after: Mapped[float] = mapped_column(Numeric(14, 3))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))  # signed: + into stock, - out of stock
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4))
+    total_cost: Mapped[Decimal] = mapped_column(Numeric(16, 2))
+    balance_after: Mapped[Decimal] = mapped_column(Numeric(14, 3))
     work_order_id: Mapped[uuid.UUID | None] = fk("work_orders.id", nullable=True)
     po_line_id: Mapped[uuid.UUID | None] = fk("purchase_order_lines.id", nullable=True)
     reference: Mapped[str | None] = mapped_column(String(120))
@@ -134,8 +135,8 @@ class Reservation(Base, PlantScoped, Timestamped, Attributed):
     work_order_id: Mapped[uuid.UUID] = fk("work_orders.id", ondelete="CASCADE")
     part_id: Mapped[uuid.UUID] = fk("parts.id")
     warehouse_id: Mapped[uuid.UUID] = fk("warehouses.id")
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3))
-    qty_issued: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    qty_issued: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
     status: Mapped[ReservationStatus] = enum_col(ReservationStatus, default=ReservationStatus.ACTIVE)
     needed_by: Mapped[date | None] = mapped_column(Date)
 
@@ -164,9 +165,9 @@ class PurchaseOrderLine(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     purchase_order_id: Mapped[uuid.UUID] = fk("purchase_orders.id", ondelete="CASCADE")
     part_id: Mapped[uuid.UUID] = fk("parts.id")
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3))
-    qty_received: Mapped[float] = mapped_column(Numeric(14, 3), default=0)
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 4))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    qty_received: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 4))
     work_order_id: Mapped[uuid.UUID | None] = fk("work_orders.id", nullable=True)
 
 
@@ -177,6 +178,6 @@ class StockoutEvent(Base, PlantScoped):
     id: Mapped[uuid.UUID] = uuid_pk()
     part_id: Mapped[uuid.UUID] = fk("parts.id")
     work_order_id: Mapped[uuid.UUID | None] = fk("work_orders.id", nullable=True)
-    requested_qty: Mapped[float] = mapped_column(Numeric(14, 3))
-    available_qty: Mapped[float] = mapped_column(Numeric(14, 3))
+    requested_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    available_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -25,7 +25,7 @@ from app.services.notifications import deliver_outbox
 log = logging.getLogger("cmms.worker")
 
 
-def _record(job: str, status: str, details: dict, error: str | None, started) -> None:  # type: ignore[no-untyped-def]
+def _record(job: str, status: str, details: dict, error: str | None, started) -> None:
     with SessionLocal() as s, s.begin():
         s.add(JobRun(job=job, started_at=started, finished_at=utcnow(), status=status, details=details, error=error))
 

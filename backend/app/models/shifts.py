@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -30,7 +31,7 @@ class ShiftDefinition(Base, PlantScoped):
     kind: Mapped[ShiftKind] = enum_col(ShiftKind)
     start_time: Mapped[time] = mapped_column(Time)
     end_time: Mapped[time] = mapped_column(Time)  # may be < start_time for overnight shifts
-    paid_hours: Mapped[float] = mapped_column(Numeric(4, 2), default=8)
+    paid_hours: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=8)
 
 
 class ShiftPattern(Base, PlantScoped):
@@ -75,9 +76,9 @@ class RosterEntry(Base, PlantScoped, Timestamped):
     work_date: Mapped[date] = mapped_column(Date)
     shift_id: Mapped[uuid.UUID | None] = fk("shift_definitions.id", nullable=True)
     kind: Mapped[RosterKind] = enum_col(RosterKind, default=RosterKind.WORK)
-    hours: Mapped[float] = mapped_column(Numeric(5, 2), default=8)
-    overtime_hours: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
-    callout_hours: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
+    hours: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=8)
+    overtime_hours: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
+    callout_hours: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
     team_id: Mapped[uuid.UUID | None] = fk("teams.id", nullable=True)
     note: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(16), default="manual")  # manual | pattern

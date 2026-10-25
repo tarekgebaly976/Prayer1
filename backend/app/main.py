@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
         )
 
     @app.middleware("http")
-    async def middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def middleware(request: Request, call_next):
         rid = request.headers.get("X-Request-Id") or uuid.uuid4().hex
         ip = request.client.host if request.client else "?"
         path = request.url.path

@@ -302,7 +302,9 @@ def list_tasks(
 
 
 def _task(db: Session, ctx: Ctx, task_id: uuid.UUID) -> LubeTask:
-    t = db.execute(select(LubeTask).where(LubeTask.id == task_id, LubeTask.plant_id == ctx.plant_id).with_for_update(key_share=True)).scalar_one_or_none()
+    t = db.execute(
+        select(LubeTask).where(LubeTask.id == task_id, LubeTask.plant_id == ctx.plant_id).with_for_update(key_share=True)
+    ).scalar_one_or_none()
     if t is None:
         raise HTTPException(404, "Task not found")
     return t

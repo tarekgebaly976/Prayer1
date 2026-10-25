@@ -63,7 +63,7 @@ def test_negative_stock_prevented_and_adjustment_rules(world):
     assert store.post("/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "x"}).status_code == 422
     store.ok("post", "/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "Cycle count 2026-10"}, status=201)
     notes = store.get("/notifications").json()["items"]
-    assert any("Reorder point" in n["title"] or "Out of stock" in n["title"] for n in notes) is False or True
+    assert any("Reorder point reached: BRG-1" == n["title"] for n in notes)  # 1 on hand ≤ reorder point 3
 
 
 def test_concurrent_issues_never_go_negative(world):
@@ -126,3 +126,11 @@ def test_parts_import_duplicate_detection(world):
     csv = "code,description,manufacturer,oem_part_number,min_qty,max_qty\nP1,dup,,,1,2\nP2,new,SKF,6205,1,2\nP3,bad,,,5,2\n"
     p = store.ok("post", "/imports/parts/preview", files={"file": ("p.csv", csv.encode(), "text/csv")})
     assert p["invalid"] == 2 and p["warnings"][0]["code"] == "P2"
+
+
+def test_aging_and_valuation_reports(world):
+    store, wh, part = _stock(world, 6, 25)
+    store.ok("patch", f"/inventory/parts/{part['id']}", {"max_qty": 4})
+    a = store.ok("get", "/inventory/aging")
+    assert a["excess"][0]["excess_qty"] == 2 and a["excess"][0]["value"] == 150.0
+    assert a["no_movement_recorded"] == [] and a["slow_moving"] == []

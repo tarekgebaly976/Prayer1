@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -51,7 +52,7 @@ class Asset(Base, PlantScoped, Timestamped, Attributed):
     location: Mapped[str | None] = mapped_column(String(200))
     specifications: Mapped[dict] = mapped_column(JSONB, default=dict)
     operating_limits: Mapped[dict] = mapped_column(JSONB, default=dict)
-    operating_hours: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    operating_hours: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     qr_token: Mapped[str] = mapped_column(String(32), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -75,7 +76,7 @@ class AssetBOM(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     asset_id: Mapped[uuid.UUID] = fk("assets.id", ondelete="CASCADE")
     part_id: Mapped[uuid.UUID] = fk("parts.id")
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
     position: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
 
@@ -88,7 +89,7 @@ class Meter(Base, PlantScoped, Timestamped):
     name: Mapped[str] = mapped_column(String(80))  # e.g. "Running hours"
     unit: Mapped[str] = mapped_column(String(20), default="h")
     is_operating_hours: Mapped[bool] = mapped_column(Boolean, default=True)
-    current_value: Mapped[float] = mapped_column(Numeric(16, 2), default=0)
+    current_value: Mapped[Decimal] = mapped_column(Numeric(16, 2), default=0)
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -97,7 +98,7 @@ class MeterReading(Base):
     __table_args__ = (Index("ix_meter_readings_meter_time", "meter_id", "read_at"),)
     id: Mapped[uuid.UUID] = uuid_pk()
     meter_id: Mapped[uuid.UUID] = fk("meters.id", ondelete="CASCADE", index=False)
-    value: Mapped[float] = mapped_column(Numeric(16, 2))
+    value: Mapped[Decimal] = mapped_column(Numeric(16, 2))
     read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     source: Mapped[str] = mapped_column(String(20), default="manual")
@@ -129,5 +130,5 @@ class DowntimeEvent(Base, PlantScoped, Timestamped, Attributed):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_failure: Mapped[bool] = mapped_column(Boolean, default=True)
     is_planned: Mapped[bool] = mapped_column(Boolean, default=False)
-    production_loss_tons: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    production_loss_tons: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     reason: Mapped[str | None] = mapped_column(Text)

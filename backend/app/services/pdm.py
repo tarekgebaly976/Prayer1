@@ -172,7 +172,7 @@ def create_wo_from_alert(db: Session, plant: Plant, alert: ConditionAlert, user_
     return wo
 
 
-def plant_priority_warning():  # type: ignore[no-untyped-def]
+def plant_priority_warning():
     from app.models.enums import Priority
 
     return Priority.P3_MEDIUM

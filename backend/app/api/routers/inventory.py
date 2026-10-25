@@ -321,7 +321,9 @@ def receipt(body: ReceiptIn, ctx: Ctx = Depends(require("inventory.transact")), 
     p, w = _part(db, ctx, body.part_id), _wh(db, ctx, body.warehouse_id)
     line = None
     if body.po_line_id:
-        line = db.execute(select(PurchaseOrderLine).where(PurchaseOrderLine.id == body.po_line_id).with_for_update(key_share=True)).scalar_one_or_none()
+        line = db.execute(
+            select(PurchaseOrderLine).where(PurchaseOrderLine.id == body.po_line_id).with_for_update(key_share=True)
+        ).scalar_one_or_none()
         po = db.get(PurchaseOrder, line.purchase_order_id) if line else None
         if line is None or po is None or po.plant_id != ctx.plant_id or line.part_id != p.id:
             raise HTTPException(422, "PO line not found for this part")
@@ -486,7 +488,7 @@ def aging(
             out["slow_moving"].append(rec)
         if float(p.max_qty) > 0 and qty > float(p.max_qty):
             out["excess"].append({**rec, "max_qty": float(p.max_qty), "excess_qty": qty - float(p.max_qty)})
-    out["note"] = ["Critical spares are flagged but should not be disposed of on movement criteria alone."]  # type: ignore[list-item]
+    out["note"] = ["Critical spares are flagged but should not be disposed of on movement criteria alone."]
     return out
 
 

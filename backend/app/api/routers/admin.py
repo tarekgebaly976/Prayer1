@@ -275,7 +275,7 @@ def list_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db
 
 
 @router.post("/failure-codes", response_model=FailureCodeOut, status_code=201)
-def create_failure_code(body: FailureCodeIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)):  # type: ignore[no-untyped-def]
+def create_failure_code(body: FailureCodeIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)):
     from app.models.assets import FailureCode
 
     fc = FailureCode(plant_id=ctx.plant_id, **body.model_dump())
@@ -350,7 +350,9 @@ class SequenceIn(In):
 @router.put("/numbering")
 def set_numbering(body: SequenceIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> dict:
     seq = db.execute(
-        select(NumberSequence).where(NumberSequence.plant_id == ctx.plant_id, NumberSequence.key == body.key).with_for_update(key_share=True)
+        select(NumberSequence)
+        .where(NumberSequence.plant_id == ctx.plant_id, NumberSequence.key == body.key)
+        .with_for_update(key_share=True)
     ).scalar_one_or_none()
     if seq is None:
         seq = NumberSequence(plant_id=ctx.plant_id, key=body.key, prefix=body.prefix, padding=body.padding, next_value=1)

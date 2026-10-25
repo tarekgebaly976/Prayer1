@@ -431,7 +431,7 @@ def mttr(db: Session, s: Scope) -> KPIResult:
     ev = [e for e in _downtime(db, s, failures_only=True, include_planned=False) if e.ended_at is not None and s.t0 <= e.ended_at < s.t1]
     if not ev:
         return unavailable("mttr", "h", "No completed repairs (failure downtime with an end time) in the period")
-    tot = sum((e.ended_at - e.started_at).total_seconds() / 3600 for e in ev if e.ended_at)  # type: ignore[operator]
+    tot = sum((e.ended_at - e.started_at).total_seconds() / 3600 for e in ev if e.ended_at)
     return KPIResult(
         code="mttr", value=tot / len(ev), unit="h", numerator=round(tot, 2), denominator=len(ev), records=[_dt_rec(e) for e in ev]
     )

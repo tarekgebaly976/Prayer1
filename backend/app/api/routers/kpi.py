@@ -206,7 +206,7 @@ def upsert_budget(body: BudgetIn, ctx: Ctx = Depends(require("kpi.manage")), db:
     return {"id": b.id}
 
 
-def snapshot_month(db: Session, plant, year: int, month: int) -> int:  # type: ignore[no-untyped-def]
+def snapshot_month(db: Session, plant, year: int, month: int) -> int:
     """Persist monthly KPI values (used by the scheduler)."""
     from app.services.common import utcnow
 

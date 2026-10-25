@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -39,7 +40,7 @@ class JobPlan(Base, PlantScoped, Timestamped, Attributed):
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     trade: Mapped[str | None] = mapped_column(String(40))
-    estimated_hours: Mapped[float] = mapped_column(Numeric(8, 2), default=1)
+    estimated_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=1)
     crew_size: Mapped[int] = mapped_column(Integer, default=1)
     tools: Mapped[str | None] = mapped_column(Text)
     safety_precautions: Mapped[str | None] = mapped_column(Text)
@@ -58,8 +59,8 @@ class JobPlanTask(Base):
     description: Mapped[str] = mapped_column(String(400))
     kind: Mapped[ChecklistKind] = enum_col(ChecklistKind, default=ChecklistKind.CHECK)
     unit: Mapped[str | None] = mapped_column(String(20))
-    min_value: Mapped[float | None] = mapped_column(Numeric(14, 3))
-    max_value: Mapped[float | None] = mapped_column(Numeric(14, 3))
+    min_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    max_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -69,7 +70,7 @@ class JobPlanMaterial(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     job_plan_id: Mapped[uuid.UUID] = fk("job_plans.id", ondelete="CASCADE")
     part_id: Mapped[uuid.UUID] = fk("parts.id")
-    quantity: Mapped[float] = mapped_column(Numeric(14, 3))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
 
 
 class PMPlan(Base, PlantScoped, Timestamped, Attributed):
@@ -95,8 +96,8 @@ class PMPlan(Base, PlantScoped, Timestamped, Attributed):
     start_date: Mapped[date | None] = mapped_column(Date)
     # Meter trigger
     meter_id: Mapped[uuid.UUID | None] = fk("meters.id", nullable=True)
-    meter_interval: Mapped[float | None] = mapped_column(Numeric(14, 2))
-    last_meter_value: Mapped[float | None] = mapped_column(Numeric(16, 2))
+    meter_interval: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    last_meter_value: Mapped[Decimal | None] = mapped_column(Numeric(16, 2))
     # Generation rules
     horizon_days: Mapped[int] = mapped_column(Integer, default=30)  # how far ahead to create occurrences
     lead_days: Mapped[int] = mapped_column(Integer, default=7)  # create the WO this many days before due
@@ -124,7 +125,7 @@ class PMOccurrence(Base, PlantScoped, Timestamped):
     occurrence_key: Mapped[str] = mapped_column(String(64))  # "D:2026-11-01" or "M:12000"
     due_date: Mapped[date] = mapped_column(Date)
     original_due_date: Mapped[date] = mapped_column(Date)
-    due_meter: Mapped[float | None] = mapped_column(Numeric(16, 2))
+    due_meter: Mapped[Decimal | None] = mapped_column(Numeric(16, 2))
     status: Mapped[OccurrenceStatus] = enum_col(OccurrenceStatus, default=OccurrenceStatus.SCHEDULED)
     work_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

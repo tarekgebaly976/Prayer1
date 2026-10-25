@@ -140,7 +140,7 @@ def validate_assets(db: Session, plant: Plant, rows: list[dict]) -> dict:
             level = AssetLevel((_s(r.get("level")) or "").lower())
         except ValueError:
             errs.append("invalid level")
-            level = None  # type: ignore[assignment]
+            level = None
         try:
             crit = Criticality((_s(r.get("criticality")) or "C").upper())
         except ValueError:

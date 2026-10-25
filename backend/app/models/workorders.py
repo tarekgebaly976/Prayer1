@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -73,17 +74,17 @@ class WorkOrder(Base, PlantScoped, Timestamped, Attributed):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    estimated_hours: Mapped[float | None] = mapped_column(Numeric(10, 2))
-    estimated_cost: Mapped[float | None] = mapped_column(Numeric(14, 2))
-    actual_labor_hours: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
-    actual_labor_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    actual_material_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
-    actual_service_cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    estimated_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    actual_labor_hours: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    actual_labor_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    actual_material_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    actual_service_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
 
-    downtime_hours: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    downtime_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     production_impact: Mapped[str | None] = mapped_column(Text)
-    production_loss_tons: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    production_loss_tons: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
 
     requires_loto: Mapped[bool] = mapped_column(Boolean, default=False)
     requires_permit: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -163,10 +164,10 @@ class WOLabor(Base, Attributed):
     work_order_id: Mapped[uuid.UUID] = fk("work_orders.id", ondelete="CASCADE")
     user_id: Mapped[uuid.UUID] = fk("users.id")
     work_date: Mapped[date] = mapped_column(Date)
-    hours: Mapped[float] = mapped_column(Numeric(6, 2))
+    hours: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     is_overtime: Mapped[bool] = mapped_column(Boolean, default=False)
-    rate: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
-    cost: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    rate: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -180,7 +181,7 @@ class WOService(Base, Attributed):
     supplier_id: Mapped[uuid.UUID | None] = fk("suppliers.id", nullable=True)
     description: Mapped[str] = mapped_column(String(300))
     po_reference: Mapped[str | None] = mapped_column(String(60))
-    cost: Mapped[float] = mapped_column(Numeric(14, 2))
+    cost: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -194,11 +195,11 @@ class WOChecklistItem(Base):
     kind: Mapped[ChecklistKind] = enum_col(ChecklistKind, default=ChecklistKind.CHECK)
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)
     unit: Mapped[str | None] = mapped_column(String(20))
-    min_value: Mapped[float | None] = mapped_column(Numeric(14, 3))
-    max_value: Mapped[float | None] = mapped_column(Numeric(14, 3))
+    min_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
+    max_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     is_done: Mapped[bool] = mapped_column(Boolean, default=False)
     is_ok: Mapped[bool | None] = mapped_column(Boolean)
-    reading_value: Mapped[float | None] = mapped_column(Numeric(14, 3))
+    reading_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 3))
     remark: Mapped[str | None] = mapped_column(Text)
     done_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -89,7 +89,7 @@ def notify(
     return created
 
 
-def notify_permission(db: Session, plant_id: uuid.UUID, permission: str, **kw) -> int:  # type: ignore[no-untyped-def]
+def notify_permission(db: Session, plant_id: uuid.UUID, permission: str, **kw) -> int:
     return notify(db, plant_id, users_with_permission(db, plant_id, permission), **kw)
 
 

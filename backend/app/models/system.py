@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -113,11 +114,11 @@ class ProductionRecord(Base, PlantScoped):
     department_id: Mapped[uuid.UUID] = fk("departments.id")
     asset_id: Mapped[uuid.UUID | None] = fk("assets.id", nullable=True)  # usually the production line
     record_date: Mapped[date] = mapped_column(Date)
-    tons_produced: Mapped[float] = mapped_column(Numeric(12, 3))
-    good_tons: Mapped[float | None] = mapped_column(Numeric(12, 3))
-    planned_production_hours: Mapped[float | None] = mapped_column(Numeric(6, 2))
-    run_hours: Mapped[float | None] = mapped_column(Numeric(6, 2))
-    ideal_rate_tph: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    tons_produced: Mapped[Decimal] = mapped_column(Numeric(12, 3))
+    good_tons: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    planned_production_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    run_hours: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    ideal_rate_tph: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
 
 
@@ -128,7 +129,7 @@ class MaintenanceBudget(Base, PlantScoped):
     department_id: Mapped[uuid.UUID | None] = fk("departments.id", nullable=True)
     year: Mapped[int] = mapped_column(Integer)
     month: Mapped[int] = mapped_column(Integer)
-    amount: Mapped[float] = mapped_column(Numeric(16, 2))
+    amount: Mapped[Decimal] = mapped_column(Numeric(16, 2))
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
 
 
@@ -156,7 +157,7 @@ class KPISnapshot(Base, PlantScoped):
     period_start: Mapped[date] = mapped_column(Date)
     period_end: Mapped[date] = mapped_column(Date)
     scope_key: Mapped[str] = mapped_column(String(80), default="plant")
-    value: Mapped[float | None] = mapped_column(Numeric(18, 4))
+    value: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     available: Mapped[bool] = mapped_column(Boolean, default=True)
     reason: Mapped[str | None] = mapped_column(Text)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

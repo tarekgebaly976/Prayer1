@@ -117,7 +117,7 @@ def get_ctx(
     return Ctx(user=user, plant=plant, membership=membership, permissions=perms, ip=client_ip(request))
 
 
-def require(perm: str):  # type: ignore[no-untyped-def]
+def require(perm: str):
     def dep(ctx: Ctx = Depends(get_ctx)) -> Ctx:
         ctx.require(perm)
         return ctx

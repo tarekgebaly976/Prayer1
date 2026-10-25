@@ -15,11 +15,11 @@ os.environ.setdefault("CMMS_LOGIN_RATE_LIMIT_PER_MINUTE", "100000")
 os.environ.setdefault("CMMS_STORAGE_LOCAL_PATH", "/tmp/claude-0/cmms-test-storage")
 
 import pytest  # noqa: E402
-from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 
+from alembic import command  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.models.base import Base  # noqa: E402
@@ -96,7 +96,7 @@ class Api:
     def put(self, url, json=None, **kw):
         return self.c.put("/api/v1" + url, json=json, headers=self._h(kw.pop("headers", None)), **kw)
 
-    def delete(self, url, **kw):
+    def delete(self, url, json=None, **kw):
         return self.c.delete("/api/v1" + url, headers=self._h(kw.pop("headers", None)), **kw)
 
     def ok(self, method: str, url: str, json=None, status: int | tuple = (200, 201, 204), **kw):

@@ -861,7 +861,9 @@ def issue(wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = None
     if body.reservation_id:
-        r = db.execute(select(Reservation).where(Reservation.id == body.reservation_id).with_for_update(key_share=True)).scalar_one_or_none()
+        r = db.execute(
+            select(Reservation).where(Reservation.id == body.reservation_id).with_for_update(key_share=True)
+        ).scalar_one_or_none()
         if r is None or r.work_order_id != wo.id:
             raise HTTPException(404, "Reservation not found")
     tx = inv.issue(db, ctx.plant, p, w, body.quantity, ctx.user.id, wo=wo, reservation=r, reference=wo.number)

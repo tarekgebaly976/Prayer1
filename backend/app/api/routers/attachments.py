@@ -137,7 +137,7 @@ def _att(db: Session, ctx: Ctx, aid: uuid.UUID) -> Attachment:
 
 
 @router.get("/{aid}/download")
-def download(aid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db), inline: bool = False):  # type: ignore[no-untyped-def]
+def download(aid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db), inline: bool = False):
     a = _att(db, ctx, aid)
     st = get_storage()
     url = st.signed_url(a.storage_key, a.filename)

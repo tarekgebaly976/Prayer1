@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -74,18 +75,18 @@ class LubricationPoint(Base, PlantScoped, Timestamped):
     component: Mapped[str | None] = mapped_column(String(120))  # e.g. "Drive-side bearing"
     location: Mapped[str | None] = mapped_column(String(200))
     lubricant_id: Mapped[uuid.UUID] = fk("lubricants.id")
-    quantity: Mapped[float] = mapped_column(Numeric(10, 3))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 3))
     unit: Mapped[str] = mapped_column(String(10), default="g")
     method: Mapped[str | None] = mapped_column(String(120))  # grease gun / oil can / top-up / change
     tools: Mapped[str | None] = mapped_column(String(200))
     frequency_days: Mapped[int | None] = mapped_column(Integer)
-    hours_interval: Mapped[float | None] = mapped_column(Numeric(10, 1))
+    hours_interval: Mapped[Decimal | None] = mapped_column(Numeric(10, 1))
     oem_recommendation: Mapped[str | None] = mapped_column(Text)
     route_id: Mapped[uuid.UUID | None] = fk("lube_routes.id", nullable=True)
     route_seq: Mapped[int] = mapped_column(Integer, default=0)
     responsible_user_id: Mapped[uuid.UUID | None] = fk("users.id", nullable=True)
     last_done_date: Mapped[date | None] = mapped_column(Date)
-    last_done_hours: Mapped[float | None] = mapped_column(Numeric(14, 2))  # asset operating hours at last service
+    last_done_hours: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))  # asset operating hours at last service
     next_due_date: Mapped[date | None] = mapped_column(Date, index=True)
     qr_token: Mapped[str] = mapped_column(String(32), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -103,7 +104,7 @@ class LubeTask(Base, PlantScoped, Timestamped):
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     done_date: Mapped[date | None] = mapped_column(Date)
     done_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    quantity_actual: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    quantity_actual: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
     lubricant_used_id: Mapped[uuid.UUID | None] = fk("lubricants.id", nullable=True)
     condition_note: Mapped[str | None] = mapped_column(Text)
     missed_notified: Mapped[bool] = mapped_column(Boolean, default=False)

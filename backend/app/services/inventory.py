@@ -58,7 +58,9 @@ def lock_stock(db: Session, plant: Plant, part: Part, wh: Warehouse) -> StockLev
 
 
 def _lock_part(db: Session, part: Part) -> Part:
-    return db.execute(select(Part).where(Part.id == part.id).with_for_update(key_share=True).execution_options(populate_existing=True)).scalar_one()
+    return db.execute(
+        select(Part).where(Part.id == part.id).with_for_update(key_share=True).execution_options(populate_existing=True)
+    ).scalar_one()
 
 
 def _txn(

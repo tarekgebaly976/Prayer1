@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -20,18 +21,18 @@ class MeasurementPoint(Base, PlantScoped, Timestamped):
     asset_id: Mapped[uuid.UUID] = fk("assets.id")
     technique: Mapped[Technique] = enum_col(Technique)
     unit: Mapped[str] = mapped_column(String(20))
-    baseline: Mapped[float | None] = mapped_column(Numeric(14, 4))
-    warning_low: Mapped[float | None] = mapped_column(Numeric(14, 4))
-    warning_high: Mapped[float | None] = mapped_column(Numeric(14, 4))
-    alarm_low: Mapped[float | None] = mapped_column(Numeric(14, 4))
-    alarm_high: Mapped[float | None] = mapped_column(Numeric(14, 4))
+    baseline: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    warning_low: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    warning_high: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    alarm_low: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    alarm_high: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     stale_after_hours: Mapped[int | None] = mapped_column()  # Unknown status if no reading for this long
     auto_create_wo: Mapped[bool] = mapped_column(Boolean, default=False)
     wo_priority_on_critical: Mapped[Priority] = enum_col(Priority, default=Priority.P2_HIGH)
     recommended_action: Mapped[str | None] = mapped_column(Text)
     external_tag: Mapped[str | None] = mapped_column(String(200))  # OPC UA node id / MQTT topic mapping
     last_status: Mapped[ConditionStatus] = enum_col(ConditionStatus, default=ConditionStatus.UNKNOWN)
-    last_value: Mapped[float | None] = mapped_column(Numeric(14, 4))
+    last_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     last_reading_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -44,7 +45,7 @@ class ConditionReading(Base, PlantScoped):
     )
     id: Mapped[uuid.UUID] = uuid_pk()
     point_id: Mapped[uuid.UUID] = fk("measurement_points.id", ondelete="CASCADE", index=False)
-    value: Mapped[float] = mapped_column(Numeric(14, 4))
+    value: Mapped[Decimal] = mapped_column(Numeric(14, 4))
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[ConditionStatus] = enum_col(ConditionStatus)
     source: Mapped[str] = mapped_column(String(20), default="manual")  # manual | import | gateway

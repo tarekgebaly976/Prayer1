@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -33,7 +34,7 @@ class Shutdown(Base, PlantScoped, Timestamped):
     actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[ShutdownStatus] = enum_col(ShutdownStatus, default=ShutdownStatus.PLANNING)
-    budget: Mapped[float | None] = mapped_column(Numeric(16, 2))
+    budget: Mapped[Decimal | None] = mapped_column(Numeric(16, 2))
     completion_report: Mapped[str | None] = mapped_column(Text)
     lessons_learned: Mapped[str | None] = mapped_column(Text)
 
@@ -52,14 +53,14 @@ class ShutdownPackage(Base, PlantScoped, Timestamped):
     asset_id: Mapped[uuid.UUID | None] = fk("assets.id", nullable=True)
     contractor_id: Mapped[uuid.UUID | None] = fk("suppliers.id", nullable=True)
     owner_id: Mapped[uuid.UUID | None] = fk("users.id", nullable=True)
-    duration_hours: Mapped[float] = mapped_column(Numeric(8, 2))
+    duration_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2))
     planned_manpower: Mapped[int] = mapped_column(Integer, default=1)
     contractor_manpower: Mapped[int] = mapped_column(Integer, default=0)
     planned_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # computed by CPM
     planned_finish: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     actual_finish: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    progress_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
+    progress_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0)
     status: Mapped[PackageStatus] = enum_col(PackageStatus, default=PackageStatus.NOT_STARTED)
     material_status: Mapped[ReadinessStatus] = enum_col(ReadinessStatus, ck_name="material_status", default=ReadinessStatus.NOT_READY)
     permit_status: Mapped[ReadinessStatus] = enum_col(ReadinessStatus, ck_name="permit_status", default=ReadinessStatus.NOT_READY)
@@ -67,7 +68,7 @@ class ShutdownPackage(Base, PlantScoped, Timestamped):
     procurement_note: Mapped[str | None] = mapped_column(Text)
     delay_reason: Mapped[str | None] = mapped_column(Text)
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)  # set by CPM
-    total_float_hours: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    total_float_hours: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
 
 class PackageDependency(Base):
@@ -76,7 +77,7 @@ class PackageDependency(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     package_id: Mapped[uuid.UUID] = fk("shutdown_packages.id", ondelete="CASCADE")
     predecessor_id: Mapped[uuid.UUID] = fk("shutdown_packages.id", ondelete="CASCADE")
-    lag_hours: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    lag_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=0)
 
 
 class ShutdownProgressLog(Base):
@@ -84,7 +85,7 @@ class ShutdownProgressLog(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     package_id: Mapped[uuid.UUID] = fk("shutdown_packages.id", ondelete="CASCADE")
     log_date: Mapped[date] = mapped_column(Date)
-    progress_pct: Mapped[float] = mapped_column(Numeric(5, 2))
+    progress_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     note: Mapped[str | None] = mapped_column(Text)
     delay_reason: Mapped[str | None] = mapped_column(Text)
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))

@@ -4,12 +4,12 @@ from datetime import date, timedelta
 from sqlalchemy import func, select
 
 from app.core.db import SessionLocal
+from app.models.enums import FrequencyUnit
 from app.models.pm import PMOccurrence
 from app.models.tenancy import Plant
 from app.models.workorders import WorkOrder
 from app.services.common import plant_today
 from app.services.pm import add_interval, fixed_schedule, run_scheduler
-from app.models.enums import FrequencyUnit
 from tests.conftest import mk_asset
 
 
