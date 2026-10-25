@@ -86,7 +86,7 @@ def _point(db: Session, ctx: Ctx, pid: uuid.UUID) -> MeasurementPoint:
 @router.get("/points", response_model=list[PointOut])
 def list_points(
     ctx: Ctx = Depends(require("pdm.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     asset_id: uuid.UUID | None = None,
     status: ConditionStatus | None = None,
 ) -> list[MeasurementPoint]:
@@ -99,7 +99,7 @@ def list_points(
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
-def create_point(body: PointIn, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db)) -> MeasurementPoint:
+def create_point(body: PointIn, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> MeasurementPoint:
     a = db.get(Asset, body.asset_id)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset not found")
@@ -115,7 +115,7 @@ def create_point(body: PointIn, ctx: Ctx = Depends(require("pdm.manage")), db: S
 
 @router.patch("/points/{pid}", response_model=PointOut)
 def update_point(
-    pid: uuid.UUID, body: PointUpdate, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db)
+    pid: uuid.UUID, body: PointUpdate, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")
 ) -> MeasurementPoint:
     p = _point(db, ctx, pid)
     data = body.model_dump(exclude_unset=True)
@@ -133,7 +133,7 @@ class ReadingIn(In):
 
 
 @router.post("/points/{pid}/readings", status_code=201)
-def add_reading(pid: uuid.UUID, body: ReadingIn, ctx: Ctx = Depends(require("pdm.record")), db: Session = Depends(get_db)) -> dict:
+def add_reading(pid: uuid.UUID, body: ReadingIn, ctx: Ctx = Depends(require("pdm.record")), db: Session = Depends(get_db, scope="function")) -> dict:
     p = _point(db, ctx, pid)
     return svc.record_reading(db, ctx.plant, p, body.value, body.measured_at or utcnow(), ctx.user.id, "manual", body.note)
 
@@ -142,7 +142,7 @@ def add_reading(pid: uuid.UUID, body: ReadingIn, ctx: Ctx = Depends(require("pdm
 def readings(
     pid: uuid.UUID,
     ctx: Ctx = Depends(require("pdm.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     start: datetime | None = None,
     end: datetime | None = None,
     limit: int = 1000,
@@ -181,7 +181,7 @@ class AlertOut(ORM):
 @router.get("/alerts")
 def alerts(
     ctx: Ctx = Depends(require("pdm.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     status: AlertStatus | None = None,
     severity: ConditionStatus | None = None,
@@ -207,7 +207,7 @@ def _alert(db: Session, ctx: Ctx, aid: uuid.UUID) -> ConditionAlert:
 
 
 @router.get("/alerts/{aid}", response_model=AlertOut)
-def get_alert(aid: uuid.UUID, ctx: Ctx = Depends(require("pdm.view")), db: Session = Depends(get_db)) -> ConditionAlert:
+def get_alert(aid: uuid.UUID, ctx: Ctx = Depends(require("pdm.view")), db: Session = Depends(get_db, scope="function")) -> ConditionAlert:
     a = db.get(ConditionAlert, aid)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(404, "Alert not found")
@@ -221,7 +221,7 @@ class AckIn(In):
 
 @router.post("/alerts/{aid}/acknowledge", response_model=AlertOut)
 def acknowledge(
-    aid: uuid.UUID, body: AckIn, ctx: Ctx = Depends(require("pdm.alert_manage")), db: Session = Depends(get_db)
+    aid: uuid.UUID, body: AckIn, ctx: Ctx = Depends(require("pdm.alert_manage")), db: Session = Depends(get_db, scope="function")
 ) -> ConditionAlert:
     a = _alert(db, ctx, aid)
     if a.status == AlertStatus.RESOLVED:
@@ -235,7 +235,7 @@ def acknowledge(
 
 
 @router.post("/alerts/{aid}/work-order")
-def alert_wo(aid: uuid.UUID, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db)) -> dict:
+def alert_wo(aid: uuid.UUID, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db, scope="function")) -> dict:
     a = _alert(db, ctx, aid)
     wo = svc.create_wo_from_alert(db, ctx.plant, a, ctx.user.id)
     return {"work_order_id": wo.id, "number": wo.number}
@@ -247,7 +247,7 @@ class ResolveIn(In):
 
 @router.post("/alerts/{aid}/resolve", response_model=AlertOut)
 def resolve(
-    aid: uuid.UUID, body: ResolveIn, ctx: Ctx = Depends(require("pdm.alert_manage")), db: Session = Depends(get_db)
+    aid: uuid.UUID, body: ResolveIn, ctx: Ctx = Depends(require("pdm.alert_manage")), db: Session = Depends(get_db, scope="function")
 ) -> ConditionAlert:
     a = _alert(db, ctx, aid)
     a.status, a.resolution, a.resolved_by_id, a.resolved_at = AlertStatus.RESOLVED, body.resolution, ctx.user.id, utcnow()
@@ -270,7 +270,7 @@ class GatewayBatch(In):
 
 
 @gateway.post("/readings")
-def ingest(body: GatewayBatch, request: Request, db: Session = Depends(get_db), authorization: str | None = Header(default=None)) -> dict:
+def ingest(body: GatewayBatch, request: Request, db: Session = Depends(get_db, scope="function"), authorization: str | None = Header(default=None)) -> dict:
     """Write-only ingestion for the industrial gateway (separate credential; no user session, no CSRF).
     The gateway pushes data in; the CMMS never sends commands to PLC/SCADA/DCS."""
     if not authorization or not authorization.startswith("Bearer "):

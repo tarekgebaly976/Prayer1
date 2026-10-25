@@ -46,7 +46,7 @@ def upload(
     category: str = Form("document"),
     file: UploadFile = File(...),
     ctx: Ctx = Depends(require("attachment.upload")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ) -> dict:
     if category not in CATEGORIES:
         raise HTTPException(422, "Invalid category")
@@ -103,7 +103,7 @@ def upload(
 
 
 @router.get("")
-def list_attachments(entity_type: str, entity_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> list[dict]:
+def list_attachments(entity_type: str, entity_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     _entity(db, ctx, entity_type, entity_id)
     rows = db.execute(
         select(Attachment)
@@ -137,7 +137,7 @@ def _att(db: Session, ctx: Ctx, aid: uuid.UUID) -> Attachment:
 
 
 @router.get("/{aid}/download")
-def download(aid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db), inline: bool = False):
+def download(aid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function"), inline: bool = False):
     a = _att(db, ctx, aid)
     st = get_storage()
     url = st.signed_url(a.storage_key, a.filename)
@@ -158,7 +158,7 @@ def download(aid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(
 
 
 @router.delete("/{aid}", status_code=204)
-def delete(aid: uuid.UUID, ctx: Ctx = Depends(require("attachment.upload")), db: Session = Depends(get_db)) -> None:
+def delete(aid: uuid.UUID, ctx: Ctx = Depends(require("attachment.upload")), db: Session = Depends(get_db, scope="function")) -> None:
     a = _att(db, ctx, aid)
     if a.uploaded_by_id != ctx.user.id and not ctx.has("plant.admin"):
         raise HTTPException(403, "Only the uploader or an administrator can delete")

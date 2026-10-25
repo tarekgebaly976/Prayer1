@@ -4,6 +4,7 @@ Revision ID: 0002
 Revises: 0001
 """
 
+import os
 from collections.abc import Sequence
 
 from alembic import op
@@ -12,8 +13,6 @@ revision: str = "0002"
 down_revision: str | None = "0001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-import os
 
 APP_ROLE = os.environ.get("CMMS_APP_DB_ROLE", "cmms_app")
 APPEND_ONLY = ["audit_logs", "inventory_transactions", "wo_status_history", "condition_readings"]

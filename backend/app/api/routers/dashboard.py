@@ -24,7 +24,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
-def summary(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> dict:
+def summary(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> dict:
     """Operational counters for the landing page (only what the caller may see)."""
     today = plant_today(ctx.plant)
     out: dict = {"today": today.isoformat(), "timezone": ctx.plant.timezone}

@@ -77,12 +77,12 @@ class JobPlanOut(ORM):
 
 
 @router.get("/job-plans", response_model=list[JobPlanOut])
-def list_job_plans(ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db)) -> list[JobPlan]:
+def list_job_plans(ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")) -> list[JobPlan]:
     return list(db.execute(select(JobPlan).where(JobPlan.plant_id == ctx.plant_id).order_by(JobPlan.code)).scalars())
 
 
 @router.get("/job-plans/{jp_id}")
-def get_job_plan(jp_id: uuid.UUID, ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db)) -> dict:
+def get_job_plan(jp_id: uuid.UUID, ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     jp = db.get(JobPlan, jp_id)
     if jp is None or jp.plant_id != ctx.plant_id:
         raise HTTPException(404, "Job plan not found")
@@ -109,7 +109,7 @@ def get_job_plan(jp_id: uuid.UUID, ctx: Ctx = Depends(require("pm.view")), db: S
 
 
 @router.post("/job-plans", response_model=JobPlanOut, status_code=201)
-def create_job_plan(body: JobPlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db)) -> JobPlan:
+def create_job_plan(body: JobPlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> JobPlan:
     data = body.model_dump(exclude={"tasks", "materials"})
     jp = JobPlan(plant_id=ctx.plant_id, created_by_id=ctx.user.id, **data)
     db.add(jp)
@@ -196,7 +196,7 @@ class PlanOut(ORM):
 @router.get("/plans")
 def list_plans(
     ctx: Ctx = Depends(require("pm.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     asset_id: uuid.UUID | None = None,
     active: bool | None = None,
@@ -210,7 +210,7 @@ def list_plans(
 
 
 @router.post("/plans", response_model=PlanOut, status_code=201)
-def create_plan(body: PlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db)) -> PMPlan:
+def create_plan(body: PlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> PMPlan:
     a, jp = db.get(Asset, body.asset_id), db.get(JobPlan, body.job_plan_id)
     if a is None or a.plant_id != ctx.plant_id or jp is None or jp.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset or job plan not found")
@@ -230,7 +230,7 @@ def create_plan(body: PlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Sess
 
 
 @router.patch("/plans/{plan_id}", response_model=PlanOut)
-def update_plan(plan_id: uuid.UUID, body: PlanUpdate, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db)) -> PMPlan:
+def update_plan(plan_id: uuid.UUID, body: PlanUpdate, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> PMPlan:
     p = db.get(PMPlan, plan_id)
     if p is None or p.plant_id != ctx.plant_id:
         raise HTTPException(404, "PM plan not found")
@@ -266,7 +266,7 @@ class OccOut(ORM):
 @router.get("/occurrences")
 def list_occurrences(
     ctx: Ctx = Depends(require("pm.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     plan_id: uuid.UUID | None = None,
     status: list[OccurrenceStatus] | None = None,
@@ -304,7 +304,7 @@ def _occ(db: Session, ctx: Ctx, occ_id: uuid.UUID) -> PMOccurrence:
 
 @router.post("/occurrences/{occ_id}/request", response_model=OccOut)
 def request_change(
-    occ_id: uuid.UUID, body: ChangeRequestIn, ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db)
+    occ_id: uuid.UUID, body: ChangeRequestIn, ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")
 ) -> PMOccurrence:
     if not (ctx.has("wo.plan") or ctx.has("wo.execute")):
         raise HTTPException(403, "Not permitted")
@@ -317,7 +317,7 @@ class DecisionIn(In):
 
 @router.post("/occurrences/{occ_id}/decide", response_model=OccOut)
 def decide(
-    occ_id: uuid.UUID, body: DecisionIn, ctx: Ctx = Depends(require("pm.approve_deferral")), db: Session = Depends(get_db)
+    occ_id: uuid.UUID, body: DecisionIn, ctx: Ctx = Depends(require("pm.approve_deferral")), db: Session = Depends(get_db, scope="function")
 ) -> PMOccurrence:
     return svc.decide_change(db, ctx.plant, _occ(db, ctx, occ_id), ctx.user.id, body.approve)
 
@@ -327,7 +327,7 @@ class RunIn(In):
 
 
 @router.post("/scheduler/run")
-def run_scheduler(body: RunIn, ctx: Ctx = Depends(require("pm.run_scheduler")), db: Session = Depends(get_db)) -> dict:
+def run_scheduler(body: RunIn, ctx: Ctx = Depends(require("pm.run_scheduler")), db: Session = Depends(get_db, scope="function")) -> dict:
     with record_job(db, "pm_scheduler_manual") as details:
         res = svc.run_scheduler(db, ctx.plant, body.as_of)
         details.update(res)

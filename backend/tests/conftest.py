@@ -2,6 +2,7 @@
 application traffic as the least-privilege app role, HTTPS test client so Secure cookies behave as in production."""
 
 import os
+import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import time
@@ -12,7 +13,7 @@ os.environ.setdefault("CMMS_ENVIRONMENT", "test")
 os.environ.setdefault("CMMS_LOG_LEVEL", "WARNING")
 os.environ.setdefault("CMMS_RATE_LIMIT_PER_MINUTE", "100000")
 os.environ.setdefault("CMMS_LOGIN_RATE_LIMIT_PER_MINUTE", "100000")
-os.environ.setdefault("CMMS_STORAGE_LOCAL_PATH", "/tmp/claude-0/cmms-test-storage")
+os.environ.setdefault("CMMS_STORAGE_LOCAL_PATH", tempfile.mkdtemp(prefix="cmms-test-storage-"))
 
 import pytest  # noqa: E402
 from alembic.config import Config  # noqa: E402

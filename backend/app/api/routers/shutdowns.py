@@ -78,12 +78,12 @@ def _pkg(db: Session, sd: Shutdown, pid: uuid.UUID) -> ShutdownPackage:
 
 
 @router.get("", response_model=list[ShutdownOut])
-def list_sd(ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db)) -> list[Shutdown]:
+def list_sd(ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db, scope="function")) -> list[Shutdown]:
     return list(db.execute(select(Shutdown).where(Shutdown.plant_id == ctx.plant_id).order_by(Shutdown.planned_start.desc())).scalars())
 
 
 @router.post("", response_model=ShutdownOut, status_code=201)
-def create_sd(body: ShutdownIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)) -> Shutdown:
+def create_sd(body: ShutdownIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")) -> Shutdown:
     if body.planned_end <= body.planned_start:
         raise HTTPException(422, "planned_end must be after planned_start")
     s = Shutdown(plant_id=ctx.plant_id, **body.model_dump())
@@ -97,7 +97,7 @@ def create_sd(body: ShutdownIn, ctx: Ctx = Depends(require("shutdown.manage")), 
 
 @router.patch("/{sid}", response_model=ShutdownOut)
 def update_sd(
-    sid: uuid.UUID, body: ShutdownUpdate, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)
+    sid: uuid.UUID, body: ShutdownUpdate, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")
 ) -> Shutdown:
     s = _sd(db, ctx, sid)
     data = body.model_dump(exclude_unset=True)
@@ -166,7 +166,7 @@ class PackageUpdate(In):
 
 
 @router.get("/{sid}")
-def detail(sid: uuid.UUID, ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db)) -> dict:
+def detail(sid: uuid.UUID, ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     s = _sd(db, ctx, sid)
     cpm = svc.compute_cpm(db, s)
     pkgs = (
@@ -226,7 +226,7 @@ def detail(sid: uuid.UUID, ctx: Ctx = Depends(require("shutdown.view")), db: Ses
 
 
 @router.post("/{sid}/packages", status_code=201)
-def add_package(sid: uuid.UUID, body: PackageIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)) -> dict:
+def add_package(sid: uuid.UUID, body: PackageIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     s = _sd(db, ctx, sid)
     p = ShutdownPackage(plant_id=ctx.plant_id, shutdown_id=s.id, **body.model_dump(exclude={"predecessor_ids"}))
     db.add(p)
@@ -247,7 +247,7 @@ class DepIn(In):
 
 @router.post("/{sid}/packages/{pid}/dependencies", status_code=201)
 def add_dep(
-    sid: uuid.UUID, pid: uuid.UUID, body: DepIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)
+    sid: uuid.UUID, pid: uuid.UUID, body: DepIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     s = _sd(db, ctx, sid)
     try:
@@ -259,7 +259,7 @@ def add_dep(
 
 @router.patch("/{sid}/packages/{pid}")
 def update_package(
-    sid: uuid.UUID, pid: uuid.UUID, body: PackageUpdate, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)
+    sid: uuid.UUID, pid: uuid.UUID, body: PackageUpdate, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     s = _sd(db, ctx, sid)
     p = _pkg(db, s, pid)
@@ -285,7 +285,7 @@ class ProgressIn(In):
 
 @router.post("/{sid}/packages/{pid}/progress", status_code=201)
 def progress(
-    sid: uuid.UUID, pid: uuid.UUID, body: ProgressIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)
+    sid: uuid.UUID, pid: uuid.UUID, body: ProgressIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     s = _sd(db, ctx, sid)
     p = _pkg(db, s, pid)
@@ -312,7 +312,7 @@ def progress(
 
 
 @router.get("/{sid}/packages/{pid}/progress")
-def progress_log(sid: uuid.UUID, pid: uuid.UUID, ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db)) -> list[dict]:
+def progress_log(sid: uuid.UUID, pid: uuid.UUID, ctx: Ctx = Depends(require("shutdown.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     s = _sd(db, ctx, sid)
     p = _pkg(db, s, pid)
     return [
@@ -329,7 +329,7 @@ class CheckIn(In):
 
 
 @router.post("/{sid}/checks", status_code=201)
-def add_check(sid: uuid.UUID, body: CheckIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)) -> dict:
+def add_check(sid: uuid.UUID, body: CheckIn, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     s = _sd(db, ctx, sid)
     c = ShutdownCheck(shutdown_id=s.id, **body.model_dump())
     db.add(c)
@@ -343,7 +343,7 @@ class CheckDone(In):
 
 @router.post("/{sid}/checks/{cid}/complete")
 def complete_check(
-    sid: uuid.UUID, cid: uuid.UUID, body: CheckDone, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db)
+    sid: uuid.UUID, cid: uuid.UUID, body: CheckDone, ctx: Ctx = Depends(require("shutdown.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     s = _sd(db, ctx, sid)
     c = db.get(ShutdownCheck, cid)

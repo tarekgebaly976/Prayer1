@@ -44,7 +44,7 @@ def definitions(ctx: Ctx = Depends(require("kpi.view"))) -> list[dict]:
 @router.get("")
 def all_kpis(
     ctx: Ctx = Depends(require("kpi.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     start: date | None = None,
     end: date | None = None,
     department_id: uuid.UUID | None = None,
@@ -58,7 +58,7 @@ def all_kpis(
 def trend(
     code: str,
     ctx: Ctx = Depends(require("kpi.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     months: int = 12,
     department_id: uuid.UUID | None = None,
 ) -> list[dict]:
@@ -88,7 +88,7 @@ def trend(
 def one(
     code: str,
     ctx: Ctx = Depends(require("kpi.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     start: date | None = None,
     end: date | None = None,
     department_id: uuid.UUID | None = None,
@@ -114,7 +114,7 @@ class ProductionIn(In):
 
 
 @router.put("/production")
-def upsert_production(body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db)) -> dict:
+def upsert_production(body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     d = db.get(Department, body.department_id)
     if d is None or d.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department not found")
@@ -152,7 +152,7 @@ def upsert_production(body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage
 
 @router.get("/production/records")
 def list_production(
-    ctx: Ctx = Depends(require("kpi.view")), db: Session = Depends(get_db), start: date | None = None, end: date | None = None
+    ctx: Ctx = Depends(require("kpi.view")), db: Session = Depends(get_db, scope="function"), start: date | None = None, end: date | None = None
 ) -> list[dict]:
     q = select(ProductionRecord).where(ProductionRecord.plant_id == ctx.plant_id)
     if start:
@@ -183,7 +183,7 @@ class BudgetIn(In):
 
 
 @router.put("/budgets")
-def upsert_budget(body: BudgetIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db)) -> dict:
+def upsert_budget(body: BudgetIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     import uuid as _u
 
     if body.department_id:

@@ -40,7 +40,7 @@ function Detail() {
   const { can, plant } = useSession();
   const a = useQ<Asset>(`/assets/${id}`);
   const anc = useQ<AssetNode[]>(`/assets/${id}/ancestors`);
-  const kids = useQ<AssetNode[]>("/assets/tree", { parent_id: id });
+  const kids = useQ<Page<AssetNode>>("/assets/tree", { parent_id: id, limit: 200 });
   const hist = useQ<History>(`/assets/${id}/history`);
   const meters = useQ<Meter[]>(`/assets/${id}/meters`);
   const bom = useQ<Bom[]>(`/assets/${id}/bom`);
@@ -111,7 +111,8 @@ function Detail() {
                 </SimpleGrid>
               </Section>
               <Section title={t("asset.children")}>
-                {(kids.data ?? []).map((k) => <Group key={k.id} gap="xs"><Anchor component={Link} href={`/assets/${k.id}`} className="mono" size="sm">{k.code}</Anchor><Text size="sm">{k.name}</Text><StatusBadge value={k.criticality} size="xs" /></Group>)}
+                {kids.data && kids.data.total > kids.data.items.length && <Text size="xs" c="dimmed">{kids.data.items.length} / {kids.data.total}</Text>}
+                {(kids.data?.items ?? []).map((k) => <Group key={k.id} gap="xs"><Anchor component={Link} href={`/assets/${k.id}`} className="mono" size="sm">{k.code}</Anchor><Text size="sm">{k.name}</Text><StatusBadge value={k.criticality} size="xs" /></Group>)}
               </Section>
             </Grid.Col>
             <Grid.Col span={{ base: 12, md: 4 }}>

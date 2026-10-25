@@ -36,7 +36,7 @@ class WarehouseIn(In):
 
 
 @router.get("/warehouses")
-def list_wh(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_wh(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [
         {"id": w.id, "code": w.code, "name": w.name}
         for w in db.execute(select(Warehouse).where(Warehouse.plant_id == ctx.plant_id).order_by(Warehouse.code)).scalars()
@@ -44,7 +44,7 @@ def list_wh(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends
 
 
 @router.post("/warehouses", status_code=201)
-def create_wh(body: WarehouseIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> dict:
+def create_wh(body: WarehouseIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     w = Warehouse(plant_id=ctx.plant_id, **body.model_dump())
     db.add(w)
     try:
@@ -65,7 +65,7 @@ class SupplierIn(In):
 
 
 @router.get("/suppliers")
-def list_suppliers(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_suppliers(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [
         {
             "id": s.id,
@@ -80,7 +80,7 @@ def list_suppliers(ctx: Ctx = Depends(require("inventory.view")), db: Session = 
 
 
 @router.post("/suppliers", status_code=201)
-def create_supplier(body: SupplierIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db)) -> dict:
+def create_supplier(body: SupplierIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     s = Supplier(plant_id=ctx.plant_id, **body.model_dump())
     db.add(s)
     try:
@@ -168,7 +168,7 @@ def _wh(db: Session, ctx: Ctx, wid: uuid.UUID) -> Warehouse:
 @router.get("/parts")
 def list_parts(
     ctx: Ctx = Depends(require("inventory.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     q: str | None = None,
     critical_only: bool = False,
@@ -216,7 +216,7 @@ def list_parts(
 
 
 @router.post("/parts", response_model=PartOut, status_code=201)
-def create_part(body: PartIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> Part:
+def create_part(body: PartIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> Part:
     if body.max_qty and body.min_qty > body.max_qty:
         raise HTTPException(422, "min_qty cannot exceed max_qty")
     data = body.model_dump()
@@ -232,7 +232,7 @@ def create_part(body: PartIn, ctx: Ctx = Depends(require("inventory.manage")), d
 
 
 @router.get("/parts/{pid}")
-def get_part(pid: uuid.UUID, ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db)) -> dict:
+def get_part(pid: uuid.UUID, ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     from app.models.assets import Asset, AssetBOM
 
     p = _part(db, ctx, pid)
@@ -273,7 +273,7 @@ def get_part(pid: uuid.UUID, ctx: Ctx = Depends(require("inventory.view")), db: 
 
 
 @router.patch("/parts/{pid}", response_model=PartOut)
-def update_part(pid: uuid.UUID, body: PartUpdate, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> Part:
+def update_part(pid: uuid.UUID, body: PartUpdate, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> Part:
     p = _part(db, ctx, pid)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(p, k, v)
@@ -295,7 +295,7 @@ class SubIn(In):
 
 
 @router.post("/parts/{pid}/substitutes", status_code=201)
-def add_sub(pid: uuid.UUID, body: SubIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> dict:
+def add_sub(pid: uuid.UUID, body: SubIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     p, s = _part(db, ctx, pid), _part(db, ctx, body.substitute_id)
     if p.id == s.id:
         raise HTTPException(422, "A part cannot substitute itself")
@@ -317,7 +317,7 @@ class ReceiptIn(In):
 
 
 @router.post("/receipts", status_code=201)
-def receipt(body: ReceiptIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db)) -> dict:
+def receipt(body: ReceiptIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")) -> dict:
     p, w = _part(db, ctx, body.part_id), _wh(db, ctx, body.warehouse_id)
     line = None
     if body.po_line_id:
@@ -352,7 +352,7 @@ class AdjustIn(In):
 
 
 @router.post("/adjustments", status_code=201)
-def adjustment(body: AdjustIn, ctx: Ctx = Depends(require("inventory.adjust")), db: Session = Depends(get_db)) -> dict:
+def adjustment(body: AdjustIn, ctx: Ctx = Depends(require("inventory.adjust")), db: Session = Depends(get_db, scope="function")) -> dict:
     p, w = _part(db, ctx, body.part_id), _wh(db, ctx, body.warehouse_id)
     tx = svc.adjust(db, ctx.plant, p, w, body.delta, body.reason, ctx.user.id)
     audit(
@@ -375,7 +375,7 @@ class IssueIn(In):
 
 
 @router.post("/issues", status_code=201)
-def issue_no_wo(body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db)) -> dict:
+def issue_no_wo(body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")) -> dict:
     p, w = _part(db, ctx, body.part_id), _wh(db, ctx, body.warehouse_id)
     tx = svc.issue(db, ctx.plant, p, w, body.quantity, ctx.user.id, reference=body.reference)
     audit(db, "inventory.issue", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="inventory_txn", entity_id=tx.id)
@@ -390,7 +390,7 @@ class TransferIn(In):
 
 
 @router.post("/transfers", status_code=201)
-def transfer(body: TransferIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db)) -> dict:
+def transfer(body: TransferIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")) -> dict:
     p = _part(db, ctx, body.part_id)
     svc.transfer(db, ctx.plant, p, _wh(db, ctx, body.from_warehouse_id), _wh(db, ctx, body.to_warehouse_id), body.quantity, ctx.user.id)
     audit(db, "inventory.transfer", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="part", entity_id=p.id, data=body.model_dump())
@@ -416,7 +416,7 @@ class TxnOut(ORM):
 @router.get("/transactions")
 def transactions(
     ctx: Ctx = Depends(require("inventory.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     part_id: uuid.UUID | None = None,
     work_order_id: uuid.UUID | None = None,
@@ -439,7 +439,7 @@ def transactions(
 
 
 @router.get("/valuation")
-def valuation(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db)) -> dict:
+def valuation(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     rows = db.execute(
         select(Part.code, Part.description, Part.average_cost, func.sum(StockLevel.qty_on_hand))
         .join(StockLevel, StockLevel.part_id == Part.id)
@@ -456,7 +456,7 @@ def valuation(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depen
 
 @router.get("/aging")
 def aging(
-    ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db), slow_days: int = 180, obsolete_days: int = 730
+    ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function"), slow_days: int = 180, obsolete_days: int = 730
 ) -> dict:
     now = utcnow()
     rows = db.execute(
@@ -509,7 +509,7 @@ class POIn(In):
 
 
 @router.get("/purchase-orders")
-def list_pos(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db), status: POStatus | None = None) -> list[dict]:
+def list_pos(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function"), status: POStatus | None = None) -> list[dict]:
     q = select(PurchaseOrder).where(PurchaseOrder.plant_id == ctx.plant_id)
     if status:
         q = q.where(PurchaseOrder.status == status)
@@ -545,7 +545,7 @@ def list_pos(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depend
 
 
 @router.post("/purchase-orders", status_code=201)
-def create_po(body: POIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db)) -> dict:
+def create_po(body: POIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     if body.supplier_id:
         s = db.get(Supplier, body.supplier_id)
         if s is None or s.plant_id != ctx.plant_id:
@@ -572,7 +572,7 @@ class POStatusIn(In):
 
 
 @router.post("/purchase-orders/{po_id}/status")
-def po_status(po_id: uuid.UUID, body: POStatusIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db)) -> dict:
+def po_status(po_id: uuid.UUID, body: POStatusIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     po = db.get(PurchaseOrder, po_id)
     if po is None or po.plant_id != ctx.plant_id:
         raise HTTPException(404, "PO not found")

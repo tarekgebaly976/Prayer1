@@ -1,0 +1,57 @@
+# Deployment pipeline TEMPLATE for Google Cloud Run (see docs/DEPLOYMENT.md).
+# Not active until the repository has the required secrets/variables AND an environment protection rule.
+# It has NOT been executed: no cloud credentials were available when this project was built.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: staging or production
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+  id-token: write   # Workload Identity Federation (no long-lived keys)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    env:
+      REGION: ${{ vars.GCP_REGION }}
+      PROJECT: ${{ vars.GCP_PROJECT }}
+      REPO: ${{ vars.GCP_ARTIFACT_REPO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and push images
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          TAG="$REGION-docker.pkg.dev/$PROJECT/$REPO"
+          docker build -t "$TAG/api:${GITHUB_SHA}" backend && docker push "$TAG/api:${GITHUB_SHA}"
+          docker build -t "$TAG/web:${GITHUB_SHA}" frontend && docker push "$TAG/web:${GITHUB_SHA}"
+      - name: Run migrations (Cloud Run job)
+        run: |
+          gcloud run jobs deploy cmms-migrate-${{ inputs.environment }} --region "$REGION" \
+            --image "$REGION-docker.pkg.dev/$PROJECT/$REPO/api:${GITHUB_SHA}" --command alembic --args upgrade,head \
+            --set-cloudsql-instances "${{ vars.CLOUDSQL_INSTANCE }}" --service-account "${{ secrets.GCP_RUNTIME_SA }}" \
+            --set-secrets "CMMS_MIGRATION_DATABASE_URL=cmms-migration-db-url:latest,CMMS_DATABASE_URL=cmms-db-url:latest" --execute-now --wait
+      - name: Deploy API, worker and web (traffic shifts only when healthy)
+        run: |
+          IMG="$REGION-docker.pkg.dev/$PROJECT/$REPO"
+          COMMON="--region $REGION --service-account ${{ secrets.GCP_RUNTIME_SA }} --set-cloudsql-instances ${{ vars.CLOUDSQL_INSTANCE }}"
+          SECRETS="CMMS_DATABASE_URL=cmms-db-url:latest,CMMS_SMTP_PASSWORD=cmms-smtp-password:latest"
+          gcloud run deploy cmms-api-${{ inputs.environment }} --image "$IMG/api:${GITHUB_SHA}" $COMMON --no-allow-unauthenticated \
+            --set-secrets "$SECRETS" --set-env-vars "CMMS_ENVIRONMENT=${{ inputs.environment }},CMMS_STORAGE_BACKEND=s3,CMMS_S3_ENDPOINT_URL=https://storage.googleapis.com,CMMS_S3_BUCKET=${{ vars.ATTACHMENT_BUCKET }}"
+          gcloud run deploy cmms-worker-${{ inputs.environment }} --image "$IMG/api:${GITHUB_SHA}" $COMMON --no-allow-unauthenticated \
+            --command python --args=-m,app.worker --min-instances 1 --max-instances 1 --no-cpu-throttling --set-secrets "$SECRETS"
+          gcloud run deploy cmms-web-${{ inputs.environment }} --image "$IMG/web:${GITHUB_SHA}" --region "$REGION" --set-env-vars "BACKEND_URL=${{ vars.API_INTERNAL_URL }}"
+# Rollback: gcloud run services update-traffic <service> --to-revisions <previous-revision>=100 (see docs/DEPLOYMENT.md)

@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "ccr-**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.10-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Create database roles (owner for migrations, least-privilege app role)
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE cmms_owner LOGIN PASSWORD 'dev_owner_pw';
+          CREATE ROLE cmms_app LOGIN PASSWORD 'dev_app_pw';
+          CREATE DATABASE cmms_test OWNER cmms_owner;
+          SQL
+          psql -h localhost -U postgres -d cmms_test -c "ALTER SCHEMA public OWNER TO cmms_owner"
+      - name: Install
+        working-directory: backend
+        run: pip install -r requirements.lock
+      - name: Lint
+        working-directory: backend
+        run: ruff check app tests alembic
+      - name: Type check (report only; see docs/TEST_REPORT.md)
+        working-directory: backend
+        run: mypy app || true
+      - name: Tests (unit + API integration on real PostgreSQL, includes migration up/down)
+        working-directory: backend
+        run: pytest -q -p no:warnings --junitxml=junit.xml --cov=app --cov-report=term
+      - name: Dependency vulnerability audit
+        working-directory: backend
+        run: pip-audit -r requirements.lock
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: backend-junit, path: backend/junit.xml }
+
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - working-directory: frontend
+        run: npm run lint
+      - working-directory: frontend
+        run: npm run typecheck
+      - working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - working-directory: frontend
+        run: npm run build
+
+  e2e:
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16.10-alpine
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+    env:
+      PGPASSWORD: postgres
+      CMMS_DATABASE_URL: postgresql+psycopg://cmms_app:dev_app_pw@localhost:5432/cmms
+      CMMS_MIGRATION_DATABASE_URL: postgresql+psycopg://cmms_owner:dev_owner_pw@localhost:5432/cmms
+      CMMS_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD || 'Demo-Passw0rd!2026' }}
+      E2E_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD || 'Demo-Passw0rd!2026' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Database
+        run: |
+          psql -h localhost -U postgres -c "CREATE ROLE cmms_owner LOGIN PASSWORD 'dev_owner_pw'" -c "CREATE ROLE cmms_app LOGIN PASSWORD 'dev_app_pw'" -c "CREATE DATABASE cmms OWNER cmms_owner"
+          psql -h localhost -U postgres -d cmms -c "ALTER SCHEMA public OWNER TO cmms_owner"
+      - name: Start API with demo data
+        working-directory: backend
+        run: |
+          pip install -r requirements.lock
+          alembic upgrade head
+          python -m app.cli seed-demo
+          nohup uvicorn app.main:app --port 8000 > api.log 2>&1 &
+      - name: Build and start web
+        working-directory: frontend
+        run: |
+          npm ci && npm run build
+          BACKEND_URL=http://127.0.0.1:8000 nohup npx next start -p 3000 > web.log 2>&1 &
+          npx playwright install --with-deps chromium
+          npx wait-on -t 60000 http://localhost:3000/login
+      - name: E2E (desktop + mobile)
+        working-directory: frontend
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-results, path: "frontend/test-results\nbackend/api.log\nfrontend/web.log" }
+
+  docker:
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t papermill-cmms-api backend
+      - run: docker build -t papermill-cmms-web frontend

@@ -9,7 +9,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [["list"], ["junit", { outputFile: "test-results/e2e-junit.xml" }]],
-  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000", trace: "retain-on-failure", screenshot: "only-on-failure" },
+  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000", ignoreHTTPSErrors: !!process.env.E2E_IGNORE_TLS, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile\.spec\.ts/ },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/ },

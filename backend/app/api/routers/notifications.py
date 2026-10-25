@@ -27,7 +27,7 @@ class NotificationOut(ORM):
 
 
 @router.get("/notifications")
-def list_notifications(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db), page: PageQ = Depends(), unread: bool = False) -> dict:
+def list_notifications(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function"), page: PageQ = Depends(), unread: bool = False) -> dict:
     q = select(Notification).where(Notification.user_id == ctx.user.id, Notification.plant_id == ctx.plant_id)
     if unread:
         q = q.where(Notification.read_at.is_(None))
@@ -41,7 +41,7 @@ def list_notifications(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db
 
 
 @router.post("/notifications/{nid}/read", status_code=204)
-def mark_read(nid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> None:
+def mark_read(nid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> None:
     n = db.get(Notification, nid)
     if n is None or n.user_id != ctx.user.id:
         raise HTTPException(404, "Notification not found")
@@ -49,7 +49,7 @@ def mark_read(nid: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends
 
 
 @router.post("/notifications/read-all", status_code=204)
-def read_all(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> None:
+def read_all(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> None:
     db.execute(
         update(Notification)
         .where(Notification.user_id == ctx.user.id, Notification.plant_id == ctx.plant_id, Notification.read_at.is_(None))
@@ -58,7 +58,7 @@ def read_all(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> None
 
 
 @router.get("/system/jobs")
-def job_runs(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db), limit: int = 100) -> list[dict]:
+def job_runs(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function"), limit: int = 100) -> list[dict]:
     return [
         {
             "id": j.id,
@@ -74,6 +74,6 @@ def job_runs(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(g
 
 
 @router.get("/system/email-outbox")
-def outbox(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> dict:
+def outbox(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
     rows = db.execute(select(EmailOutbox.status, func.count()).group_by(EmailOutbox.status)).all()
     return {s.value: n for s, n in rows}

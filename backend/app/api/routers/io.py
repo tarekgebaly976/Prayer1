@@ -58,12 +58,12 @@ def template(kind: str, ctx: Ctx = Depends(require("asset.view"))) -> Response:
 
 
 @router.post("/imports/assets/preview")
-def preview_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db)) -> dict:
+def preview_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")) -> dict:
     return _strip(imp.validate_assets(db, ctx.plant, _read(file)))
 
 
 @router.post("/imports/assets/commit")
-def commit_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db)) -> dict:
+def commit_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")) -> dict:
     rows = _read(file)
     v = imp.validate_assets(db, ctx.plant, rows)
     if v["invalid"]:
@@ -72,12 +72,12 @@ def commit_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asse
 
 
 @router.post("/imports/parts/preview")
-def preview_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> dict:
+def preview_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     return _strip(imp.validate_parts(db, ctx.plant, _read(file)))
 
 
 @router.post("/imports/parts/commit")
-def commit_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db)) -> dict:
+def commit_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     rows = _read(file)
     v = imp.validate_parts(db, ctx.plant, rows)
     if v["invalid"]:
@@ -87,7 +87,7 @@ def commit_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inven
 
 @router.post("/imports/{kind}/errors.csv")
 def error_report(
-    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db)
+    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
 ) -> Response:
     rows = _read(file)
     if kind == "assets":
@@ -168,7 +168,7 @@ def _wo_rows(db: Session, ctx: Ctx, start: date | None, end: date | None) -> lis
 def export_wos(
     fmt: str,
     ctx: Ctx = Depends(require("report.export")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     start: date | None = None,
     end: date | None = None,
 ) -> Response:
@@ -201,7 +201,7 @@ def export_wos(
 
 
 @router.get("/exports/assets.csv")
-def export_assets(ctx: Ctx = Depends(require("report.export")), db: Session = Depends(get_db)) -> Response:
+def export_assets(ctx: Ctx = Depends(require("report.export")), db: Session = Depends(get_db, scope="function")) -> Response:
     depts = {d.id: d.code for d in db.execute(select(Department).where(Department.plant_id == ctx.plant_id)).scalars()}
     assets = db.execute(select(Asset).where(Asset.plant_id == ctx.plant_id).order_by(Asset.path)).scalars().all()
     codes = {a.id: a.code for a in assets}
@@ -249,7 +249,7 @@ def export_assets(ctx: Ctx = Depends(require("report.export")), db: Session = De
 @router.get("/exports/kpis.xlsx")
 def export_kpis(
     ctx: Ctx = Depends(require("report.export")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     start: date | None = None,
     end: date | None = None,
     department_id: uuid.UUID | None = None,
@@ -267,7 +267,7 @@ def export_kpis(
 
 
 @router.get("/reports/work-orders/{wo_id}.pdf")
-def wo_pdf(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> StreamingResponse:
+def wo_pdf(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> StreamingResponse:
     from app.api.routers.workorders import wo_detail
 
     detail = wo_detail(wo_id, ctx, db)
@@ -281,7 +281,7 @@ def wo_pdf(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session
 
 @router.get("/reports/kpis.pdf")
 def kpi_pdf(
-    ctx: Ctx = Depends(require("report.export")), db: Session = Depends(get_db), start: date | None = None, end: date | None = None
+    ctx: Ctx = Depends(require("report.export")), db: Session = Depends(get_db, scope="function"), start: date | None = None, end: date | None = None
 ) -> StreamingResponse:
     today = plant_today(ctx.plant)
     s = kpisvc.Scope(plant=ctx.plant, start=start or today.replace(day=1), end=end or today, department_id=ctx.department_id)

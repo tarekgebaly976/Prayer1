@@ -1,0 +1,20 @@
+# OPTIONAL override for building behind a TLS-intercepting egress proxy (e.g. this project's CI sandbox).
+# Not used in production. Usage:
+#   EXTRA_CA_FILE=/path/to/ca-bundle.crt docker compose -f docker-compose.yml -f docker-compose.build-proxy.yml build
+x-proxy-build: &proxy-build
+  network: host
+  args:
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-}
+  secrets: [extra_ca]
+
+services:
+  migrate: { build: { context: ../backend, <<: *proxy-build } }
+  api: { build: { context: ../backend, <<: *proxy-build } }
+  worker: { build: { context: ../backend, <<: *proxy-build } }
+  web: { build: { context: ../frontend, <<: *proxy-build } }
+
+secrets:
+  extra_ca:
+    file: ${EXTRA_CA_FILE:?set EXTRA_CA_FILE}

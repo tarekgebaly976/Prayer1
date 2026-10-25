@@ -44,12 +44,12 @@ class LubricantOut(ORM):
 
 
 @router.get("/lubricants", response_model=list[LubricantOut])
-def list_lubricants(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)) -> list[Lubricant]:
+def list_lubricants(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> list[Lubricant]:
     return list(db.execute(select(Lubricant).where(Lubricant.plant_id == ctx.plant_id).order_by(Lubricant.code)).scalars())
 
 
 @router.post("/lubricants", response_model=LubricantOut, status_code=201)
-def create_lubricant(body: LubricantIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db)) -> Lubricant:
+def create_lubricant(body: LubricantIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> Lubricant:
     if body.part_id:
         from app.models.inventory import Part
 
@@ -72,7 +72,7 @@ class AlternativeIn(In):
 
 @router.post("/lubricants/{lub_id}/alternatives", status_code=201)
 def approve_alternative(
-    lub_id: uuid.UUID, body: AlternativeIn, ctx: Ctx = Depends(require("lube.approve_alternative")), db: Session = Depends(get_db)
+    lub_id: uuid.UUID, body: AlternativeIn, ctx: Ctx = Depends(require("lube.approve_alternative")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     a, b = db.get(Lubricant, lub_id), db.get(Lubricant, body.alternative_id)
     if a is None or b is None or a.plant_id != ctx.plant_id or b.plant_id != ctx.plant_id:
@@ -100,7 +100,7 @@ def approve_alternative(
 
 
 @router.get("/lubricants/{lub_id}/alternatives")
-def list_alternatives(lub_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_alternatives(lub_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     rows = db.execute(
         select(LubricantAlternative, Lubricant)
         .join(Lubricant, Lubricant.id == LubricantAlternative.alternative_id)
@@ -135,12 +135,12 @@ class RouteOut(ORM):
 
 
 @router.get("/routes", response_model=list[RouteOut])
-def list_routes(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)) -> list[LubeRoute]:
+def list_routes(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> list[LubeRoute]:
     return list(db.execute(select(LubeRoute).where(LubeRoute.plant_id == ctx.plant_id).order_by(LubeRoute.code)).scalars())
 
 
 @router.post("/routes", response_model=RouteOut, status_code=201)
-def create_route(body: RouteIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db)) -> LubeRoute:
+def create_route(body: RouteIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> LubeRoute:
     d = db.get(Department, body.department_id)
     if d is None or d.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department not found")
@@ -158,7 +158,7 @@ class GenerateIn(In):
 
 
 @router.post("/routes/{route_id}/generate")
-def generate(route_id: uuid.UUID, body: GenerateIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db)) -> dict:
+def generate(route_id: uuid.UUID, body: GenerateIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     r = db.get(LubeRoute, route_id)
     if r is None or r.plant_id != ctx.plant_id:
         raise HTTPException(404, "Route not found")
@@ -215,7 +215,7 @@ class PointOut(ORM):
 @router.get("/points", response_model=list[PointOut])
 def list_points(
     ctx: Ctx = Depends(require("lube.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     route_id: uuid.UUID | None = None,
     asset_id: uuid.UUID | None = None,
     due_before: date | None = None,
@@ -231,7 +231,7 @@ def list_points(
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
-def create_point(body: PointIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db)) -> LubricationPoint:
+def create_point(body: PointIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> LubricationPoint:
     if not body.frequency_days and not body.hours_interval:
         raise HTTPException(422, "A frequency in days or an operating-hour interval is required")
     a, lub = db.get(Asset, body.asset_id), db.get(Lubricant, body.lubricant_id)
@@ -253,7 +253,7 @@ def create_point(body: PointIn, ctx: Ctx = Depends(require("lube.manage")), db: 
 
 
 @router.get("/points/{point_id}/qr.png")
-def point_qr(point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)):  # type: ignore[no-untyped-def]
+def point_qr(point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")):  # type: ignore[no-untyped-def]
     import io
 
     import qrcode
@@ -269,7 +269,7 @@ def point_qr(point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: 
 
 
 @router.get("/points/by-qr/{token}", response_model=PointOut)
-def point_by_qr(token: str, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)) -> LubricationPoint:
+def point_by_qr(token: str, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> LubricationPoint:
     p = db.execute(
         select(LubricationPoint).where(LubricationPoint.qr_token == token, LubricationPoint.plant_id == ctx.plant_id)
     ).scalar_one_or_none()
@@ -289,7 +289,7 @@ class TaskRecordIn(In):
 @router.get("/tasks")
 def list_tasks(
     ctx: Ctx = Depends(require("lube.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     status: LubeTaskStatus | None = None,
     work_order_id: uuid.UUID | None = None,
 ) -> list[dict]:
@@ -327,7 +327,7 @@ def _task(db: Session, ctx: Ctx, task_id: uuid.UUID) -> LubeTask:
 
 
 @router.post("/tasks/{task_id}/record")
-def record(task_id: uuid.UUID, body: TaskRecordIn, ctx: Ctx = Depends(require("lube.execute")), db: Session = Depends(get_db)) -> dict:
+def record(task_id: uuid.UUID, body: TaskRecordIn, ctx: Ctx = Depends(require("lube.execute")), db: Session = Depends(get_db, scope="function")) -> dict:
     t = _task(db, ctx, task_id)
     if body.done_date and body.done_date > plant_today(ctx.plant):
         raise HTTPException(422, "Completion date cannot be in the future")
@@ -355,7 +355,7 @@ class SkipIn(In):
 
 
 @router.post("/tasks/{task_id}/skip")
-def skip(task_id: uuid.UUID, body: SkipIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db)) -> dict:
+def skip(task_id: uuid.UUID, body: SkipIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     t = _task(db, ctx, task_id)
     svc.skip_task(db, t, ctx.user.id, body.reason)
     audit(
@@ -366,7 +366,7 @@ def skip(task_id: uuid.UUID, body: SkipIn, ctx: Ctx = Depends(require("lube.mana
 
 @router.get("/consumption")
 def consumption(
-    ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db), start: date | None = None, end: date | None = None
+    ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function"), start: date | None = None, end: date | None = None
 ) -> list[dict]:
     from sqlalchemy import func
 

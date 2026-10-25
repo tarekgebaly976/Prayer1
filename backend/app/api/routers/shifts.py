@@ -42,14 +42,14 @@ class ShiftOut(ORM):
 
 
 @router.get("/definitions", response_model=list[ShiftOut])
-def list_shifts(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db)) -> list[ShiftDefinition]:
+def list_shifts(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function")) -> list[ShiftDefinition]:
     return list(
         db.execute(select(ShiftDefinition).where(ShiftDefinition.plant_id == ctx.plant_id).order_by(ShiftDefinition.start_time)).scalars()
     )
 
 
 @router.post("/definitions", response_model=ShiftOut, status_code=201)
-def create_shift(body: ShiftIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db)) -> ShiftDefinition:
+def create_shift(body: ShiftIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")) -> ShiftDefinition:
     s = ShiftDefinition(plant_id=ctx.plant_id, **body.model_dump())
     db.add(s)
     try:
@@ -66,7 +66,7 @@ class PatternIn(In):
 
 
 @router.get("/patterns")
-def list_patterns(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_patterns(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [
         {"id": p.id, "code": p.code, "name": p.name, "cycle": p.cycle}
         for p in db.execute(select(ShiftPattern).where(ShiftPattern.plant_id == ctx.plant_id)).scalars()
@@ -74,7 +74,7 @@ def list_patterns(ctx: Ctx = Depends(require("shift.view")), db: Session = Depen
 
 
 @router.post("/patterns", status_code=201)
-def create_pattern(body: PatternIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db)) -> dict:
+def create_pattern(body: PatternIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     codes = {s.code for s in db.execute(select(ShiftDefinition).where(ShiftDefinition.plant_id == ctx.plant_id)).scalars()}
     bad = [c for c in body.cycle if c != "OFF" and c not in codes]
     if bad:
@@ -104,7 +104,7 @@ def _member(db: Session, ctx: Ctx, uid: uuid.UUID) -> None:
 
 
 @router.get("/teams")
-def list_teams(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_teams(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     out = []
     for t in db.execute(select(Team).where(Team.plant_id == ctx.plant_id).order_by(Team.code)).scalars():
         members = db.execute(
@@ -126,7 +126,7 @@ def list_teams(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(
 
 
 @router.post("/teams", status_code=201)
-def create_team(body: TeamIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db)) -> dict:
+def create_team(body: TeamIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     if body.department_id:
         d = db.get(Department, body.department_id)
         if d is None or d.plant_id != ctx.plant_id:
@@ -152,7 +152,7 @@ class GenerateRosterIn(In):
 
 @router.post("/teams/{team_id}/generate-roster")
 def generate_roster(
-    team_id: uuid.UUID, body: GenerateRosterIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db)
+    team_id: uuid.UUID, body: GenerateRosterIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     t = db.get(Team, team_id)
     if t is None or t.plant_id != ctx.plant_id:
@@ -178,7 +178,7 @@ class RosterIn(In):
 
 @router.get("/roster")
 def roster(
-    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db), user_id: uuid.UUID | None = None
+    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function"), user_id: uuid.UUID | None = None
 ) -> list[dict]:
     if (end - start).days > 92:
         raise HTTPException(422, "Range too long (max 92 days)")
@@ -209,7 +209,7 @@ def roster(
 
 
 @router.put("/roster")
-def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db)) -> dict:
+def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     _member(db, ctx, body.user_id)
     if body.kind in (RosterKind.WORK, RosterKind.OVERTIME, RosterKind.CALLOUT) and body.shift_id is None:
         raise HTTPException(422, "A shift is required for working entries")
@@ -256,7 +256,7 @@ def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: 
 
 @router.get("/manpower")
 def manpower(
-    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db), department_id: uuid.UUID | None = None
+    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function"), department_id: uuid.UUID | None = None
 ) -> list[dict]:
     if (end - start).days > 62:
         raise HTTPException(422, "Range too long (max 62 days)")
@@ -322,7 +322,7 @@ def _ho(db: Session, ctx: Ctx, hid: uuid.UUID) -> ShiftHandover:
 @router.get("/handovers", response_model=list[HandoverOut])
 def list_handovers(
     ctx: Ctx = Depends(require("shift.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     department_id: uuid.UUID | None = None,
     status: HandoverStatus | None = None,
     limit: int = 50,
@@ -336,7 +336,7 @@ def list_handovers(
 
 
 @router.get("/handovers/{hid}")
-def get_handover(hid: uuid.UUID, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db)) -> dict:
+def get_handover(hid: uuid.UUID, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     h = db.get(ShiftHandover, hid)
     if h is None or h.plant_id != ctx.plant_id:
         raise HTTPException(404, "Handover not found")
@@ -353,7 +353,7 @@ def get_handover(hid: uuid.UUID, ctx: Ctx = Depends(require("shift.view")), db: 
 
 
 @router.post("/handovers", response_model=HandoverOut, status_code=201)
-def create_handover(body: HandoverIn, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db)) -> ShiftHandover:
+def create_handover(body: HandoverIn, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")) -> ShiftHandover:
     d, s = db.get(Department, body.department_id), db.get(ShiftDefinition, body.shift_id)
     if d is None or d.plant_id != ctx.plant_id or s is None or s.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department or shift not found")
@@ -370,7 +370,7 @@ def create_handover(body: HandoverIn, ctx: Ctx = Depends(require("handover.creat
 
 @router.patch("/handovers/{hid}", response_model=HandoverOut)
 def update_handover(
-    hid: uuid.UUID, body: HandoverUpdate, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db)
+    hid: uuid.UUID, body: HandoverUpdate, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")
 ) -> ShiftHandover:
     h = _ho(db, ctx, hid)
     if h.is_locked or h.status != HandoverStatus.DRAFT:
@@ -384,7 +384,7 @@ def update_handover(
 
 
 @router.post("/handovers/{hid}/submit", response_model=HandoverOut)
-def submit(hid: uuid.UUID, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db)) -> ShiftHandover:
+def submit(hid: uuid.UUID, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")) -> ShiftHandover:
     return svc.submit_handover(db, ctx.plant, _ho(db, ctx, hid), ctx.user.id)
 
 
@@ -394,6 +394,6 @@ class ConfirmIn(In):
 
 @router.post("/handovers/{hid}/confirm", response_model=HandoverOut)
 def confirm(
-    hid: uuid.UUID, body: ConfirmIn, ctx: Ctx = Depends(require("handover.confirm")), db: Session = Depends(get_db)
+    hid: uuid.UUID, body: ConfirmIn, ctx: Ctx = Depends(require("handover.confirm")), db: Session = Depends(get_db, scope="function")
 ) -> ShiftHandover:
     return svc.confirm_handover(db, ctx.plant, _ho(db, ctx, hid), ctx.user.id, body.comment)

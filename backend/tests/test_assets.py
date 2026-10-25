@@ -26,7 +26,7 @@ def test_hierarchy_example_and_rules(world):
     sub = api.get("/assets", params={"under": wire["id"]}).json()
     assert sub["total"] == 3
     tree = api.get("/assets/tree", params={"parent_id": pm["id"]}).json()
-    assert tree[0]["code"] == "PM1-WIRE" and tree[0]["child_count"] == 1
+    assert tree["total"] == 1 and tree["items"][0]["code"] == "PM1-WIRE" and tree["items"][0]["child_count"] == 1
     assert api.get(f"/assets/by-qr/{brg['qr_token']}").json()["id"] == brg["id"]
     assert api.get(f"/assets/{brg['id']}/qr.png").headers["content-type"] == "image/png"
 

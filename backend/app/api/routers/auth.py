@@ -116,7 +116,7 @@ def build_me(db: Session, user: User, csrf: str) -> MeOut:
 
 
 @router.post("/login", response_model=MeOut)
-def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)) -> MeOut:
+def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db, scope="function")) -> MeOut:
     s = get_settings()
     now = utcnow()
     ip = client_ip(request)
@@ -177,7 +177,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
 
 
 @router.post("/logout", status_code=204)
-def logout(response: Response, p: Principal = Depends(get_principal), db: Session = Depends(get_db)) -> Response:
+def logout(response: Response, p: Principal = Depends(get_principal), db: Session = Depends(get_db, scope="function")) -> Response:
     p.session.revoked_at = utcnow()
     audit(db, "auth.logout", user_id=p.user.id, organization_id=p.user.organization_id)
     response.status_code = 204
@@ -187,7 +187,7 @@ def logout(response: Response, p: Principal = Depends(get_principal), db: Sessio
 
 
 @router.get("/me", response_model=MeOut)
-def me(p: Principal = Depends(get_principal), db: Session = Depends(get_db)) -> MeOut:
+def me(p: Principal = Depends(get_principal), db: Session = Depends(get_db, scope="function")) -> MeOut:
     return build_me(db, p.user, p.session.csrf_token)
 
 
@@ -197,7 +197,7 @@ class ChangePasswordIn(In):
 
 
 @router.post("/change-password", status_code=204)
-def change_password(body: ChangePasswordIn, p: Principal = Depends(get_principal), db: Session = Depends(get_db)) -> None:
+def change_password(body: ChangePasswordIn, p: Principal = Depends(get_principal), db: Session = Depends(get_db, scope="function")) -> None:
     if not verify_password(p.user.password_hash, body.current_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
     try:

@@ -36,6 +36,7 @@ services:
       retries: 20
 
   migrate:
+    image: papermill-cmms-api
     build: ../backend
     command: ["alembic", "upgrade", "head"]
     environment: *api-env
@@ -44,6 +45,7 @@ services:
     restart: "no"
 
   api:
+    image: papermill-cmms-api
     build: ../backend
     restart: unless-stopped
     environment: *api-env
@@ -53,6 +55,7 @@ services:
       migrate: { condition: service_completed_successfully }
 
   worker:
+    image: papermill-cmms-api
     build: ../backend
     command: ["python", "-m", "app.worker"]
     restart: unless-stopped
@@ -63,6 +66,7 @@ services:
       migrate: { condition: service_completed_successfully }
 
   web:
+    image: papermill-cmms-web
     build: ../frontend
     restart: unless-stopped
     environment:

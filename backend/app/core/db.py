@@ -18,6 +18,8 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def get_db() -> Iterator[Session]:
+    """Request DB session. Always declared with Depends(get_db, scope="function") so the commit happens BEFORE
+    the response is sent: a client that receives 2xx can immediately read its own write (also across workers)."""
     db = SessionLocal()
     try:
         yield db

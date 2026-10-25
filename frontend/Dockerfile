@@ -2,7 +2,9 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# Optional BuildKit secret "extra_ca" for TLS-intercepting egress proxies (never stored in a layer).
+RUN --mount=type=secret,id=extra_ca,required=false \
+    if [ -f /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi; npm ci --no-audit --no-fund
 
 FROM node:22-slim AS build
 WORKDIR /app

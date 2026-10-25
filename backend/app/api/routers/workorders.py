@@ -75,7 +75,7 @@ def _asset(db: Session, ctx: Ctx, asset_id: uuid.UUID) -> Asset:
 
 
 @router.post("/work-requests", response_model=RequestOut, status_code=201)
-def create_request(body: RequestIn, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db)) -> WorkRequest:
+def create_request(body: RequestIn, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
     a = _asset(db, ctx, body.asset_id)
     r = WorkRequest(plant_id=ctx.plant_id, number=next_number(db, ctx.plant, "WR"), created_by_id=ctx.user.id, **body.model_dump())
     db.add(r)
@@ -99,7 +99,7 @@ def create_request(body: RequestIn, ctx: Ctx = Depends(require("request.create")
 @router.get("/work-requests")
 def list_requests(
     ctx: Ctx = Depends(require("wo.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     status: RequestStatus | None = None,
     mine: bool = False,
@@ -113,7 +113,7 @@ def list_requests(
 
 
 @router.get("/work-requests/{rid}", response_model=RequestOut)
-def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db)) -> WorkRequest:
+def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
     r = db.get(WorkRequest, rid)
     if r is None or r.plant_id != ctx.plant_id or (not ctx.has("wo.view") and r.created_by_id != ctx.user.id):
         raise HTTPException(404, "Request not found")
@@ -121,7 +121,7 @@ def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), d
 
 
 @router.post("/work-requests/{rid}/triage", response_model=RequestOut)
-def triage(rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db)) -> WorkRequest:
+def triage(rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
     r = db.execute(
         select(WorkRequest).where(WorkRequest.id == rid, WorkRequest.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
@@ -308,7 +308,7 @@ def _is_assignee(ctx: Ctx, wo: WorkOrder) -> bool:
 @router.get("/work-orders")
 def list_work_orders(
     ctx: Ctx = Depends(require("wo.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     q: str | None = None,
     status: list[WOStatus] | None = None,
@@ -372,7 +372,7 @@ def list_work_orders(
 
 
 @router.post("/work-orders", response_model=WOOut, status_code=201)
-def create_wo(body: WOCreate, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db)) -> WorkOrder:
+def create_wo(body: WOCreate, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     a = _asset(db, ctx, body.asset_id)
     if ctx.department_id and a.department_id != ctx.department_id:
         raise HTTPException(403, "Your access is limited to your department")
@@ -423,12 +423,12 @@ def _check_refs(db: Session, ctx: Ctx, data: dict) -> None:
 
 
 @router.get("/work-orders/{wo_id}", response_model=WOOut)
-def get_work_order(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> WorkOrder:
+def get_work_order(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     return get_wo(db, ctx, wo_id)
 
 
 @router.get("/work-orders/{wo_id}/detail")
-def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> dict:
+def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     """Everything a technician needs on one screen."""
     wo = get_wo(db, ctx, wo_id)
     asset = db.get(Asset, wo.asset_id)
@@ -566,7 +566,7 @@ def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Sess
 
 
 @router.patch("/work-orders/{wo_id}", response_model=WOOut)
-def update_wo(wo_id: uuid.UUID, body: WOUpdate, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> WorkOrder:
+def update_wo(wo_id: uuid.UUID, body: WOUpdate, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     data = body.model_dump(exclude_unset=True)
     version = data.pop("version", None)
@@ -599,7 +599,7 @@ class StatusIn(In):
 
 
 @router.post("/work-orders/{wo_id}/status", response_model=WOOut)
-def set_status(wo_id: uuid.UUID, body: StatusIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> WorkOrder:
+def set_status(wo_id: uuid.UUID, body: StatusIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     # Technicians may only move work they are assigned to.
     if (
@@ -620,14 +620,14 @@ class AssignIn(In):
 
 
 @router.post("/work-orders/{wo_id}/assign")
-def assign(wo_id: uuid.UUID, body: AssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db)) -> dict:
+def assign(wo_id: uuid.UUID, body: AssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     warnings = svc.assign(db, ctx, wo, body.user_ids, body.lead_id, body.force)
     return {"warnings": warnings, "assignees": [a.user_id for a in wo.assignments]}
 
 
 @router.delete("/work-orders/{wo_id}/assign/{user_id}", status_code=204)
-def unassign(wo_id: uuid.UUID, user_id: uuid.UUID, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db)) -> None:
+def unassign(wo_id: uuid.UUID, user_id: uuid.UUID, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")) -> None:
     wo = get_wo(db, ctx, wo_id, lock=True)
     wo.assignments = [a for a in wo.assignments if a.user_id != user_id]
     audit(db, "wo.unassign", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="work_order", entity_id=wo.id, data={"user": user_id})
@@ -641,7 +641,7 @@ class BulkAssignIn(In):
 
 
 @router.post("/work-orders/bulk-assign")
-def bulk_assign(body: BulkAssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db)) -> dict:
+def bulk_assign(body: BulkAssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")) -> dict:
     results = {}
     for wid in body.work_order_ids:
         wo = get_wo(db, ctx, wid, lock=True)
@@ -656,7 +656,7 @@ class SafetyIn(In):
 
 @router.post("/work-orders/{wo_id}/safety-signoff", response_model=WOOut)
 def safety_signoff(
-    wo_id: uuid.UUID, body: SafetyIn, ctx: Ctx = Depends(require("wo.safety_signoff")), db: Session = Depends(get_db)
+    wo_id: uuid.UUID, body: SafetyIn, ctx: Ctx = Depends(require("wo.safety_signoff")), db: Session = Depends(get_db, scope="function")
 ) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     if body.permit_reference:
@@ -684,7 +684,7 @@ class TestIn(In):
 
 
 @router.post("/work-orders/{wo_id}/test-result", response_model=WOOut)
-def test_result(wo_id: uuid.UUID, body: TestIn, ctx: Ctx = Depends(require("wo.review")), db: Session = Depends(get_db)) -> WorkOrder:
+def test_result(wo_id: uuid.UUID, body: TestIn, ctx: Ctx = Depends(require("wo.review")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     if wo.status not in (WOStatus.IN_PROGRESS, WOStatus.AWAITING_REVIEW):
         raise DomainError("Test results are recorded during execution or review", "invalid_state", 409)
@@ -712,7 +712,7 @@ def _require_execute(ctx: Ctx, wo: WorkOrder) -> None:
 
 @router.patch("/work-orders/{wo_id}/checklist/{item_id}")
 def update_checklist(
-    wo_id: uuid.UUID, item_id: uuid.UUID, body: ChecklistUpdate, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db)
+    wo_id: uuid.UUID, item_id: uuid.UUID, body: ChecklistUpdate, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     wo = get_wo(db, ctx, wo_id)
     _require_execute(ctx, wo)
@@ -748,7 +748,7 @@ class ChecklistAdd(In):
 
 
 @router.post("/work-orders/{wo_id}/checklist", status_code=201)
-def add_checklist(wo_id: uuid.UUID, body: ChecklistAdd, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db)) -> dict:
+def add_checklist(wo_id: uuid.UUID, body: ChecklistAdd, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")) -> dict:
     from sqlalchemy import func
 
     wo = get_wo(db, ctx, wo_id)
@@ -768,7 +768,7 @@ class LaborIn(In):
 
 
 @router.post("/work-orders/{wo_id}/labor", status_code=201)
-def add_labor(wo_id: uuid.UUID, body: LaborIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db)) -> dict:
+def add_labor(wo_id: uuid.UUID, body: LaborIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     if not (_is_assignee(ctx, wo) or ctx.has("wo.assign")):
         raise HTTPException(403, "You are not assigned to this work order")
@@ -786,7 +786,7 @@ class ServiceIn(In):
 
 
 @router.post("/work-orders/{wo_id}/services", status_code=201)
-def add_service(wo_id: uuid.UUID, body: ServiceIn, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db)) -> dict:
+def add_service(wo_id: uuid.UUID, body: ServiceIn, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")) -> dict:
     from decimal import Decimal
 
     wo = get_wo(db, ctx, wo_id, lock=True)
@@ -806,7 +806,7 @@ class CommentIn(In):
 
 
 @router.post("/work-orders/{wo_id}/comments", status_code=201)
-def add_comment(wo_id: uuid.UUID, body: CommentIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> dict:
+def add_comment(wo_id: uuid.UUID, body: CommentIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> dict:
     wo = get_wo(db, ctx, wo_id)
     c = WOComment(work_order_id=wo.id, user_id=ctx.user.id, body=body.body, created_at=utcnow())
     db.add(c)
@@ -829,7 +829,7 @@ def _part_wh(db: Session, ctx: Ctx, part_id: uuid.UUID, wh_id: uuid.UUID) -> tup
 
 
 @router.post("/work-orders/{wo_id}/reservations", status_code=201)
-def reserve(wo_id: uuid.UUID, body: ReserveIn, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db)) -> dict:
+def reserve(wo_id: uuid.UUID, body: ReserveIn, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db, scope="function")) -> dict:
     wo = get_wo(db, ctx, wo_id)
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = inv.reserve(db, ctx.plant, wo, p, w, body.quantity, ctx.user.id)
@@ -847,7 +847,7 @@ def reserve(wo_id: uuid.UUID, body: ReserveIn, ctx: Ctx = Depends(require("inven
 
 @router.delete("/work-orders/{wo_id}/reservations/{res_id}", status_code=204)
 def cancel_res(
-    wo_id: uuid.UUID, res_id: uuid.UUID, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db)
+    wo_id: uuid.UUID, res_id: uuid.UUID, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db, scope="function")
 ) -> None:
     wo = get_wo(db, ctx, wo_id)
     r = db.get(Reservation, res_id)
@@ -864,7 +864,7 @@ class IssueIn(In):
 
 
 @router.post("/work-orders/{wo_id}/issues", status_code=201)
-def issue(wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db)) -> dict:
+def issue(wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = None
@@ -902,7 +902,7 @@ class ReturnIn(In):
 
 @router.post("/work-orders/{wo_id}/returns", status_code=201)
 def return_stock(
-    wo_id: uuid.UUID, body: ReturnIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db)
+    wo_id: uuid.UUID, body: ReturnIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)

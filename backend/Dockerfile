@@ -4,7 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app --home /app app
 COPY requirements.lock ./
-RUN grep -vE '^(pytest|pytest-cov|ruff|mypy|pip-audit|httpx|coverage|iniconfig|pluggy|mypy_extensions|pathspec|pip-requirements-parser|pip_audit|cyclonedx|license-expression|boolean.py|packageurl|py-serializable|sortedcontainers|defusedxml|CacheControl|msgpack|toml|platformdirs|filelock|requests|urllib3|charset-normalizer|certifi|idna|rich|markdown-it-py|mdurl|Pygments|packaging|tomli|tomli_w|pip-api|pip)==' requirements.lock > req.txt \
+# Optional BuildKit secret "extra_ca": a CA bundle for TLS-intercepting egress proxies (never stored in a layer).
+RUN --mount=type=secret,id=extra_ca,required=false grep -vE '^(pytest|pytest-cov|ruff|mypy|pip-audit|httpx|coverage|iniconfig|pluggy|mypy_extensions|pathspec|pip-requirements-parser|pip_audit|cyclonedx|license-expression|boolean.py|packageurl|py-serializable|sortedcontainers|defusedxml|CacheControl|msgpack|toml|platformdirs|filelock|requests|urllib3|charset-normalizer|certifi|idna|rich|markdown-it-py|mdurl|Pygments|packaging|tomli|tomli_w|pip-api|pip)==' requirements.lock > req.txt \
+    && if [ -f /run/secrets/extra_ca ]; then export PIP_CERT=/run/secrets/extra_ca; fi \
     && pip install -r req.txt && rm req.txt
 COPY alembic.ini ./
 COPY alembic ./alembic

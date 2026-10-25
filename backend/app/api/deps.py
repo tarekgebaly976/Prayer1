@@ -58,7 +58,7 @@ def client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def get_principal(request: Request, db: Session = Depends(get_db)) -> Principal:
+def get_principal(request: Request, db: Session = Depends(get_db, scope="function")) -> Principal:
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
@@ -89,7 +89,7 @@ def get_ctx(
     request: Request,
     principal: Principal = Depends(get_principal),
     x_plant_id: str | None = Header(default=None, alias="X-Plant-Id"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
 ) -> Ctx:
     if not x_plant_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "X-Plant-Id header required")

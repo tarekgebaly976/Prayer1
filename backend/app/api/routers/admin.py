@@ -53,7 +53,7 @@ def get_plant(ctx: Ctx = Depends(get_ctx)) -> Plant:
 
 
 @router.patch("/plant", response_model=PlantOut)
-def update_plant(body: PlantUpdate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> Plant:
+def update_plant(body: PlantUpdate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> Plant:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
     data = body.model_dump(exclude_unset=True)
@@ -85,12 +85,12 @@ class DepartmentOut(ORM):
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
-def list_departments(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> list[Department]:
+def list_departments(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[Department]:
     return list(db.execute(select(Department).where(Department.plant_id == ctx.plant_id).order_by(Department.code)).scalars())
 
 
 @router.post("/departments", response_model=DepartmentOut, status_code=201)
-def create_department(body: DepartmentIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> Department:
+def create_department(body: DepartmentIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> Department:
     d = Department(plant_id=ctx.plant_id, **body.model_dump())
     db.add(d)
     try:
@@ -148,7 +148,7 @@ def _role(db: Session, code: str) -> Role:
 
 
 @router.get("/users", response_model=list[MemberOut])
-def list_users(ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db)) -> list[dict]:
+def list_users(ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     rows = db.execute(
         select(Membership, User)
         .join(User, User.id == Membership.user_id)
@@ -161,7 +161,7 @@ def list_users(ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get
 
 
 @router.post("/users", response_model=MemberOut, status_code=201)
-def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db)) -> dict:
+def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
     try:
         validate_password_strength(body.password)
     except ValueError as e:
@@ -207,7 +207,7 @@ def _check_dept(db: Session, ctx: Ctx, dept_id: uuid.UUID | None) -> None:
 
 @router.patch("/users/{user_id}", response_model=MemberOut)
 def update_membership(
-    user_id: uuid.UUID, body: MembershipUpdate, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db)
+    user_id: uuid.UUID, body: MembershipUpdate, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     m = db.execute(select(Membership).where(Membership.user_id == user_id, Membership.plant_id == ctx.plant_id)).scalar_one_or_none()
     if m is None:
@@ -241,7 +241,7 @@ def update_membership(
 
 
 @router.get("/roles")
-def list_roles(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> list[dict]:
+def list_roles(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [{"code": r.code, "name": r.name} for r in db.execute(select(Role).order_by(Role.name)).scalars()]
 
 
@@ -262,7 +262,7 @@ class FailureCodeOut(ORM):
 
 
 @router.get("/failure-codes", response_model=list[FailureCodeOut])
-def list_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> list:
+def list_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list:
     from app.models.assets import FailureCode
 
     return list(
@@ -275,7 +275,7 @@ def list_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db
 
 
 @router.post("/failure-codes", response_model=FailureCodeOut, status_code=201)
-def create_failure_code(body: FailureCodeIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)):
+def create_failure_code(body: FailureCodeIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")):
     from app.models.assets import FailureCode
 
     fc = FailureCode(plant_id=ctx.plant_id, **body.model_dump())
@@ -302,7 +302,7 @@ class TransitionUpdate(In):
 
 
 @router.get("/workflow/transitions", response_model=list[TransitionOut])
-def list_transitions(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db)) -> list:
+def list_transitions(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list:
     ensure_default_transitions(db, ctx.plant_id)
     return list(
         db.execute(
@@ -315,7 +315,7 @@ def list_transitions(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db))
 
 @router.patch("/workflow/transitions/{tid}", response_model=TransitionOut)
 def update_transition(
-    tid: uuid.UUID, body: TransitionUpdate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)
+    tid: uuid.UUID, body: TransitionUpdate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")
 ) -> WOStatusTransition:
     from app.core.permissions import PERMISSIONS
 
@@ -348,7 +348,7 @@ class SequenceIn(In):
 
 
 @router.put("/numbering")
-def set_numbering(body: SequenceIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> dict:
+def set_numbering(body: SequenceIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
     seq = db.execute(
         select(NumberSequence)
         .where(NumberSequence.plant_id == ctx.plant_id, NumberSequence.key == body.key)
@@ -370,7 +370,7 @@ class TokenIn(In):
 
 
 @router.post("/integration-tokens", status_code=201)
-def create_token(body: TokenIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> dict:
+def create_token(body: TokenIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
     token = "cmmsgw_" + new_token(32)
     t = IntegrationToken(plant_id=ctx.plant_id, name=body.name, token_hash=hash_token(token), notes=body.notes, created_by_id=ctx.user.id)
     db.add(t)
@@ -380,7 +380,7 @@ def create_token(body: TokenIn, ctx: Ctx = Depends(require("plant.admin")), db: 
 
 
 @router.get("/integration-tokens")
-def list_tokens(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> list[dict]:
+def list_tokens(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [
         {"id": t.id, "name": t.name, "scopes": t.scopes, "revoked_at": t.revoked_at, "last_used_at": t.last_used_at}
         for t in db.execute(select(IntegrationToken).where(IntegrationToken.plant_id == ctx.plant_id)).scalars()
@@ -388,7 +388,7 @@ def list_tokens(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depend
 
 
 @router.delete("/integration-tokens/{tid}", status_code=204)
-def revoke_token(tid: uuid.UUID, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> None:
+def revoke_token(tid: uuid.UUID, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> None:
     t = db.get(IntegrationToken, tid)
     if t is None or t.plant_id != ctx.plant_id:
         raise HTTPException(404, "Token not found")
@@ -411,7 +411,7 @@ class AuditOut(ORM):
 @router.get("/audit-logs")
 def audit_logs(
     ctx: Ctx = Depends(require("audit.view")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     entity_type: str | None = None,
     entity_id: str | None = None,

@@ -111,4 +111,8 @@ def test_health_endpoints(world):
     c = make_client()
     assert c.get("/api/v1/health/live").json() == {"status": "ok"}
     r = c.get("/api/v1/health/ready").json()
-    assert r["checks"]["database"] == "ok" and r["checks"]["migration"] == "0002"
+    from alembic.script import ScriptDirectory
+
+    from tests.conftest import alembic_cfg
+    head = ScriptDirectory.from_config(alembic_cfg()).get_current_head()
+    assert r["checks"]["database"] == "ok" and r["checks"]["migration"] == head
