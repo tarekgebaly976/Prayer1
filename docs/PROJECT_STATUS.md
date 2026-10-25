@@ -2,7 +2,7 @@
 
 ## Completed
 * Milestone 1 — Foundation: repository, PostgreSQL schema (73 tables) with 3 Alembic migrations, least-privilege DB
-  roles, Argon2 auth with server-side sessions + CSRF, RBAC (11 roles, 49 permissions), multi-plant tenancy with
+  roles, Argon2 auth with server-side sessions + CSRF, RBAC (11 roles, 48 permissions), multi-plant tenancy with
   department restriction, asset hierarchy (Plant→Department→Line→Unit→Assembly→Sub-assembly→Component), QR codes,
   responsive app shell (EN/AR RTL, PWA).
 * Milestone 2 — Core maintenance: work requests & triage, work-order lifecycle with configurable transitions and
