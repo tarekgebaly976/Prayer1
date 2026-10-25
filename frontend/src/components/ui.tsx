@@ -49,7 +49,7 @@ export function ErrorText({ error }: { error: unknown }) {
 
 export interface Column<T> { key: string; label: string; render: (row: T) => ReactNode; hideOnMobile?: boolean }
 
-export function DataTable<T extends { id?: string }>({ rows, columns, onRow, empty, rowKey }: {
+export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKey }: {
   rows: T[] | undefined; columns: Column<T>[]; onRow?: (r: T) => void; empty?: string; rowKey?: (r: T, i: number) => string;
 }) {
   const { t } = useTranslation();
@@ -61,7 +61,7 @@ export function DataTable<T extends { id?: string }>({ rows, columns, onRow, emp
         <Table.Thead><Table.Tr>{columns.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}</Table.Tr></Table.Thead>
         <Table.Tbody>
           {rows.map((r, i) => (
-            <Table.Tr key={rowKey ? rowKey(r, i) : (r.id ?? String(i))} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
+            <Table.Tr key={rowKey ? rowKey(r, i) : ("id" in r && typeof r.id === "string" ? r.id : String(i))} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
               {columns.map((c) => <Table.Td key={c.key}>{c.render(r)}</Table.Td>)}
             </Table.Tr>
           ))}

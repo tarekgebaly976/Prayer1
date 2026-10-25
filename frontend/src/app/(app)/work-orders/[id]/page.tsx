@@ -5,7 +5,7 @@ import {
 } from "@mantine/core";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Attachments } from "@/components/Attachments";
 import { KV, Loading, PageHeader, Section, StatusBadge, UserPicker } from "@/components/ui";
@@ -129,8 +129,11 @@ export default function WODetailPage() {
   const [lube, setLube] = useState<Record<string, number | string>>({});
 
   const d = q.data;
-  useEffect(() => {
-    if (!d) return;
+  // Re-seed the edit forms whenever a new version of the work order arrives (adjust state during render).
+  const [seededVersion, setSeededVersion] = useState<string | null>(null);
+  const seedKey = d ? `${d.work_order.id}:${d.work_order.version}` : null;
+  if (d && seedKey !== seededVersion) {
+    setSeededVersion(seedKey);
     const w = d.work_order;
     setExec({ findings: w.findings ?? "", recommendations: w.recommendations ?? "", root_cause: w.root_cause ?? "", corrective_action: w.corrective_action ?? "",
       problem_code_id: w.problem_code_id, cause_code_id: w.cause_code_id, remedy_code_id: w.remedy_code_id, downtime_hours: w.downtime_hours ?? "",
@@ -138,7 +141,7 @@ export default function WODetailPage() {
     setPlan({ planned_start: toLocalInput(w.planned_start), planned_end: toLocalInput(w.planned_end), due_date: w.due_date ?? "", estimated_hours: w.estimated_hours ?? "",
       priority: w.priority, requires_loto: w.requires_loto, requires_permit: w.requires_permit, requires_testing: w.requires_testing, supervisor_id: w.supervisor_id });
     setPermit(w.permit_reference ?? "");
-  }, [d]);
+  }
 
   const saveExec = useMut(() => patch(`/work-orders/${id}`, {
     ...exec, version: d?.work_order.version,

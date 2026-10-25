@@ -87,3 +87,24 @@ export async function download(path: string, query?: Query, filename?: string): 
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+/** POST a form and save the response body as a file (e.g. import error reports). */
+export async function downloadPost(path: string, body: FormData, filename: string): Promise<void> {
+  const headers: Record<string, string> = { "X-CSRF-Token": csrfToken ?? readCookie("cmms_csrf") ?? "" };
+  if (currentPlant) headers["X-Plant-Id"] = currentPlant;
+  const res = await fetch(`/api/v1${path}`, { method: "POST", body, headers, credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/** Fetch an authenticated binary (e.g. QR PNG) as an object URL for <img>. */
+export async function blobUrl(path: string): Promise<string> {
+  const res = await fetch(`/api/v1${path}`, { headers: currentPlant ? { "X-Plant-Id": currentPlant } : {}, credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status, `Load failed (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}

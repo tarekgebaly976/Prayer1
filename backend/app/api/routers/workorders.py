@@ -112,6 +112,14 @@ def list_requests(
     return paginate(db, q.order_by(WorkRequest.created_at.desc()), page, RequestOut)
 
 
+@router.get("/work-requests/{rid}", response_model=RequestOut)
+def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db)) -> WorkRequest:
+    r = db.get(WorkRequest, rid)
+    if r is None or r.plant_id != ctx.plant_id or (not ctx.has("wo.view") and r.created_by_id != ctx.user.id):
+        raise HTTPException(404, "Request not found")
+    return r
+
+
 @router.post("/work-requests/{rid}/triage", response_model=RequestOut)
 def triage(rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db)) -> WorkRequest:
     r = db.execute(
