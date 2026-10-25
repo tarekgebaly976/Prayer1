@@ -245,7 +245,7 @@ def commit_assets(db: Session, plant: Plant, rows: list[dict], user_id: uuid.UUI
 
 
 def validate_parts(db: Session, plant: Plant, rows: list[dict]) -> dict:
-    existing = {p.code.upper() for p in db.execute(select(Part.code).where(Part.plant_id == plant.id)).scalars()}
+    existing = {c.upper() for c in db.execute(select(Part.code).where(Part.plant_id == plant.id)).scalars()}
     existing_pn = {
         (p.manufacturer or "").upper() + "|" + (p.oem_part_number or "").upper(): p.code
         for p in db.execute(select(Part).where(Part.plant_id == plant.id, Part.oem_part_number.is_not(None))).scalars()

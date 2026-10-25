@@ -115,7 +115,7 @@ def list_requests(
 @router.post("/work-requests/{rid}/triage", response_model=RequestOut)
 def triage(rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db)) -> WorkRequest:
     r = db.execute(
-        select(WorkRequest).where(WorkRequest.id == rid, WorkRequest.plant_id == ctx.plant_id).with_for_update()
+        select(WorkRequest).where(WorkRequest.id == rid, WorkRequest.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if r is None:
         raise HTTPException(404, "Request not found")
@@ -286,7 +286,7 @@ class WOOut(ORM):
 def get_wo(db: Session, ctx: Ctx, wo_id: uuid.UUID, lock: bool = False) -> WorkOrder:
     q = select(WorkOrder).where(WorkOrder.id == wo_id, WorkOrder.plant_id == ctx.plant_id)
     if lock:
-        q = q.with_for_update()
+        q = q.with_for_update(key_share=True)
     wo = db.execute(q).scalar_one_or_none()
     if wo is None or (ctx.department_id and wo.department_id != ctx.department_id):
         raise HTTPException(404, "Work order not found")
@@ -861,7 +861,7 @@ def issue(wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = None
     if body.reservation_id:
-        r = db.execute(select(Reservation).where(Reservation.id == body.reservation_id).with_for_update()).scalar_one_or_none()
+        r = db.execute(select(Reservation).where(Reservation.id == body.reservation_id).with_for_update(key_share=True)).scalar_one_or_none()
         if r is None or r.work_order_id != wo.id:
             raise HTTPException(404, "Reservation not found")
     tx = inv.issue(db, ctx.plant, p, w, body.quantity, ctx.user.id, wo=wo, reservation=r, reference=wo.number)

@@ -218,7 +218,7 @@ def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: 
         if s is None or s.plant_id != ctx.plant_id:
             raise HTTPException(422, "Shift not found")
     existing = db.execute(
-        select(RosterEntry).where(RosterEntry.user_id == body.user_id, RosterEntry.work_date == body.work_date).with_for_update()
+        select(RosterEntry).where(RosterEntry.user_id == body.user_id, RosterEntry.work_date == body.work_date).with_for_update(key_share=True)
     ).scalar_one_or_none()
     data = body.model_dump(exclude={"replace"})
     if existing is not None:
@@ -310,7 +310,7 @@ class HandoverOut(ORM):
 
 def _ho(db: Session, ctx: Ctx, hid: uuid.UUID) -> ShiftHandover:
     h = db.execute(
-        select(ShiftHandover).where(ShiftHandover.id == hid, ShiftHandover.plant_id == ctx.plant_id).with_for_update()
+        select(ShiftHandover).where(ShiftHandover.id == hid, ShiftHandover.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if h is None:
         raise HTTPException(404, "Handover not found")

@@ -295,7 +295,7 @@ class ChangeRequestIn(In):
 
 def _occ(db: Session, ctx: Ctx, occ_id: uuid.UUID) -> PMOccurrence:
     o = db.execute(
-        select(PMOccurrence).where(PMOccurrence.id == occ_id, PMOccurrence.plant_id == ctx.plant_id).with_for_update()
+        select(PMOccurrence).where(PMOccurrence.id == occ_id, PMOccurrence.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if o is None:
         raise HTTPException(404, "Occurrence not found")

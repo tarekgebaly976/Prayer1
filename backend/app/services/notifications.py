@@ -68,8 +68,9 @@ def notify(
                 created_at=utcnow(),
             )
             .on_conflict_do_nothing(index_elements=["user_id", "dedupe_key"])
+            .returning(Notification.id)
         )
-        if res.rowcount:  # type: ignore[attr-defined]
+        if res.first() is not None:
             created += 1
             if email:
                 user = db.get(User, uid)
@@ -104,7 +105,7 @@ def deliver_outbox(db: Session, limit: int = 50) -> dict[str, int]:
             .where(EmailOutbox.status == DeliveryStatus.PENDING, EmailOutbox.next_attempt_at <= utcnow())
             .order_by(EmailOutbox.created_at)
             .limit(limit)
-            .with_for_update(skip_locked=True)
+            .with_for_update(skip_locked=True, key_share=True)
         )
         .scalars()
         .all()

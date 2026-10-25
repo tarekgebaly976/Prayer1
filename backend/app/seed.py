@@ -34,20 +34,20 @@ from app.services.pm import plan_occurrences
 from app.services.workflow import ensure_default_transitions
 
 USERS = [
-    ("admin@demo.papermill.local", "Demo Administrator", "system_admin", None, None),
-    ("manager@demo.papermill.local", "Khalid Al-Harbi", "maintenance_manager", None, None),
-    ("planner@demo.papermill.local", "Sara Al-Qahtani", "planner", None, None),
-    ("mech.sup@demo.papermill.local", "Omar Al-Shehri", "mech_supervisor", None, "mechanical"),
-    ("elec.sup@demo.papermill.local", "Faisal Al-Dosari", "elec_supervisor", None, "electrical"),
-    ("reliability@demo.papermill.local", "Nora Al-Mutairi", "reliability_engineer", None, None),
-    ("engineer@demo.papermill.local", "Yousef Al-Ghamdi", "engineer", None, "mechanical"),
-    ("tech1@demo.papermill.local", "Ahmed Saleh", "technician", None, "mechanical"),
-    ("tech2@demo.papermill.local", "Rashid Nasser", "technician", None, "mechanical"),
-    ("tech3@demo.papermill.local", "Imran Khan", "technician", None, "electrical"),
-    ("tech.sp@demo.papermill.local", "Hassan Ali", "technician", "SP", "mechanical"),
-    ("store@demo.papermill.local", "Majed Al-Otaibi", "storekeeper", None, None),
-    ("production@demo.papermill.local", "PM1 Shift Leader", "production_user", None, None),
-    ("viewer@demo.papermill.local", "Plant Director", "management_viewer", None, None),
+    ("admin@demo.example.com", "Demo Administrator", "system_admin", None, None),
+    ("manager@demo.example.com", "Khalid Al-Harbi", "maintenance_manager", None, None),
+    ("planner@demo.example.com", "Sara Al-Qahtani", "planner", None, None),
+    ("mech.sup@demo.example.com", "Omar Al-Shehri", "mech_supervisor", None, "mechanical"),
+    ("elec.sup@demo.example.com", "Faisal Al-Dosari", "elec_supervisor", None, "electrical"),
+    ("reliability@demo.example.com", "Nora Al-Mutairi", "reliability_engineer", None, None),
+    ("engineer@demo.example.com", "Yousef Al-Ghamdi", "engineer", None, "mechanical"),
+    ("tech1@demo.example.com", "Ahmed Saleh", "technician", None, "mechanical"),
+    ("tech2@demo.example.com", "Rashid Nasser", "technician", None, "mechanical"),
+    ("tech3@demo.example.com", "Imran Khan", "technician", None, "electrical"),
+    ("tech.sp@demo.example.com", "Hassan Ali", "technician", "SP", "mechanical"),
+    ("store@demo.example.com", "Majed Al-Otaibi", "storekeeper", None, None),
+    ("production@demo.example.com", "PM1 Shift Leader", "production_user", None, None),
+    ("viewer@demo.example.com", "Plant Director", "management_viewer", None, None),
 ]
 
 # (code, name, level, parent_code, dept, criticality, oem, model)

@@ -83,8 +83,9 @@ def record_reading(
             created_at=utcnow(),
         )
         .on_conflict_do_nothing(index_elements=["point_id", "measured_at", "source"])
+        .returning(ConditionReading.id)
     )
-    if not res.rowcount:  # type: ignore[attr-defined]
+    if res.first() is None:
         return {"duplicate": True, "status": status}
     if p.last_reading_at is None or measured_at >= p.last_reading_at:
         p.last_value, p.last_reading_at, p.last_status = value, measured_at, status
@@ -97,7 +98,7 @@ def record_reading(
                 ConditionAlert.point_id == p.id,
                 ConditionAlert.status.in_([AlertStatus.OPEN, AlertStatus.ACKNOWLEDGED, AlertStatus.WO_CREATED]),
             )
-            .with_for_update()
+            .with_for_update(key_share=True)
         ).scalar_one_or_none()
         asset = db.get(Asset, p.asset_id)
         label = f"{asset.code if asset else ''} {p.name}"

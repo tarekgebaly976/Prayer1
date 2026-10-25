@@ -51,8 +51,9 @@ def generate_roster(db: Session, plant: Plant, team: Team, start: date, end: dat
                         source="pattern",
                     )
                     .on_conflict_do_nothing(index_elements=["user_id", "work_date"])
+                    .returning(RosterEntry.id)
                 )
-                n += res.rowcount  # type: ignore[attr-defined]
+                n += res.first() is not None
         d += timedelta(days=1)
     return n
 

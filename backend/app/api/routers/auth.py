@@ -2,7 +2,7 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -28,8 +28,8 @@ _DUMMY_HASH = hash_password("dummy-password-for-timing-1A!")
 
 
 class LoginIn(In):
-    email: EmailStr
-    password: str
+    email: str = Field(min_length=3, max_length=254)  # lookup only; format validated at user creation
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class PlantAccess(BaseModel):

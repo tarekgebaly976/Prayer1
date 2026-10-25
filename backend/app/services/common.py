@@ -83,7 +83,7 @@ def next_number(db: Session, plant: Plant, key: str) -> str:
         .on_conflict_do_nothing(index_elements=["plant_id", "key"])
     )
     seq = db.execute(
-        select(NumberSequence).where(NumberSequence.plant_id == plant.id, NumberSequence.key == key).with_for_update()
+        select(NumberSequence).where(NumberSequence.plant_id == plant.id, NumberSequence.key == key).with_for_update(key_share=True)
     ).scalar_one()
     value = seq.next_value
     seq.next_value = value + 1

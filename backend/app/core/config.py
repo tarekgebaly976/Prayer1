@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     login_window_minutes: int = 15
     login_lockout_minutes: int = 15
     rate_limit_per_minute: int = 300
+    login_rate_limit_per_minute: int = 20
 
     storage_backend: Literal["local", "s3"] = "local"
     storage_local_path: str = "./var/storage"

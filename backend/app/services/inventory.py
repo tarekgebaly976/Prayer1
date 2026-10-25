@@ -52,13 +52,13 @@ def lock_stock(db: Session, plant: Plant, part: Part, wh: Warehouse) -> StockLev
     return db.execute(
         select(StockLevel)
         .where(StockLevel.part_id == part.id, StockLevel.warehouse_id == wh.id)
-        .with_for_update()
+        .with_for_update(key_share=True)
         .execution_options(populate_existing=True)
     ).scalar_one()
 
 
 def _lock_part(db: Session, part: Part) -> Part:
-    return db.execute(select(Part).where(Part.id == part.id).with_for_update().execution_options(populate_existing=True)).scalar_one()
+    return db.execute(select(Part).where(Part.id == part.id).with_for_update(key_share=True).execution_options(populate_existing=True)).scalar_one()
 
 
 def _txn(
@@ -217,7 +217,7 @@ def cancel_reservation(db: Session, r: Reservation) -> None:
     sl = db.execute(
         select(StockLevel)
         .where(StockLevel.part_id == r.part_id, StockLevel.warehouse_id == r.warehouse_id)
-        .with_for_update()
+        .with_for_update(key_share=True)
         .execution_options(populate_existing=True)
     ).scalar_one()
     remaining = d(r.quantity) - d(r.qty_issued)

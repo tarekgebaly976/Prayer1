@@ -45,7 +45,7 @@ def generate_route(
             select(LubricationPoint)
             .where(LubricationPoint.route_id == route.id, LubricationPoint.is_active.is_(True))
             .order_by(LubricationPoint.route_seq, LubricationPoint.code)
-            .with_for_update()
+            .with_for_update(key_share=True)
         )
         .scalars()
         .all()

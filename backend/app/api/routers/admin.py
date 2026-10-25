@@ -350,7 +350,7 @@ class SequenceIn(In):
 @router.put("/numbering")
 def set_numbering(body: SequenceIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db)) -> dict:
     seq = db.execute(
-        select(NumberSequence).where(NumberSequence.plant_id == ctx.plant_id, NumberSequence.key == body.key).with_for_update()
+        select(NumberSequence).where(NumberSequence.plant_id == ctx.plant_id, NumberSequence.key == body.key).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if seq is None:
         seq = NumberSequence(plant_id=ctx.plant_id, key=body.key, prefix=body.prefix, padding=body.padding, next_value=1)

@@ -71,7 +71,7 @@ def create_app() -> FastAPI:
         openapi_url=f"{API}/openapi.json" if docs else None,
     )
     limiter = RateLimiter(s.rate_limit_per_minute)
-    login_limiter = RateLimiter(20)
+    login_limiter = RateLimiter(s.login_rate_limit_per_minute)
 
     if s.cors_origins:
         app.add_middleware(

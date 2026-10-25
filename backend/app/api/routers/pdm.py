@@ -199,7 +199,7 @@ def alerts(
 
 def _alert(db: Session, ctx: Ctx, aid: uuid.UUID) -> ConditionAlert:
     a = db.execute(
-        select(ConditionAlert).where(ConditionAlert.id == aid, ConditionAlert.plant_id == ctx.plant_id).with_for_update()
+        select(ConditionAlert).where(ConditionAlert.id == aid, ConditionAlert.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
     if a is None:
         raise HTTPException(404, "Alert not found")

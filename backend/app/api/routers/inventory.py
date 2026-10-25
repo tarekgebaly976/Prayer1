@@ -321,7 +321,7 @@ def receipt(body: ReceiptIn, ctx: Ctx = Depends(require("inventory.transact")), 
     p, w = _part(db, ctx, body.part_id), _wh(db, ctx, body.warehouse_id)
     line = None
     if body.po_line_id:
-        line = db.execute(select(PurchaseOrderLine).where(PurchaseOrderLine.id == body.po_line_id).with_for_update()).scalar_one_or_none()
+        line = db.execute(select(PurchaseOrderLine).where(PurchaseOrderLine.id == body.po_line_id).with_for_update(key_share=True)).scalar_one_or_none()
         po = db.get(PurchaseOrder, line.purchase_order_id) if line else None
         if line is None or po is None or po.plant_id != ctx.plant_id or line.part_id != p.id:
             raise HTTPException(422, "PO line not found for this part")

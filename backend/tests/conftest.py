@@ -11,6 +11,7 @@ os.environ.setdefault("CMMS_MIGRATION_DATABASE_URL", "postgresql+psycopg://cmms_
 os.environ.setdefault("CMMS_ENVIRONMENT", "test")
 os.environ.setdefault("CMMS_LOG_LEVEL", "WARNING")
 os.environ.setdefault("CMMS_RATE_LIMIT_PER_MINUTE", "100000")
+os.environ.setdefault("CMMS_LOGIN_RATE_LIMIT_PER_MINUTE", "100000")
 os.environ.setdefault("CMMS_STORAGE_LOCAL_PATH", "/tmp/claude-0/cmms-test-storage")
 
 import pytest  # noqa: E402
@@ -161,7 +162,7 @@ def world() -> World:
         roles = {r.code: r for r in db.query(Role).all()}
         users = {}
         for key, role in ROLE_USERS.items():
-            u = User(organization_id=org.id, email=f"{key}@test.local", full_name=key.title(), password_hash=_HASH,
+            u = User(organization_id=org.id, email=f"{key}@example.com", full_name=key.title(), password_hash=_HASH,
                      is_system_admin=role == "system_admin", hourly_rate=80 if role == "technician" else None,
                      trade="mechanical" if role == "technician" else None)
             db.add(u)
@@ -169,8 +170,8 @@ def world() -> World:
             db.add(Membership(user_id=u.id, plant_id=plant.id, role_id=roles[role].id))
             users[key] = u
         # A plant-B-only planner and a department-restricted (SP) supervisor in plant A.
-        ub = User(organization_id=org.id, email="planner_b@test.local", full_name="Planner B", password_hash=_HASH)
-        usp = User(organization_id=org.id, email="sp_sup@test.local", full_name="SP Supervisor", password_hash=_HASH)
+        ub = User(organization_id=org.id, email="planner_b@example.com", full_name="Planner B", password_hash=_HASH)
+        usp = User(organization_id=org.id, email="sp_sup@example.com", full_name="SP Supervisor", password_hash=_HASH)
         db.add_all([ub, usp])
         db.flush()
         db.add(Membership(user_id=ub.id, plant_id=plant_b.id, role_id=roles["planner"].id))

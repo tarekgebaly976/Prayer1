@@ -76,8 +76,9 @@ def _insert_occ(db: Session, plan: PMPlan, key: str, due: date, due_meter: float
             status=OccurrenceStatus.SCHEDULED,
         )
         .on_conflict_do_nothing(index_elements=["pm_plan_id", "occurrence_key"])
+        .returning(PMOccurrence.id)
     )
-    return bool(res.rowcount)  # type: ignore[attr-defined]
+    return res.first() is not None
 
 
 def plan_occurrences(db: Session, plant: Plant, plan: PMPlan, today: date) -> int:
@@ -132,7 +133,7 @@ def generate_work_orders(db: Session, plant: Plant, today: date, plan_id: uuid.U
             PMPlan.is_active.is_(True),
         )
         .order_by(PMOccurrence.due_date)
-        .with_for_update(of=PMOccurrence, skip_locked=True)
+        .with_for_update(of=PMOccurrence, skip_locked=True, key_share=True)
     )
     if plan_id:
         q = q.where(PMOccurrence.pm_plan_id == plan_id)
