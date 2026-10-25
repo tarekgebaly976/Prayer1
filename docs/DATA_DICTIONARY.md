@@ -179,7 +179,7 @@ Grants a user a role within one plant, optionally restricted to one department.
 
 Unique: (user_id, plant_id)
 
-Indexes: ix_memberships_department_id (department_id); ix_memberships_plant_id (plant_id); ix_memberships_role_id (role_id); ix_memberships_user_id (user_id)
+Indexes: ix_memberships_plant_id (plant_id); ix_memberships_role_id (role_id); ix_memberships_user_id (user_id); ix_memberships_department_id (department_id)
 
 ### `user_sessions`
 
