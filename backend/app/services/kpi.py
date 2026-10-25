@@ -445,7 +445,7 @@ def availability(db: Session, s: Scope) -> KPIResult:
         return unavailable("availability", "%", "Period has not started")
     down = _merged_hours(ev, s.t0, s.t1, _now_clip(s))
     op = observed - down
-    return ratio(
+    res = ratio(
         "availability",
         "%",
         op,
@@ -456,6 +456,9 @@ def availability(db: Session, s: Scope) -> KPIResult:
         downtime_hours=round(down, 2),
         include_planned_downtime=inc_planned,
     )
+    if not ev:
+        res.details["note"] = "No downtime events recorded in scope; the value is only as complete as downtime logging."
+    return res
 
 
 def breakdown_downtime(db: Session, s: Scope) -> KPIResult:

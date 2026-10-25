@@ -252,6 +252,22 @@ def create_point(body: PointIn, ctx: Ctx = Depends(require("lube.manage")), db: 
     return p
 
 
+@router.get("/points/{point_id}/qr.png")
+def point_qr(point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)):  # type: ignore[no-untyped-def]
+    import io
+
+    import qrcode
+    from fastapi.responses import StreamingResponse
+
+    p = db.get(LubricationPoint, point_id)
+    if p is None or p.plant_id != ctx.plant_id:
+        raise HTTPException(404, "Point not found")
+    buf = io.BytesIO()
+    qrcode.make(f"cmms:lube:{p.qr_token}").save(buf, "PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+
 @router.get("/points/by-qr/{token}", response_model=PointOut)
 def point_by_qr(token: str, ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db)) -> LubricationPoint:
     p = db.execute(

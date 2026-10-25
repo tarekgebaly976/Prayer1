@@ -88,6 +88,7 @@ function KPIs() {
                     <Text size="xs" c="dimmed" lineClamp={1}>{names.get(k.code) ?? k.code}</Text>
                     {k.available ? <Text fz={22} fw={700}>{fmtNum(k.value)} <Text span size="sm" c="dimmed">{k.unit}</Text></Text>
                       : <Text size="xs" c="orange" lineClamp={3} title={k.reason ?? ""}>{t("common.unavailable")}: {k.reason}</Text>}
+                    {typeof k.details.note === "string" && <Text size="xs" c="dimmed" lineClamp={2} title={k.details.note}>ⓘ {k.details.note}</Text>}
                     {k.code === "backlog" && k.details.weeks !== undefined && k.details.weeks !== null && <Text size="xs" c="dimmed">≈ {String(k.details.weeks)} weeks</Text>}
                   </Card>))}
               </SimpleGrid>

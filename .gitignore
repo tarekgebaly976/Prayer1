@@ -19,3 +19,6 @@ backend/var/
 backups/
 *.dump
 *.sql.gz
+frontend/test-results/
+frontend/playwright-report/
+frontend/next-env.d.ts.bak
