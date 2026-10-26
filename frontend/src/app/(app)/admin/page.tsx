@@ -162,11 +162,11 @@ function PartsImport() {
   const [res, setRes] = useState<{ total: number; valid: number; invalid: number; errors: { row: number; errors: string[] }[]; warnings: { row: number; warnings: string[] }[] } | null>(null);
   const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
   const preview = useMut(() => api<NonNullable<typeof res>>("POST", "/imports/parts/preview", fd()), { success: false, onDone: setRes });
-  const commit = useMut(() => api("POST", "/imports/parts/commit", fd()), { onDone: () => setRes(null) });
+  const commit = useMut(() => api("POST", "/imports/parts/commit", fd()), { onDone: () => { setFile(null); setRes(null); } });
   return (
     <Stack maw={700}>
       <Button variant="subtle" w="fit-content" onClick={() => void download("/imports/templates/parts.xlsx")}>{t("asset.template")} (parts)</Button>
-      <FileInput label={t("common.file")} accept=".csv,.xlsx" value={file} onChange={(f) => { setFile(f); setRes(null); }} />
+      <FileInput label={t("common.file")} accept=".csv,.xlsx" clearable value={file} onChange={(f) => { setFile(f); setRes(null); }} />
       <Group><Button disabled={!file} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
         <Button color="teal" disabled={!res || res.invalid > 0} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button></Group>
       {res && <Alert color={res.invalid ? "red" : "teal"}>{res.total} · {res.valid} {t("asset.valid")} · {res.invalid} {t("asset.invalid")}

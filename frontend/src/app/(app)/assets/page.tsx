@@ -102,13 +102,15 @@ function ImportAssets({ opened, onClose }: { opened: boolean; onClose: () => voi
   const [res, setRes] = useState<ImportResult | null>(null);
   const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
   const preview = useMut(() => api<ImportResult>("POST", "/imports/assets/preview", fd()), { success: false, onDone: setRes });
-  const commit = useMut(() => api<{ created: number }>("POST", "/imports/assets/commit", fd()), { onDone: () => { onClose(); setRes(null); } });
+  // Start from an empty form every time, so a finished import never leaves its file selected for the next one.
+  const close = () => { setFile(null); setRes(null); onClose(); };
+  const commit = useMut(() => api<{ created: number }>("POST", "/imports/assets/commit", fd()), { onDone: close });
   const errorsCsv = () => downloadPost("/imports/assets/errors.csv", fd(), "asset_import_errors.csv");
   return (
-    <Modal opened={opened} onClose={onClose} title={t("asset.importTitle")} size="lg">
+    <Modal opened={opened} onClose={close} title={t("asset.importTitle")} size="lg">
       <Stack>
         <Button variant="subtle" onClick={() => void download("/imports/templates/assets.xlsx")}>{t("asset.template")}</Button>
-        <FileInput label={t("common.file")} accept=".csv,.xlsx" value={file} onChange={(f) => { setFile(f); setRes(null); }} />
+        <FileInput label={t("common.file")} accept=".csv,.xlsx" clearable value={file} onChange={(f) => { setFile(f); setRes(null); }} />
         <Group>
           <Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
           <Button color="teal" disabled={!res || res.invalid > 0} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button>
