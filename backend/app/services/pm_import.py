@@ -8,6 +8,7 @@ import re
 import uuid
 import zlib
 from collections import OrderedDict
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -62,6 +63,7 @@ DAYS_TO_NAMED = {
 TRADE_CODES = {"mechanical": "MECH", "electrical": "ELEC", "instrumentation": "INST", "operations": "OPS", "lubrication": "LUBE"}
 STEP_SPLIT = re.compile(r"(?:^|\s)\d{1,2}\s*[.)-]\s*(?=\S)")
 YES = {"yes", "y", "true", "1", "offline", "shutdown"}
+MAX_STEPS = 60  # above this a plan lists one checklist line per task; full procedures go to the job plan description
 
 
 def parse_frequency(v: Any) -> tuple[FrequencyUnit, int, str, str] | None:
@@ -91,6 +93,13 @@ def split_steps(text: str) -> list[str]:
     elif head:
         steps[0] = f"{head} {steps[0]}"  # keep a preamble such as "Secure work permit:" with the first step
     return [st if len(st) <= 400 else st[:399] + "…" for st in steps]
+
+
+def spread_start(code: str, unit: FrequencyUnit, n: int, today: date) -> date:
+    """First due date for a plan imported without start_date: a stable offset inside its first cycle, so a bulk import
+    spreads the workload instead of making every plan due on the import day."""
+    cycle = {FrequencyUnit.DAY: 1, FrequencyUnit.WEEK: 7, FrequencyUnit.MONTH: 30, FrequencyUnit.YEAR: 365}[unit] * n
+    return today + timedelta(days=zlib.crc32(code.upper().encode()) % cycle)
 
 
 def _trade_code(trade: str) -> str:
@@ -147,6 +156,7 @@ def validate_pm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
                 "freq": freq,
                 "trade": trade,
                 "rows": [],
+                "texts": [],
                 "tasks": [],
                 "minutes": 0.0,
                 "crew": 1,
@@ -156,6 +166,7 @@ def validate_pm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
             },
         )
         g["rows"].append(rec)
+        g["texts"].append(" ".join(task.split()))
         g["tasks"].extend(split_steps(task))
         g["minutes"] += float(minutes)
         g["crew"] = max(g["crew"], int(crew))
@@ -198,9 +209,13 @@ def commit_pm_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid.U
             crew_size=g["crew"],
             safety_precautions="Machine shutdown required (offline task)." if g["shutdown"] else None,
         )
+        items = g["tasks"]
+        if len(items) > MAX_STEPS:
+            items = [t if len(t) <= 400 else t[:399] + "…" for t in g["texts"]]
+            jp.description = "\n\n".join(f"{i}. {t}" for i, t in enumerate(dict.fromkeys(g["texts"]), start=1))
         db.add(jp)
         db.flush()
-        for seq, step in enumerate(g["tasks"], start=1):
+        for seq, step in enumerate(items, start=1):
             db.add(JobPlanTask(job_plan_id=jp.id, seq=seq, description=step))
         interval_days = {FrequencyUnit.DAY: 1, FrequencyUnit.WEEK: 7, FrequencyUnit.MONTH: 30, FrequencyUnit.YEAR: 365}[unit] * n
         plan = PMPlan(
@@ -214,7 +229,7 @@ def commit_pm_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid.U
             frequency_unit=unit,
             frequency_interval=n,
             schedule_basis=ScheduleBasis.FIXED,
-            start_date=g["start"] or today,
+            start_date=g["start"] or spread_start(g["code"], unit, n, today),
             lead_days=min(7, max(interval_days - 1, 0)),
             created_by_id=user_id,
         )

@@ -21,7 +21,7 @@ from app.services import pm as pmsvc
 from app.services.common import audit, plant_today
 from app.services.imports import _date, _num, _s
 from app.services.lube_import import UNIT_DAYS
-from app.services.pm_import import _plan_code, parse_frequency
+from app.services.pm_import import _plan_code, parse_frequency, spread_start
 
 LIMITS = ("warning_high", "alarm_high", "warning_low", "alarm_low", "baseline")
 
@@ -172,7 +172,7 @@ def commit_pdm_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid.
             frequency_unit=unit,
             frequency_interval=n,
             schedule_basis=ScheduleBasis.FIXED,
-            start_date=g["start"] or today,
+            start_date=g["start"] or spread_start(g["code"], unit, n, today),
             lead_days=min(7, max(UNIT_DAYS[unit] * n - 1, 0)),
             created_by_id=user_id,
         )

@@ -60,7 +60,7 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("duration_min", "Minutes for this task (summed per plan)"),
         ("crew", "Number of people"),
         ("shutdown_required", "yes / offline if the machine must be stopped, otherwise no / online"),
-        ("start_date", "YYYY-MM-DD of the first due date (blank = today)"),
+        ("start_date", "YYYY-MM-DD of the first due date (blank = spread evenly over the first cycle)"),
         ("priority", "P1 | P2 | P3 | P4 (blank = P3)"),
     ],
     "lube_plans": [
@@ -90,7 +90,7 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("alarm_low", "number (optional)"),
         ("baseline", "number (optional)"),
         ("trade", "Who takes the readings, e.g. Reliability (blank = Reliability)"),
-        ("start_date", "YYYY-MM-DD first round (blank = today)"),
+        ("start_date", "YYYY-MM-DD first round (blank = spread evenly over the first cycle)"),
         ("point_code", "Optional; blank = generated from the asset code"),
     ],
 }

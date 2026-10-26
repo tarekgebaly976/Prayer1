@@ -47,6 +47,19 @@ Scan an equipment QR label with **Scan QR** to open its page: history, spare par
   every N running hours). Work orders are generated automatically *lead days* before the due date — never twice.
 * Plan work orders: planned start/end, estimated hours, supervisor; schedule; reserve spare parts.
 * *Lubrication*: lubrication points, routes, *Generate route WO*.
+* *Importing plans from Excel* (**Import plan** on the Preventive maintenance, Lubrication and Condition monitoring
+  pages): download the template, fill one row per task, **Preview**, then **Import** (nothing is saved if any row has
+  an error).
+  * PM: rows with the same equipment + frequency + trade become **one** PM plan, so a monthly mechanical round is one
+    work order with all tasks as its checklist. Frequency can be `weekly`, `monthly`, `quarterly`, `semiannual`,
+    `yearly` or a number of days. Numbered steps (`1. … 2. …`) become separate checklist lines; very large rounds
+    (more than 60 lines) list one line per task and keep the full procedures in the job plan description.
+  * Lubrication: one row per lubrication point; points are grouped into one route per department and frequency
+    (e.g. `LR-PM-W`), and new lubricant codes are created from the row.
+  * Condition monitoring: one row per measurement point with its alarm limits; points of the same equipment and
+    frequency get one predictive reading round.
+  * A blank `start_date` spreads the first due dates evenly over the first cycle, so a bulk import does not make
+    every plan due on the same day.
 * *Shutdowns*: work packages with durations and predecessors; the critical path is calculated and shown in red on the
   Gantt chart; track material/permit/LOTO readiness, daily progress and delay reasons; pre-startup checks must be
   completed before the shutdown can be closed.

@@ -1,4 +1,5 @@
 import io
+from datetime import date
 
 from openpyxl import Workbook
 
@@ -65,8 +66,23 @@ def test_pm_import_groups_tasks_into_plans_and_is_all_or_nothing(world):
     assert [t["description"] for t in jp["tasks"]] == ["Clean motor", "Check base", "Inspect coupling"]
     assert jp["estimated_hours"] == 1.5 and jp["crew_size"] == 2 and "shutdown" in jp["safety_precautions"].lower()
 
+    elec = plans["PM-DRYER-M-ELEC"]  # no start_date: first due spread inside the first month, never in the past
+    assert -1 <= (date.fromisoformat(elec["start_date"]) - date.today()).days < 31  # -1: plant (Riyadh) vs UTC date
+
     again = api.ok("post", "/imports/pm_plans/preview", files=_xlsx(rows))
     assert again["invalid"] == 4 and "already exists" in again["errors"][0]["errors"][0]
+
+
+def test_large_round_lists_one_line_per_task(world):
+    api = world.api("planner")
+    mk_asset(api, world, "PM-COATER")
+    tasks = [f"Task {i}: 1. Clean part {i} 2. Inspect part {i}" for i in range(40)]  # 80 steps > MAX_STEPS
+    rows = [HEADER] + [["PM-COATER", "quarterly", t, "Instrumentation", 10, 1, "", "", ""] for t in tasks]
+    assert api.ok("post", "/imports/pm_plans/commit", files=_xlsx(rows))["created"] == 1
+    plan = api.get("/pm/plans").json()["items"][0]
+    jp = api.ok("get", f"/pm/job-plans/{plan['job_plan_id']}")
+    assert len(jp["tasks"]) == 40 and jp["tasks"][0]["description"].startswith("Task 0: 1. Clean part 0")
+    assert "40. Task 39" in jp["description"]
 
 
 def test_pm_import_requires_pm_manage(world):
