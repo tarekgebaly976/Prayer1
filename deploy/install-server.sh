@@ -24,6 +24,9 @@ log "Installing Docker and tools"
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sh
 fi
+export DEBIAN_FRONTEND=noninteractive
+echo "iptables-persistent iptables-persistent/autosave_v4 boolean true" | debconf-set-selections
+echo "iptables-persistent iptables-persistent/autosave_v6 boolean true" | debconf-set-selections
 apt-get update -qq && apt-get install -y -qq git openssl curl iptables-persistent >/dev/null 2>&1 || apt-get install -y -qq git openssl curl
 systemctl enable --now docker
 
