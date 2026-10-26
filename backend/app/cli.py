@@ -3,6 +3,7 @@
   python -m app.cli bootstrap --org-code ACME --org-name "Acme Paper" --plant-code PM1 --plant-name "Mill 1" \
         --admin-email admin@example.com           # password from CMMS_ADMIN_PASSWORD or interactive prompt
   python -m app.cli seed-demo                     # isolated DEMO organization; password from CMMS_DEMO_PASSWORD
+  python -m app.cli reset-password --email admin@example.com   # new password from CMMS_NEW_PASSWORD or prompt
   python -m app.cli sync-rbac
   python -m app.cli run-scheduler [--plant-code X]
 """
@@ -12,12 +13,12 @@ import getpass
 import os
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.db import SessionLocal
 from app.core.security import hash_password, validate_password_strength
 from app.models.enums import DepartmentType
-from app.models.identity import Membership, Role, User
+from app.models.identity import Membership, Role, User, UserSession
 from app.models.tenancy import Department, Organization, Plant
 from app.services.common import sync_rbac, utcnow
 from app.services.workflow import ensure_default_transitions
@@ -33,9 +34,34 @@ DEFAULT_DEPTS = [
 
 
 def _password(env: str) -> str:
-    pw = os.environ.get(env) or getpass.getpass("Password: ")
-    validate_password_strength(pw)
-    return pw
+    if os.environ.get(env):
+        validate_password_strength(os.environ[env])
+        return os.environ[env]
+    # Interactive: typed twice (input is hidden), re-asked until it is strong and both entries match.
+    while True:
+        pw = getpass.getpass("Password (hidden while typing): ")
+        try:
+            validate_password_strength(pw)
+        except ValueError as e:
+            print(f"  {e}. Try again.")
+            continue
+        if getpass.getpass("Repeat password: ") == pw:
+            return pw
+        print("  The two entries do not match. Try again.")
+
+
+def reset_password(a: argparse.Namespace) -> None:
+    pw = _password("CMMS_NEW_PASSWORD")
+    with SessionLocal() as db, db.begin():
+        user = db.execute(select(User).where(User.email == a.email.lower())).scalar_one_or_none()
+        if user is None:
+            sys.exit(f"No user with e-mail {a.email}")
+        user.password_hash = hash_password(pw)
+        user.password_changed_at = utcnow()
+        user.failed_login_count = 0
+        user.locked_until = None
+        db.execute(update(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
+    print(f"Password reset for {a.email}; existing sessions signed out")
 
 
 def bootstrap(a: argparse.Namespace) -> None:
@@ -98,6 +124,8 @@ def main() -> None:
     b.add_argument("--admin-email", required=True)
     b.add_argument("--timezone", default="Asia/Riyadh")
     b.add_argument("--currency", default="SAR")
+    rp = sub.add_parser("reset-password")
+    rp.add_argument("--email", required=True)
     sub.add_parser("seed-demo")
     sub.add_parser("sync-rbac")
     r = sub.add_parser("run-scheduler")
@@ -105,6 +133,8 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "bootstrap":
         bootstrap(a)
+    elif a.cmd == "reset-password":
+        reset_password(a)
     elif a.cmd == "seed-demo":
         from app.seed import seed_demo
 

@@ -85,6 +85,9 @@ if [[ "${USERS//[^0-9]/}" == "0" ]]; then
   echo "Password: at least 12 characters with 3 of: lowercase, uppercase, digit, symbol"
   "${COMPOSE[@]}" exec api python -m app.cli bootstrap --org-code "$ORG" --org-name "$ORGNAME" \
     --plant-code "$PLANT" --plant-name "$PLANTNAME" --admin-email "$ADMIN_EMAIL"
+else
+  echo "Administrator already exists. To set a new password:"
+  echo "  cd $DIR && sudo ${COMPOSE[*]} exec api python -m app.cli reset-password --email <admin e-mail>"
 fi
 
 if [[ "${SEED_DEMO:-0}" == 1 ]]; then
