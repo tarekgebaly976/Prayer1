@@ -52,6 +52,47 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("unit_price", "number"),
         ("category", "text"),
     ],
+    "pm_plans": [
+        ("asset_code", "Code of an existing asset; tasks of the same asset + frequency + trade become one PM plan"),
+        ("frequency", "weekly | biweekly | monthly | bimonthly | quarterly | semiannual | yearly, or a number of days (7, 30, 90, 365)"),
+        ("task", "Activity; numbered steps (1. ... 2. ...) become separate checklist items"),
+        ("trade", "Mechanical | Electrical | Instrumentation | Operations ... (who does it)"),
+        ("duration_min", "Minutes for this task (summed per plan)"),
+        ("crew", "Number of people"),
+        ("shutdown_required", "yes / offline if the machine must be stopped, otherwise no / online"),
+        ("start_date", "YYYY-MM-DD of the first due date (blank = today)"),
+        ("priority", "P1 | P2 | P3 | P4 (blank = P3)"),
+    ],
+    "lube_plans": [
+        ("asset_code", "Code of an existing asset"),
+        ("component", "Lubricated part, e.g. Drive-side bearing"),
+        ("lubricant_code", "Lubricant code; a new code is created from the next three columns"),
+        ("lubricant_name", "Product, e.g. Mobilux EP 2 (needed only for a new lubricant code)"),
+        ("lubricant_type", "grease | oil"),
+        ("viscosity_grade", "e.g. NLGI 2 or ISO VG 220"),
+        ("quantity", "Amount per service"),
+        ("unit", "g | kg | ml | L (blank = g)"),
+        ("method", "Grease gun / top-up / oil change ..."),
+        ("frequency", "weekly | monthly | quarterly | yearly ... or a number of days"),
+        ("route_code", "Optional route; blank = one route per department and frequency, e.g. LR-PM-W"),
+        ("start_date", "YYYY-MM-DD first due date (blank = today)"),
+        ("point_code", "Optional; blank = generated from the asset code"),
+    ],
+    "pdm_plans": [
+        ("asset_code", "Code of an existing asset"),
+        ("point_name", "What is measured, e.g. Motor DE bearing vibration"),
+        ("technique", "vibration | temperature | thermography | ultrasound | oil_analysis | motor_current | pressure | flow | other"),
+        ("unit", "e.g. mm/s, °C, A, bar"),
+        ("frequency", "How often readings are taken: weekly | monthly | quarterly ... or days"),
+        ("warning_high", "number (optional)"),
+        ("alarm_high", "number (optional)"),
+        ("warning_low", "number (optional)"),
+        ("alarm_low", "number (optional)"),
+        ("baseline", "number (optional)"),
+        ("trade", "Who takes the readings, e.g. Reliability (blank = Reliability)"),
+        ("start_date", "YYYY-MM-DD first round (blank = today)"),
+        ("point_code", "Optional; blank = generated from the asset code"),
+    ],
 }
 
 
@@ -98,7 +139,7 @@ def _num(v: Any, field: str, errs: list[str], integer: bool = False) -> float | 
         return None
 
 
-def _date(v: Any, errs: list[str]) -> date | None:
+def _date(v: Any, errs: list[str], field: str = "install_date") -> date | None:
     if v is None or _s(v) is None:
         return None
     if isinstance(v, datetime):
@@ -108,7 +149,7 @@ def _date(v: Any, errs: list[str]) -> date | None:
     try:
         return date.fromisoformat(str(v).strip()[:10])
     except ValueError:
-        errs.append("install_date must be YYYY-MM-DD")
+        errs.append(f"{field} must be YYYY-MM-DD")
         return None
 
 

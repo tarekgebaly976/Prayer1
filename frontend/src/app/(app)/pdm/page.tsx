@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtDate, fmtNum, useMut, useQ } from "@/lib/hooks";
@@ -58,6 +59,7 @@ function PdM() {
   const [offset, setOffset] = useState(0);
   const [openOnly, setOpenOnly] = useState(true);
   const [add, setAdd] = useState(false);
+  const [imp, setImp] = useState(false);
   const [f, setF] = useState({ code: "", name: "", asset_id: null as string | null, technique: "vibration", unit: "mm/s", warning_high: "" as number | string, alarm_high: "" as number | string,
     warning_low: "" as number | string, alarm_low: "" as number | string, auto_create_wo: false, external_tag: "", recommended_action: "" });
   const points = useQ<MPoint[]>("/pdm/points");
@@ -71,9 +73,13 @@ function PdM() {
   const point = sel ? pmap.get(sel) : undefined;
   return (
     <>
-      <PageHeader title={t("nav.pdm")} actions={can("pdm.manage") ? <Button onClick={() => setAdd(true)}>{t("pdm.newPoint")}</Button> : null}>
+      <PageHeader title={t("nav.pdm")} actions={can("pdm.manage") ? <>
+        <Button onClick={() => setAdd(true)}>{t("pdm.newPoint")}</Button>
+        <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>
+      </> : null}>
         <Text size="sm" c="dimmed">{t("pdm.ruleNote")}</Text>
       </PageHeader>
+      <PlanImport kind="pdm_plans" title={t("planImport.pdm")} opened={imp} onClose={() => setImp(false)} />
       <Tabs defaultValue={sp.get("tab") ?? "points"}>
         <Tabs.List><Tabs.Tab value="points">{t("pdm.points")}</Tabs.Tab><Tabs.Tab value="alerts">{t("pdm.alerts")}</Tabs.Tab></Tabs.List>
         <Tabs.Panel value="points" pt="md">

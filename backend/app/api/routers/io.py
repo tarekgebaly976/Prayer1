@@ -16,7 +16,7 @@ from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
 from app.services import imports as imp
 from app.services import kpi as kpisvc
-from app.services import reports
+from app.services import lube_import, pdm_import, pm_import, reports
 from app.services.common import plant_today
 
 router = APIRouter(tags=["import/export"])
@@ -58,12 +58,16 @@ def template(kind: str, ctx: Ctx = Depends(require("asset.view"))) -> Response:
 
 
 @router.post("/imports/assets/preview")
-def preview_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")) -> dict:
+def preview_assets(
+    file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     return _strip(imp.validate_assets(db, ctx.plant, _read(file)))
 
 
 @router.post("/imports/assets/commit")
-def commit_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")) -> dict:
+def commit_assets(
+    file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.import")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     rows = _read(file)
     v = imp.validate_assets(db, ctx.plant, rows)
     if v["invalid"]:
@@ -72,17 +76,57 @@ def commit_assets(file: UploadFile = File(...), ctx: Ctx = Depends(require("asse
 
 
 @router.post("/imports/parts/preview")
-def preview_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def preview_parts(
+    file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     return _strip(imp.validate_parts(db, ctx.plant, _read(file)))
 
 
 @router.post("/imports/parts/commit")
-def commit_parts(file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def commit_parts(
+    file: UploadFile = File(...), ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     rows = _read(file)
     v = imp.validate_parts(db, ctx.plant, rows)
     if v["invalid"]:
         raise HTTPException(422, {"message": "Import has validation errors; nothing was imported", **_strip(v)})
     return {"created": imp.commit_parts(db, ctx.plant, rows, ctx.user.id)}
+
+
+# Maintenance plan imports: kind -> (validate, commit, preview summary, permission)
+PLAN_IMPORTS = {
+    "pm_plans": (pm_import.validate_pm_plans, pm_import.commit_pm_plans, pm_import.preview_dict, "pm.manage"),
+    "lube_plans": (lube_import.validate_lube_plans, lube_import.commit_lube_plans, lube_import.preview_dict, "lube.manage"),
+    "pdm_plans": (pdm_import.validate_pdm_plans, pdm_import.commit_pdm_plans, pdm_import.preview_dict, "pdm.manage"),
+}
+
+
+def _plan_import(kind: str, ctx: Ctx):
+    if kind not in PLAN_IMPORTS:
+        raise HTTPException(404, "Unknown import")
+    spec = PLAN_IMPORTS[kind]
+    ctx.require(spec[3])
+    return spec
+
+
+@router.post("/imports/{kind}/preview")
+def preview_plans(
+    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    validate, _, summary, _ = _plan_import(kind, ctx)
+    return summary(validate(db, ctx.plant, _read(file)))
+
+
+@router.post("/imports/{kind}/commit")
+def commit_plans(
+    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    validate, commit, summary, _ = _plan_import(kind, ctx)
+    rows = _read(file)
+    v = validate(db, ctx.plant, rows)
+    if v["invalid"]:
+        raise HTTPException(422, {"message": "Import has validation errors; nothing was imported", **summary(v)})
+    return {"created": commit(db, ctx.plant, rows, ctx.user.id)}
 
 
 @router.post("/imports/{kind}/errors.csv")
@@ -96,6 +140,9 @@ def error_report(
     elif kind == "parts":
         ctx.require("inventory.manage")
         v = imp.validate_parts(db, ctx.plant, rows)
+    elif kind in PLAN_IMPORTS:
+        validate = _plan_import(kind, ctx)[0]
+        v = validate(db, ctx.plant, rows)
     else:
         raise HTTPException(404, "Unknown import")
     return Response(
@@ -281,7 +328,10 @@ def wo_pdf(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session
 
 @router.get("/reports/kpis.pdf")
 def kpi_pdf(
-    ctx: Ctx = Depends(require("report.export")), db: Session = Depends(get_db, scope="function"), start: date | None = None, end: date | None = None
+    ctx: Ctx = Depends(require("report.export")),
+    db: Session = Depends(get_db, scope="function"),
+    start: date | None = None,
+    end: date | None = None,
 ) -> StreamingResponse:
     today = plant_today(ctx.plant)
     s = kpisvc.Scope(plant=ctx.plant, start=start or today.replace(day=1), end=end or today, department_id=ctx.department_id)

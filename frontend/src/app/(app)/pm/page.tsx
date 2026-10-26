@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
@@ -136,6 +137,7 @@ function PM() {
   const { can } = useSession();
   const [jp, setJp] = useState(false);
   const [np, setNp] = useState(false);
+  const [imp, setImp] = useState(false);
   const [runRes, setRunRes] = useState<string | null>(null);
   const plans = useQ<Page<Plan>>("/pm/plans", { limit: 500 });
   const jobs = useQ<JobPlan[]>("/pm/job-plans");
@@ -159,8 +161,10 @@ function PM() {
       <PageHeader title={t("nav.pm")} actions={<>
         {can("pm.manage") && <Button onClick={() => setNp(true)}>{t("pm.newPlan")}</Button>}
         {can("pm.manage") && <Button variant="light" onClick={() => setJp(true)}>{t("pm.newJobPlan")}</Button>}
+        {can("pm.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>}
         {can("pm.run_scheduler") && <Button variant="default" loading={run.isPending} onClick={() => run.mutate(undefined)}>{t("pm.runScheduler")}</Button>}
       </>} />
+      <PlanImport kind="pm_plans" title={t("planImport.pm")} opened={imp} onClose={() => setImp(false)} />
       {runRes && <Alert color="teal" mb="md" withCloseButton onClose={() => setRunRes(null)}>{runRes}</Alert>}
       <Tabs defaultValue={sp.get("tab") ?? "plans"}>
         <Tabs.List>

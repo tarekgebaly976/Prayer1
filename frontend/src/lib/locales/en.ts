@@ -90,6 +90,9 @@ export const en = {
     tokens: "Integration tokens", audit: "Audit log", jobs: "Background jobs", timezone: "Timezone", currency: "Currency", disable: "Disable",
     enable: "Enable", tokenNote: "Copy this token now. It will not be shown again.", permission: "Required permission", action: "Action" },
   notif: { markAll: "Mark all read", unread: "unread" },
+  planImport: { button: "Import plan", pm: "Import PM plan", lube: "Import lubrication plan", pdm: "Import condition-monitoring plan",
+    help: "One row per task. Rows with the same equipment, frequency and trade become one plan, so each round is one work order.",
+    plans: "plans / routes to create", newLubricants: "new lubricants", created: "Imported {{n}} rows" },
 } as const;
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
