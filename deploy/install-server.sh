@@ -98,7 +98,7 @@ fi
 
 log "Scheduling nightly backups (02:15 server time, kept 14 days in /opt/cmms-backups)"
 CRON="15 2 * * * cd $DIR && ENV_FILE=deploy/.env scripts/backup.sh /opt/cmms-backups >> /var/log/cmms-backup.log 2>&1"
-( crontab -l 2>/dev/null | grep -v 'scripts/backup.sh'; echo "$CRON" ) | crontab -
+{ crontab -l 2>/dev/null | grep -v 'scripts/backup.sh' || true; echo "$CRON"; } | crontab -
 
 log "Done"
 echo "Open:  https://$DOMAIN"
