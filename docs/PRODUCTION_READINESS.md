@@ -19,7 +19,7 @@ real-device mobile testing, SSO or MFA for privileged users, and a penetration t
 | I | Unauthorized users / other plant blocked | **Done** | `test_rbac_tenancy.py`, file and security tests, E2E |
 | J | Persistence after browser close and app restart | **Done** | E2E fresh browser context; API process restarted with data intact (count before/after: 1 closed WO) |
 | K | Backup and restore in test environment | **Done** | `scripts/verify_restore.sh`: 74 tables, 0 mismatches |
-| L | Deploy to selected cloud, HTTPS, desktop + mobile | **Partial** | Trial cloud deployment on an Oracle Cloud Always Free VM (me-riyadh-1, ARM) via `deploy/install-server.sh`; HTTPS at https://84-8-106-22.sslip.io with a Let's Encrypt certificate. The owner signed in and saw the dashboard in a desktop browser (2026-10-26). Remaining: real-phone test, confirm backup cron, production target with managed PostgreSQL/PITR and monitoring. |
+| L | Deploy to selected cloud, HTTPS, desktop + mobile | **Partial** | Trial cloud deployment on an Oracle Cloud Always Free VM (me-riyadh-1, ARM) via `deploy/install-server.sh`; HTTPS at https://84-8-106-22.sslip.io with a Let's Encrypt certificate. The owner signed in and saw the dashboard in a desktop browser (2026-10-26). Nightly backup cron installed. Remaining: real-phone test, verify first server backup, production target with managed PostgreSQL/PITR and monitoring. |
 | M | Critical workflows have automated coverage, results documented | **Done** (with gaps listed in TEST_REPORT) | 60 backend tests, 8 E2E, report in TEST_REPORT.md |
 
 ## Readiness by area

@@ -22,7 +22,7 @@
 * —
 
 ## Blocked
-* **Cloud deployment (criterion L):** trial deployment done on 2026-10-26: Oracle Cloud Always Free VM (Riyadh, Ampere A1 2 OCPU/12 GB, Ubuntu 24.04), installed with `deploy/install-server.sh`, served at https://84-8-106-22.sslip.io (Let's Encrypt). The owner signed in and reached the dashboard on a desktop browser. Not yet done: real-phone test, confirming the nightly backup cron after re-running the installer, and a production deployment (managed DB/PITR, monitoring) approved by the company's IT.
+* **Cloud deployment (criterion L):** trial deployment done on 2026-10-26: Oracle Cloud Always Free VM (Riyadh, Ampere A1 2 OCPU/12 GB, Ubuntu 24.04), installed with `deploy/install-server.sh`, served at https://84-8-106-22.sslip.io (Let's Encrypt). The owner signed in and reached the dashboard on a desktop browser. Nightly backup cron installed (02:15 server time, UTC) after re-running the installer. Not yet done: real-phone test, a first verified backup/restore on the server, and a production deployment (managed DB/PITR, monitoring) approved by the company's IT.
 * SMTP delivery and S3/GCS storage verification: need provider credentials.
 
 ## Tested
