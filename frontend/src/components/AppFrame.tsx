@@ -1,16 +1,17 @@
 "use client";
 
-import { ActionIcon, AppShell, Badge, Burger, Group, Indicator, Menu, NavLink, ScrollArea, Select, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Burger, Button, Group, Indicator, Menu, Modal, NavLink, PasswordInput, ScrollArea, Select, Stack, Text, Tooltip } from "@mantine/core";
 import { useDisclosure, useNetwork } from "@mantine/hooks";
 import {
   IconAlertTriangle, IconBell, IconBox, IconCalendarTime, IconChartBar, IconClipboardList, IconDashboard, IconDroplet, IconHeartRateMonitor,
-  IconLanguage, IconLogout, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
+  IconKey, IconLanguage, IconLogout, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { useQ } from "@/lib/hooks";
+import { post } from "@/lib/api";
+import { useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import { Loading } from "./ui";
 
@@ -35,6 +36,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const { me, loading, plant, setPlant, can, logout, setLocale } = useSession();
   const { t, i18n } = useTranslation();
   const [opened, { toggle, close }] = useDisclosure();
+  const [pwOpen, pw] = useDisclosure();
   const pathname = usePathname();
   const router = useRouter();
   const net = useNetwork();
@@ -77,6 +79,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
               <Menu.Target><ActionIcon variant="subtle" aria-label="account" data-testid="account-menu"><IconUserCheck size={20} /></ActionIcon></Menu.Target>
               <Menu.Dropdown>
                 <Menu.Label>{me.full_name}<br />{plant.plant_name} · {plant.role}</Menu.Label>
+                <Menu.Item leftSection={<IconKey size={16} />} onClick={pw.open}>{t("auth.changePassword")}</Menu.Item>
                 <Menu.Item leftSection={<IconLogout size={16} />} onClick={() => void logout()}>{t("app.logout")}</Menu.Item>
               </Menu.Dropdown>
             </Menu>
@@ -92,6 +95,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         </ScrollArea>
       </AppShell.Navbar>
       <AppShell.Main>{children}</AppShell.Main>
+      <ChangePassword opened={pwOpen} onClose={pw.close} />
     </AppShell>
   );
 }
@@ -102,4 +106,24 @@ export function Guard({ perm, children }: { perm: string; children: ReactNode })
   // UX only: the backend enforces every permission independently.
   if (!can(perm)) return <Text c="dimmed" p="xl">{t("app.noAccess")}</Text>;
   return <>{children}</>;
+}
+
+function ChangePassword({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const empty = { current: "", next: "", repeat: "" };
+  const [f, setF] = useState(empty);
+  const done = () => { setF(empty); onClose(); };
+  const m = useMut(() => post("/auth/change-password", { current_password: f.current, new_password: f.next }), { success: t("auth.passwordChanged"), onDone: done });
+  const mismatch = f.repeat.length > 0 && f.repeat !== f.next;
+  return (
+    <Modal opened={opened} onClose={done} title={t("auth.changePassword")}>
+      <Stack>
+        <PasswordInput label={t("auth.currentPassword")} autoComplete="current-password" value={f.current} onChange={(e) => setF({ ...f, current: e.currentTarget.value })} />
+        <PasswordInput label={t("auth.newPassword")} description={t("auth.passwordRule")} autoComplete="new-password" value={f.next} onChange={(e) => setF({ ...f, next: e.currentTarget.value })} />
+        <PasswordInput label={t("auth.repeatPassword")} autoComplete="new-password" value={f.repeat} error={mismatch ? t("auth.passwordMismatch") : undefined}
+          onChange={(e) => setF({ ...f, repeat: e.currentTarget.value })} />
+        <Button onClick={() => m.mutate(undefined)} loading={m.isPending} disabled={!f.current || f.next.length < 12 || f.next !== f.repeat}>{t("common.save")}</Button>
+      </Stack>
+    </Modal>
+  );
 }
