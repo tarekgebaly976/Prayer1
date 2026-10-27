@@ -80,7 +80,9 @@ def list_suppliers(ctx: Ctx = Depends(require("inventory.view")), db: Session = 
 
 
 @router.post("/suppliers", status_code=201)
-def create_supplier(body: SupplierIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def create_supplier(
+    body: SupplierIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     s = Supplier(plant_id=ctx.plant_id, **body.model_dump())
     db.add(s)
     try:
@@ -273,7 +275,9 @@ def get_part(pid: uuid.UUID, ctx: Ctx = Depends(require("inventory.view")), db: 
 
 
 @router.patch("/parts/{pid}", response_model=PartOut)
-def update_part(pid: uuid.UUID, body: PartUpdate, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> Part:
+def update_part(
+    pid: uuid.UUID, body: PartUpdate, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")
+) -> Part:
     p = _part(db, ctx, pid)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(p, k, v)
@@ -295,7 +299,9 @@ class SubIn(In):
 
 
 @router.post("/parts/{pid}/substitutes", status_code=201)
-def add_sub(pid: uuid.UUID, body: SubIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_sub(
+    pid: uuid.UUID, body: SubIn, ctx: Ctx = Depends(require("inventory.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     p, s = _part(db, ctx, pid), _part(db, ctx, body.substitute_id)
     if p.id == s.id:
         raise HTTPException(422, "A part cannot substitute itself")
@@ -456,7 +462,10 @@ def valuation(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depen
 
 @router.get("/aging")
 def aging(
-    ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function"), slow_days: int = 180, obsolete_days: int = 730
+    ctx: Ctx = Depends(require("inventory.view")),
+    db: Session = Depends(get_db, scope="function"),
+    slow_days: int = 180,
+    obsolete_days: int = 730,
 ) -> dict:
     now = utcnow()
     rows = db.execute(
@@ -509,7 +518,9 @@ class POIn(In):
 
 
 @router.get("/purchase-orders")
-def list_pos(ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function"), status: POStatus | None = None) -> list[dict]:
+def list_pos(
+    ctx: Ctx = Depends(require("inventory.view")), db: Session = Depends(get_db, scope="function"), status: POStatus | None = None
+) -> list[dict]:
     q = select(PurchaseOrder).where(PurchaseOrder.plant_id == ctx.plant_id)
     if status:
         q = q.where(PurchaseOrder.status == status)
@@ -572,7 +583,9 @@ class POStatusIn(In):
 
 
 @router.post("/purchase-orders/{po_id}/status")
-def po_status(po_id: uuid.UUID, body: POStatusIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def po_status(
+    po_id: uuid.UUID, body: POStatusIn, ctx: Ctx = Depends(require("purchase.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     po = db.get(PurchaseOrder, po_id)
     if po is None or po.plant_id != ctx.plant_id:
         raise HTTPException(404, "PO not found")

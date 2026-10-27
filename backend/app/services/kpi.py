@@ -245,14 +245,29 @@ def planned_maintenance_pct(db: Session, s: Scope) -> KPIResult:
 
 # 4 ---------------------------------------------------------------------------
 def _wo_cols():  # type: ignore[no-untyped-def]
-    return (WorkOrder.id, WorkOrder.number, WorkOrder.type, WorkOrder.status, WorkOrder.title, WorkOrder.due_date,
-            WorkOrder.completed_at, WorkOrder.estimated_hours, WorkOrder.actual_labor_hours)
+    return (
+        WorkOrder.id,
+        WorkOrder.number,
+        WorkOrder.type,
+        WorkOrder.status,
+        WorkOrder.title,
+        WorkOrder.due_date,
+        WorkOrder.completed_at,
+        WorkOrder.estimated_hours,
+        WorkOrder.actual_labor_hours,
+    )
 
 
 def _row_rec(r: Any) -> dict:
-    return {"id": str(r.id), "number": r.number, "type": r.type.value, "status": r.status.value, "title": r.title,
-            "due_date": r.due_date.isoformat() if r.due_date else None,
-            "completed_at": r.completed_at.isoformat() if r.completed_at else None}
+    return {
+        "id": str(r.id),
+        "number": r.number,
+        "type": r.type.value,
+        "status": r.status.value,
+        "title": r.title,
+        "due_date": r.due_date.isoformat() if r.due_date else None,
+        "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+    }
 
 
 def backlog(db: Session, s: Scope) -> KPIResult:
@@ -260,27 +275,46 @@ def backlog(db: Session, s: Scope) -> KPIResult:
     ids = _asset_ids(db, s)
     statuses = [WOStatus.APPROVED, WOStatus.PLANNED, WOStatus.SCHEDULED, WOStatus.IN_PROGRESS, WOStatus.ON_HOLD]
     remaining = func.greatest(WorkOrder.estimated_hours - func.coalesce(WorkOrder.actual_labor_hours, 0), 0)
-    agg = _wo_scope(select(func.count(), func.count(WorkOrder.estimated_hours), func.coalesce(func.sum(remaining), 0))
-                    .select_from(WorkOrder), s, ids).where(WorkOrder.status.in_(statuses))
+    agg = _wo_scope(
+        select(func.count(), func.count(WorkOrder.estimated_hours), func.coalesce(func.sum(remaining), 0)).select_from(WorkOrder), s, ids
+    ).where(WorkOrder.status.in_(statuses))
     n_open, n_est, hours_d = db.execute(agg).one()
     hours = float(hours_d or 0)
     missing = n_open - n_est
-    rows = db.execute(_wo_scope(select(*_wo_cols(), remaining.label("rem")), s, ids)
-                      .where(WorkOrder.status.in_(statuses), WorkOrder.estimated_hours.is_not(None))
-                      .order_by(WorkOrder.due_date.asc().nulls_last()).limit(MAX_RECORDS + 1)).all()
+    rows = db.execute(
+        _wo_scope(select(*_wo_cols(), remaining.label("rem")), s, ids)
+        .where(WorkOrder.status.in_(statuses), WorkOrder.estimated_hours.is_not(None))
+        .order_by(WorkOrder.due_date.asc().nulls_last())
+        .limit(MAX_RECORDS + 1)
+    ).all()
     recs = [{**_row_rec(r), "remaining_hours": round(float(r.rem or 0), 2)} for r in rows]
     tech_roles = s.cfg("capacity_roles", ["technician"])
-    q = (select(func.count()).select_from(Membership).join(Role, Role.id == Membership.role_id)
-         .where(Membership.plant_id == s.plant.id, Membership.is_active.is_(True), Role.code.in_(tech_roles)))
+    q = (
+        select(func.count())
+        .select_from(Membership)
+        .join(Role, Role.id == Membership.role_id)
+        .where(Membership.plant_id == s.plant.id, Membership.is_active.is_(True), Role.code.in_(tech_roles))
+    )
     if s.department_id:
         q = q.where(Membership.department_id == s.department_id)
     techs = db.execute(q).scalar_one()
     weekly = techs * float(s.plant.working_hours_per_day) * len(s.plant.working_days or [])
     weeks = hours / weekly if weekly else None
-    res = KPIResult(code="backlog", value=hours, unit="h", numerator=round(hours, 2), denominator=weekly or None,
-                    records=recs, details={"weeks": round(weeks, 2) if weeks is not None else None,
-                                           "weekly_capacity_hours": weekly, "technicians": techs,
-                                           "excluded_missing_estimate": missing, "open_work_orders": n_open})
+    res = KPIResult(
+        code="backlog",
+        value=hours,
+        unit="h",
+        numerator=round(hours, 2),
+        denominator=weekly or None,
+        records=recs,
+        details={
+            "weeks": round(weeks, 2) if weeks is not None else None,
+            "weekly_capacity_hours": weekly,
+            "technicians": techs,
+            "excluded_missing_estimate": missing,
+            "open_work_orders": n_open,
+        },
+    )
     if weeks is None:
         res.details["weeks_unavailable_reason"] = "No technician capacity configured"
     return res
@@ -293,8 +327,14 @@ def overdue_work_orders(db: Session, s: Scope) -> KPIResult:
     cond = (WorkOrder.status.in_(OPEN_WO_STATUSES), WorkOrder.due_date < today)
     n = db.execute(_wo_scope(select(func.count()).select_from(WorkOrder), s, ids).where(*cond)).scalar_one()
     rows = db.execute(_wo_scope(select(*_wo_cols()), s, ids).where(*cond).order_by(WorkOrder.due_date).limit(MAX_RECORDS + 1)).all()
-    return KPIResult(code="overdue_work_orders", value=float(n), unit="count", numerator=n,
-                     records=[_row_rec(r) for r in rows], details={"as_of": today.isoformat()})
+    return KPIResult(
+        code="overdue_work_orders",
+        value=float(n),
+        unit="count",
+        numerator=n,
+        records=[_row_rec(r) for r in rows],
+        details={"as_of": today.isoformat()},
+    )
 
 
 # 6 ---------------------------------------------------------------------------

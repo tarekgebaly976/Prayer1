@@ -103,7 +103,9 @@ def upload(
 
 
 @router.get("")
-def list_attachments(entity_type: str, entity_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[dict]:
+def list_attachments(
+    entity_type: str, entity_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")
+) -> list[dict]:
     _entity(db, ctx, entity_type, entity_id)
     rows = db.execute(
         select(Attachment)

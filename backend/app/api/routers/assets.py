@@ -158,8 +158,9 @@ def asset_labels(
 ) -> Response:
     """QR label sheets (A4, 24 per sheet) for an asset and everything below it, or a filtered list."""
     stmt = _dept_filter(ctx, select(Asset).where(Asset.plant_id == ctx.plant_id, Asset.status != AssetStatus.DECOMMISSIONED))
-    if under:
-        stmt = stmt.where(Asset.path.startswith(_get(db, ctx, under).path))
+    root = _get(db, ctx, under) if under else None
+    if root:
+        stmt = stmt.where(Asset.path.startswith(root.path))
     if levels:
         try:
             stmt = stmt.where(Asset.level.in_([AssetLevel(x.strip()) for x in levels.split(",") if x.strip()]))
@@ -185,7 +186,7 @@ def asset_labels(
     return Response(
         labels.sheet_pdf(items, skip, "Asset QR labels"),
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="asset_qr_labels.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{labels.file_name(root.code if root else "assets")}"'},
     )
 
 

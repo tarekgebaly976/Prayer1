@@ -10,7 +10,7 @@ test("planner downloads an A4 sheet of QR labels for a line and everything below
   const wait = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Download PDF" }).click();
   const file = await wait;
-  expect(file.suggestedFilename()).toBe("asset_qr_labels.pdf");
+  expect(file.suggestedFilename()).toMatch(/^QR_labels_PM1-WIRE.*\.pdf$/);
   const path = await file.path();
   const head = (await import("node:fs")).readFileSync(path).subarray(0, 4).toString();
   expect(head).toBe("%PDF");

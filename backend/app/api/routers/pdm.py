@@ -99,7 +99,9 @@ def list_points(
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
-def create_point(body: PointIn, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> MeasurementPoint:
+def create_point(
+    body: PointIn, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")
+) -> MeasurementPoint:
     a = db.get(Asset, body.asset_id)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset not found")
@@ -133,7 +135,9 @@ class ReadingIn(In):
 
 
 @router.post("/points/{pid}/readings", status_code=201)
-def add_reading(pid: uuid.UUID, body: ReadingIn, ctx: Ctx = Depends(require("pdm.record")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_reading(
+    pid: uuid.UUID, body: ReadingIn, ctx: Ctx = Depends(require("pdm.record")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     p = _point(db, ctx, pid)
     return svc.record_reading(db, ctx.plant, p, body.value, body.measured_at or utcnow(), ctx.user.id, "manual", body.note)
 
@@ -270,7 +274,9 @@ class GatewayBatch(In):
 
 
 @gateway.post("/readings")
-def ingest(body: GatewayBatch, request: Request, db: Session = Depends(get_db, scope="function"), authorization: str | None = Header(default=None)) -> dict:
+def ingest(
+    body: GatewayBatch, request: Request, db: Session = Depends(get_db, scope="function"), authorization: str | None = Header(default=None)
+) -> dict:
     """Write-only ingestion for the industrial gateway (separate credential; no user session, no CSRF).
     The gateway pushes data in; the CMMS never sends commands to PLC/SCADA/DCS."""
     if not authorization or not authorization.startswith("Bearer "):

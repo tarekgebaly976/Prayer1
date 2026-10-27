@@ -27,7 +27,9 @@ class NotificationOut(ORM):
 
 
 @router.get("/notifications")
-def list_notifications(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function"), page: PageQ = Depends(), unread: bool = False) -> dict:
+def list_notifications(
+    ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function"), page: PageQ = Depends(), unread: bool = False
+) -> dict:
     q = select(Notification).where(Notification.user_id == ctx.user.id, Notification.plant_id == ctx.plant_id)
     if unread:
         q = q.where(Notification.read_at.is_(None))

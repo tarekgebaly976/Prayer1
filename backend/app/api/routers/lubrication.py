@@ -301,7 +301,7 @@ def point_labels(
     return Response(
         labels.sheet_pdf(items, skip, "Lubrication QR labels"),
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="lubrication_qr_labels.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{labels.file_name("lubrication")}"'},
     )
 
 

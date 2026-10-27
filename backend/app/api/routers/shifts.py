@@ -49,7 +49,9 @@ def list_shifts(ctx: Ctx = Depends(require("shift.view")), db: Session = Depends
 
 
 @router.post("/definitions", response_model=ShiftOut, status_code=201)
-def create_shift(body: ShiftIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")) -> ShiftDefinition:
+def create_shift(
+    body: ShiftIn, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")
+) -> ShiftDefinition:
     s = ShiftDefinition(plant_id=ctx.plant_id, **body.model_dump())
     db.add(s)
     try:
@@ -178,7 +180,11 @@ class RosterIn(In):
 
 @router.get("/roster")
 def roster(
-    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function"), user_id: uuid.UUID | None = None
+    start: date,
+    end: date,
+    ctx: Ctx = Depends(require("shift.view")),
+    db: Session = Depends(get_db, scope="function"),
+    user_id: uuid.UUID | None = None,
 ) -> list[dict]:
     if (end - start).days > 92:
         raise HTTPException(422, "Range too long (max 92 days)")
@@ -256,7 +262,11 @@ def set_roster(body: RosterIn, ctx: Ctx = Depends(require("shift.manage")), db: 
 
 @router.get("/manpower")
 def manpower(
-    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function"), department_id: uuid.UUID | None = None
+    start: date,
+    end: date,
+    ctx: Ctx = Depends(require("shift.view")),
+    db: Session = Depends(get_db, scope="function"),
+    department_id: uuid.UUID | None = None,
 ) -> list[dict]:
     if (end - start).days > 62:
         raise HTTPException(422, "Range too long (max 62 days)")
@@ -353,7 +363,9 @@ def get_handover(hid: uuid.UUID, ctx: Ctx = Depends(require("shift.view")), db: 
 
 
 @router.post("/handovers", response_model=HandoverOut, status_code=201)
-def create_handover(body: HandoverIn, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")) -> ShiftHandover:
+def create_handover(
+    body: HandoverIn, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")
+) -> ShiftHandover:
     d, s = db.get(Department, body.department_id), db.get(ShiftDefinition, body.shift_id)
     if d is None or d.plant_id != ctx.plant_id or s is None or s.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department or shift not found")
@@ -384,7 +396,9 @@ def update_handover(
 
 
 @router.post("/handovers/{hid}/submit", response_model=HandoverOut)
-def submit(hid: uuid.UUID, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")) -> ShiftHandover:
+def submit(
+    hid: uuid.UUID, ctx: Ctx = Depends(require("handover.create")), db: Session = Depends(get_db, scope="function")
+) -> ShiftHandover:
     return svc.submit_handover(db, ctx.plant, _ho(db, ctx, hid), ctx.user.id)
 
 

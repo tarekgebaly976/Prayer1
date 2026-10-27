@@ -2,7 +2,9 @@
 self-adhesive sheet. Each label: the QR code the in-app scanner reads, the code in bold, the name, one sub-line."""
 
 import io
+import re
 from dataclasses import dataclass
+from datetime import datetime
 
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode.qr import QrCodeWidget
@@ -62,6 +64,12 @@ def _tail(text: str, font: str, size: float, width: float) -> str:
     while text and stringWidth("…" + text, font, size) > width:
         text = text[1:]
     return "…" + text.lstrip()
+
+
+def file_name(subject: str) -> str:
+    """A different name for every download (subject + time), so phones never open an older copy of the file."""
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", subject).strip("-")[:40] or "labels"
+    return f"QR_labels_{safe}_{datetime.now():%Y%m%d-%H%M%S}.pdf"
 
 
 def sheet_pdf(labels: list[Label], skip: int = 0, title: str = "QR labels") -> bytes:
