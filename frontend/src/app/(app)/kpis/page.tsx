@@ -16,7 +16,7 @@ interface Def { code: string; name: string; unit: string; formula: string; sourc
 function Drill({ code, start, end, dept, onClose }: { code: string; start: string; end: string; dept: string | null; onClose: () => void }) {
   const { t } = useTranslation();
   const q = useQ<KPI & { definition: Def; records: Record<string, unknown>[]; records_truncated: boolean }>(`/kpis/${code}`, { start, end, department_id: dept });
-  const trend = useQ<{ period: string; value: number | null; available: boolean; manual: number | null }[]>(`/kpis/trend/${code}`, { months: 12, department_id: dept });
+  const trend = useQ<{ period: string; value: number | null; available: boolean; manual: number | null; target: number | null }[]>(`/kpis/trend/${code}`, { months: 12, department_id: dept });
   const hasManual = (trend.data ?? []).some((x) => x.manual !== null && x.manual !== undefined);
   const rows = q.data?.records ?? [];
   const cols = rows[0] ? Object.keys(rows[0]).filter((k) => !k.endsWith("_id") && k !== "id") : [];
@@ -31,8 +31,8 @@ function Drill({ code, start, end, dept, onClose }: { code: string; start: strin
             {q.data.denominator !== null && <Text size="sm" c="dimmed">{t("kpi.numerator")} {fmtNum(q.data.numerator)} · {t("kpi.denominator")} {fmtNum(q.data.denominator)}</Text>}</Group>
           {Object.keys(q.data.details ?? {}).length > 0 && <Text size="xs" className="mono">{JSON.stringify(q.data.details)}</Text>}
           {trend.data && <BarChart h={180} withLegend={hasManual} dataKey="period"
-            data={trend.data.map((x) => ({ period: x.period, [t("kpi.calculated")]: x.value ?? 0, [t("kpi.manualSeries")]: x.manual ?? 0 }))}
-            series={[{ name: t("kpi.calculated"), color: "indigo.6" }, ...(hasManual ? [{ name: t("kpi.manualSeries"), color: "orange.5" }] : [])]} />}
+            data={trend.data.map((x) => ({ period: x.period, [t("kpi.calculated")]: x.value ?? 0, [t("kpi.manualSeries")]: x.manual ?? 0, [t("kpi.target")]: x.target ?? 0 }))}
+            series={[{ name: t("kpi.calculated"), color: "indigo.6" }, ...(hasManual ? [{ name: t("kpi.manualSeries"), color: "orange.5" }, { name: t("kpi.target"), color: "gray.5" }] : [])]} />}
           <Text fw={600}>{t("kpi.drill")} ({rows.length}{q.data.records_truncated ? "+" : ""})</Text>
           <ScrollArea h={300}>
             <Table fz="xs" striped>
@@ -51,27 +51,31 @@ function Drill({ code, start, end, dept, onClose }: { code: string; start: strin
   );
 }
 
-interface ManualRow { kpi_code: string; name: string; unit: string; months: (number | null)[] }
+interface Card { id: string; name: string; unit: string | null; department: string | null; kpi_code: string | null; higher_is_better: boolean;
+  months: { target: number | null; actual: number | null }[] }
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** Monthly KPI values from manual reports / the previous system: download template → fill → upload. */
-function ManualKPIs() {
+const met = (c: Card, a: number | null, tg: number | null) => (a === null || tg === null ? null : c.higher_is_better ? a >= tg : a <= tg);
+const avg = (xs: (number | null)[]) => { const v = xs.filter((x): x is number => x !== null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+/** Company KPI scorecard (e.g. the management KPI sheet): target and actual per month, entered by the team via Excel. */
+function CompanyKPIs() {
   const { t } = useTranslation();
   const { can } = useSession();
   const [year, setYear] = useState<number | string>(new Date().getFullYear());
   const [file, setFile] = useState<File | null>(null);
-  const [res, setRes] = useState<{ values: number; cleared: number; invalid: number; errors: { row: number; code: string | null; errors: string[] }[] } | null>(null);
-  const rows = useQ<ManualRow[]>("/kpis/manual/values", { year: Number(year) });
+  const [res, setRes] = useState<{ kpis: number; values: number; cleared: number; invalid: number; errors: { row: number; code: string | null; errors: string[] }[] } | null>(null);
+  const cards = useQ<Card[]>("/kpis/scorecard", { year: Number(year) });
   const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
-  const preview = useMut(() => api<NonNullable<typeof res>>("POST", "/kpis/manual/preview", fd()), { success: false, onDone: setRes });
-  const commit = useMut(() => api("POST", "/kpis/manual/commit", fd()), { onDone: () => { setFile(null); setRes(null); } });
-  const filled = (rows.data ?? []).filter((r) => r.months.some((v) => v !== null));
+  const preview = useMut(() => api<NonNullable<typeof res>>("POST", "/kpis/scorecard/preview", fd()), { success: false, onDone: setRes });
+  const commit = useMut(() => api("POST", "/kpis/scorecard/commit", fd()), { onDone: () => { setFile(null); setRes(null); } });
+  const remove = useMut((id: string) => api("DELETE", `/kpis/scorecard/${id}`));
   return (
     <Stack>
       <Text size="sm" c="dimmed">{t("kpi.manualHint")}</Text>
       <Group align="end" wrap="wrap">
         <NumberInput label={t("kpi.year")} w={110} min={2000} max={2100} value={year} onChange={setYear} />
-        <Button variant="light" onClick={() => void download("/kpis/manual/template.xlsx", { year: Number(year) }, `kpi_manual_${year}.xlsx`)}>{t("kpi.downloadTemplate")}</Button>
+        <Button variant="light" onClick={() => void download("/kpis/scorecard/template.xlsx", { year: Number(year) }, `kpi_scorecard_${year}.xlsx`)}>{t("kpi.downloadTemplate")}</Button>
       </Group>
       {can("kpi.manage") && (
         <Group align="end" wrap="wrap">
@@ -82,17 +86,27 @@ function ManualKPIs() {
       )}
       {res && (
         <Alert color={res.invalid ? "red" : "teal"}>
-          {res.values} {t("kpi.values")} · {res.cleared} {t("kpi.cleared")} · {res.invalid} {t("asset.invalid")}
+          {res.kpis} KPI · {res.values} {t("kpi.values")} · {res.cleared} {t("kpi.cleared")} · {res.invalid} {t("asset.invalid")}
           {res.errors.slice(0, 50).map((e, i) => <div key={i}>Row {e.row}: {e.errors.join("; ")}</div>)}
         </Alert>
       )}
-      {filled.length === 0 ? <Text size="sm" c="dimmed">{t("common.noData")}</Text> : (
+      {(cards.data ?? []).length === 0 ? <Text size="sm" c="dimmed">{t("common.noData")}</Text> : (
         <ScrollArea>
-          <Table striped fz="sm">
-            <Table.Thead><Table.Tr><Table.Th>KPI</Table.Th>{MONTHS.map((m) => <Table.Th key={m}>{m}</Table.Th>)}</Table.Tr></Table.Thead>
-            <Table.Tbody>{filled.map((r) => (
-              <Table.Tr key={r.kpi_code}><Table.Td>{r.name} <Text span size="xs" c="dimmed">({r.unit})</Text></Table.Td>
-                {r.months.map((v, i) => <Table.Td key={i}>{v === null ? "—" : fmtNum(v)}</Table.Td>)}</Table.Tr>))}</Table.Tbody>
+          <Table striped fz="sm" withColumnBorders>
+            <Table.Thead><Table.Tr><Table.Th>KPI</Table.Th><Table.Th /><Table.Th>{t("kpi.ytd")}</Table.Th>{MONTHS.map((m) => <Table.Th key={m}>{m}</Table.Th>)}{can("kpi.manage") && <Table.Th />}</Table.Tr></Table.Thead>
+            <Table.Tbody>{(cards.data ?? []).map((c) => {
+              const ya = avg(c.months.map((m) => m.actual)), yt = avg(c.months.map((m) => m.target)), ok = met(c, ya, yt);
+              return (
+                <Table.Tr key={c.id}>
+                  <Table.Td><b>{c.name}</b><Text size="xs" c="dimmed">{[c.department, c.unit, c.higher_is_better ? "↑" : "↓"].filter(Boolean).join(" · ")}</Text></Table.Td>
+                  <Table.Td><Text size="xs">{t("kpi.actual")}</Text><Text size="xs" c="dimmed">{t("kpi.target")}</Text></Table.Td>
+                  <Table.Td><Text size="sm" fw={700} c={ok === null ? undefined : ok ? "teal" : "red"}>{ya === null ? "—" : fmtNum(ya)}</Text><Text size="xs" c="dimmed">{yt === null ? "—" : fmtNum(yt)}</Text></Table.Td>
+                  {c.months.map((m, i) => { const g = met(c, m.actual, m.target); return (
+                    <Table.Td key={i}><Text size="sm" fw={600} c={g === null ? undefined : g ? "teal" : "red"}>{m.actual === null ? "—" : fmtNum(m.actual)}</Text>
+                      <Text size="xs" c="dimmed">{m.target === null ? "" : fmtNum(m.target)}</Text></Table.Td>); })}
+                  {can("kpi.manage") && <Table.Td><Button size="compact-xs" variant="subtle" color="red" onClick={() => { if (window.confirm(t("kpi.deleteConfirm", { name: c.name }))) remove.mutate(c.id); }}>{t("common.delete")}</Button></Table.Td>}
+                </Table.Tr>);
+            })}</Table.Tbody>
           </Table>
         </ScrollArea>
       )}
@@ -132,7 +146,7 @@ function KPIs() {
       <Tabs defaultValue="dash">
         <Tabs.List><Tabs.Tab value="dash">{t("nav.kpis")}</Tabs.Tab><Tabs.Tab value="manual">{t("kpi.manual")}</Tabs.Tab>
           {can("kpi.manage") && <Tabs.Tab value="data">{t("kpi.production")} / {t("kpi.budget")}</Tabs.Tab>}</Tabs.List>
-        <Tabs.Panel value="manual" pt="md"><ManualKPIs /></Tabs.Panel>
+        <Tabs.Panel value="manual" pt="md"><CompanyKPIs /></Tabs.Panel>
         <Tabs.Panel value="dash" pt="md">
           {!q.data ? <Loading /> : (
             <>

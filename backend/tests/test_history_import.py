@@ -140,25 +140,44 @@ def test_history_work_orders_and_parts_feed_reports_and_kpis(world):
     assert c["value"] == 1289.58 and c["details"]["by_department"] == {"SP": 1289.58}  # parts used count as material cost
 
 
-def test_manual_kpi_template_roundtrip(world):
+def test_company_kpi_scorecard_template_roundtrip(world):
     admin, viewer = world.api("admin"), world.api("viewer")
-    tpl = viewer.get("/kpis/manual/template.xlsx", params={"year": 2026})
-    ws = load_workbook(io.BytesIO(tpl.content)).active
-    rows = [list(r) for r in ws.iter_rows(values_only=True)]
-    assert rows[0][:5] == ["kpi_code", "kpi_name", "unit", "2026-01", "2026-02"]
-    mtbf = next(r for r in rows if r[0] == "mtbf")
-    mtbf[3:6] = [120.5, "98", "x"]
-    rows.append(["not_a_kpi", "", "", 1])
-    assert viewer.post("/kpis/manual/preview", files=_xlsx(rows)).status_code == 403
-    p = admin.ok("post", "/kpis/manual/preview", files=_xlsx(rows))
-    assert p["values"] == 2 and p["cleared"] == 1 and p["invalid"] == 1
-    assert admin.post("/kpis/manual/commit", files=_xlsx(rows)).status_code == 422
-    rows.pop()
-    assert admin.ok("post", "/kpis/manual/commit", files=_xlsx(rows)) == {"saved": 2, "cleared": 1}
-    vals = {v["kpi_code"]: v["months"] for v in viewer.ok("get", "/kpis/manual/values", params={"year": 2026})}
-    assert vals["mtbf"][:3] == [120.5, 98.0, None]
-    tpl2 = load_workbook(io.BytesIO(viewer.get("/kpis/manual/template.xlsx", params={"year": 2026}).content)).active
-    assert next(r for r in tpl2.iter_rows(values_only=True) if r[0] == "mtbf")[3] == 120.5  # template comes back pre-filled
+    tpl = viewer.get("/kpis/scorecard/template.xlsx", params={"year": 2026})
+    wb = load_workbook(io.BytesIO(tpl.content))
+    assert wb.sheetnames == ["KPI 2026", "instructions", "codes"]
+    head = [c.value for c in wb.active[1]]
+    assert head[:8] == ["kpi_name", "department", "unit", "higher_is_better", "cmms_kpi", "frequency", "row", "2026-01"]
+    rows = [
+        head,
+        ["Major Breakdown", "", "count", "no", "", "Monthly", "Target", 2, 2, 2],
+        ["Major Breakdown", "", "count", "no", "", "Monthly", "Actual", 0, 2, 3],
+        ["MTBF - PM", "PM", "h", "yes", "mtbf", "Monthly", "Target", 35, 35],
+        ["MTBF - PM", "PM", "h", "yes", "mtbf", "Monthly", "Actual", 110, "x"],
+    ]
+    bad = rows + [["Oops", "ZZ", "", "maybe", "nope", "", "Forecast", "abc"]]
+    assert viewer.post("/kpis/scorecard/preview", files=_xlsx(bad)).status_code == 403
+    p = admin.ok("post", "/kpis/scorecard/preview", files=_xlsx(bad))
+    assert (p["kpis"], p["values"], p["cleared"], p["invalid"]) == (3, 9, 1, 1)
+    msg = " ".join(p["errors"][0]["errors"])
+    assert all(x in msg for x in ("department ZZ", "higher_is_better", "cmms_kpi nope", "Target or Actual"))
+    assert admin.post("/kpis/scorecard/commit", files=_xlsx(bad)).status_code == 422
+    assert admin.ok("post", "/kpis/scorecard/commit", files=_xlsx(rows)) == {"kpis_created": 2, "saved": 9, "cleared": 1}
+
+    cards = {c["name"]: c for c in viewer.ok("get", "/kpis/scorecard", params={"year": 2026})}
+    mb, mtbf = cards["Major Breakdown"], cards["MTBF - PM"]
+    assert mb["department"] is None and mb["higher_is_better"] is False and mb["months"][2] == {"target": 2.0, "actual": 3.0}
+    assert mtbf["department"] == "PM" and mtbf["kpi_code"] == "mtbf" and mtbf["months"][0] == {"target": 35.0, "actual": 110.0}
+    trend = viewer.ok("get", "/kpis/trend/mtbf", params={"months": 24, "department_id": str(world.depts["PM"].id)})
+    jan = next(t for t in trend if t["period"] == "2026-01")
+    assert (jan["manual"], jan["target"]) == (110.0, 35.0)  # linked company KPI shown next to the calculated value
+    assert all(t["manual"] is None for t in viewer.ok("get", "/kpis/trend/mtbf", params={"months": 24}))  # plant level: not linked
+
+    again = load_workbook(io.BytesIO(viewer.get("/kpis/scorecard/template.xlsx", params={"year": 2026}).content)).active
+    filled = [list(r) for r in again.iter_rows(values_only=True)]
+    assert filled[3][:9] == ["MTBF - PM", "PM", "h", "yes", "mtbf", "Monthly", "Target", 35, 35]  # template comes back pre-filled
+    assert viewer.delete(f"/kpis/scorecard/{mb['id']}").status_code == 403
+    assert admin.delete(f"/kpis/scorecard/{mb['id']}").status_code == 204
+    assert [c["name"] for c in viewer.ok("get", "/kpis/scorecard", params={"year": 2026})] == ["MTBF - PM"]
 
 
 def test_nightly_kpi_snapshot_job_saves_values(world):

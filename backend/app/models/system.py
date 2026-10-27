@@ -161,3 +161,30 @@ class KPISnapshot(Base, PlantScoped):
     available: Mapped[bool] = mapped_column(Boolean, default=True)
     reason: Mapped[str | None] = mapped_column(Text)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class KPIScorecard(Base, PlantScoped):
+    """A KPI the plant reports (e.g. from a management KPI sheet), with monthly targets and actuals entered by people.
+
+    Optionally linked to a calculated CMMS KPI (`kpi_code`, same department) so both appear in the same trend."""
+
+    __tablename__ = "kpi_scorecard"
+    __table_args__ = (UniqueConstraint("plant_id", "name"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(120))
+    unit: Mapped[str | None] = mapped_column(String(20))
+    department_id: Mapped[uuid.UUID | None] = fk("departments.id", nullable=True, index=False)
+    kpi_code: Mapped[str | None] = mapped_column(String(40), ForeignKey("kpi_definitions.code"))
+    higher_is_better: Mapped[bool] = mapped_column(Boolean, default=True)
+    frequency: Mapped[str] = mapped_column(String(20), default="Monthly")
+    sort: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class KPIScorecardValue(Base, PlantScoped):
+    __tablename__ = "kpi_scorecard_values"
+    __table_args__ = (UniqueConstraint("scorecard_id", "period_start"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    scorecard_id: Mapped[uuid.UUID] = fk("kpi_scorecard.id", ondelete="CASCADE", index=False)
+    period_start: Mapped[date] = mapped_column(Date)
+    target: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    actual: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
