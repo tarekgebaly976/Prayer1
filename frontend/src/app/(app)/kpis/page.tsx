@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart } from "@mantine/charts";
-import { Alert, Button, Card, FileInput, Group, Modal, NumberInput, ScrollArea, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Card, FileInput, Group, Modal, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
@@ -51,12 +51,55 @@ function Drill({ code, start, end, dept, onClose }: { code: string; start: strin
   );
 }
 
-interface Card { id: string; name: string; unit: string | null; department: string | null; kpi_code: string | null; higher_is_better: boolean;
+interface KpiCard { id: string; name: string; unit: string | null; department: string | null; kpi_code: string | null; higher_is_better: boolean;
   months: { target: number | null; actual: number | null }[] }
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const met = (c: Card, a: number | null, tg: number | null) => (a === null || tg === null ? null : c.higher_is_better ? a >= tg : a <= tg);
+const met = (c: KpiCard, a: number | null, tg: number | null) => (a === null || tg === null ? null : c.higher_is_better ? a >= tg : a <= tg);
 const avg = (xs: (number | null)[]) => { const v = xs.filter((x): x is number => x !== null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+type Num = number | string;
+const num = (v: Num) => (v === "" ? null : Number(v));
+
+/** Enter one month for every company KPI directly in the app (phone-friendly, no Excel). */
+function MonthEntry({ cards, year, onClose }: { cards: KpiCard[]; year: number; onClose: () => void }) {
+  const { t } = useTranslation();
+  const now = new Date();
+  const [month, setMonth] = useState<string>(String(year === now.getFullYear() ? now.getMonth() + 1 : 12));
+  const m = Number(month) - 1;
+  // Prefill: the stored value, or for the target the latest earlier target (targets rarely change month to month).
+  const initial = (mi: number) => Object.fromEntries(cards.map((c) => {
+    const prevTarget = [...c.months.slice(0, mi)].reverse().find((x) => x.target !== null)?.target ?? null;
+    const cur = c.months[mi];
+    return [c.id, { actual: cur?.actual ?? "", target: cur?.target ?? prevTarget ?? "" }];
+  })) as Record<string, { actual: Num; target: Num }>;
+  const [vals, setVals] = useState(() => initial(m));
+  const get = (id: string) => vals[id] ?? { actual: "", target: "" };
+  const set = (id: string, k: "actual" | "target", v: Num) => setVals({ ...vals, [id]: { ...get(id), [k]: v } });
+  const save = useMut(() => put<{ changed: number }>("/kpis/scorecard/month", {
+    period: `${year}-${String(m + 1).padStart(2, "0")}`,
+    values: cards.map((c) => ({ id: c.id, actual: num(get(c.id).actual), target: num(get(c.id).target) })),
+  }), { onDone: onClose });
+  return (
+    <Modal opened onClose={onClose} title={t("kpi.enterMonth")} size="lg">
+      <Stack>
+        <Select label={t("kpi.month")} data={MONTHS.map((n, i) => ({ value: String(i + 1), label: `${n} ${year}` }))} value={month}
+          onChange={(v) => { if (v) { setMonth(v); setVals(initial(Number(v) - 1)); } }} allowDeselect={false} />
+        {cards.map((c) => (
+          <Card key={c.id} withBorder padding="xs">
+            <Text fw={600} size="sm">{c.name} <Text span size="xs" c="dimmed">{[c.department, c.unit, c.higher_is_better ? "↑" : "↓"].filter(Boolean).join(" · ")}</Text></Text>
+            <SimpleGrid cols={2} mt={4}>
+              <NumberInput label={t("kpi.actual")} decimalScale={4} value={get(c.id).actual} onChange={(v) => set(c.id, "actual", v)} />
+              <NumberInput label={t("kpi.target")} decimalScale={4} value={get(c.id).target} onChange={(v) => set(c.id, "target", v)} />
+            </SimpleGrid>
+          </Card>
+        ))}
+        <Group justify="flex-end"><Button variant="default" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button></Group>
+      </Stack>
+    </Modal>
+  );
+}
 
 /** Company KPI scorecard (e.g. the management KPI sheet): target and actual per month, entered by the team via Excel. */
 function CompanyKPIs() {
@@ -65,16 +108,18 @@ function CompanyKPIs() {
   const [year, setYear] = useState<number | string>(new Date().getFullYear());
   const [file, setFile] = useState<File | null>(null);
   const [res, setRes] = useState<{ kpis: number; values: number; cleared: number; invalid: number; errors: { row: number; code: string | null; errors: string[] }[] } | null>(null);
-  const cards = useQ<Card[]>("/kpis/scorecard", { year: Number(year) });
+  const cards = useQ<KpiCard[]>("/kpis/scorecard", { year: Number(year) });
   const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
   const preview = useMut(() => api<NonNullable<typeof res>>("POST", "/kpis/scorecard/preview", fd()), { success: false, onDone: setRes });
   const commit = useMut(() => api("POST", "/kpis/scorecard/commit", fd()), { onDone: () => { setFile(null); setRes(null); } });
   const remove = useMut((id: string) => api("DELETE", `/kpis/scorecard/${id}`));
+  const [entry, setEntry] = useState(false);
   return (
     <Stack>
       <Text size="sm" c="dimmed">{t("kpi.manualHint")}</Text>
       <Group align="end" wrap="wrap">
         <NumberInput label={t("kpi.year")} w={110} min={2000} max={2100} value={year} onChange={setYear} />
+        {can("kpi.manage") && (cards.data ?? []).length > 0 && <Button onClick={() => setEntry(true)}>{t("kpi.enterMonth")}</Button>}
         <Button variant="light" onClick={() => void download("/kpis/scorecard/template.xlsx", { year: Number(year) }, `kpi_scorecard_${year}.xlsx`)}>{t("kpi.downloadTemplate")}</Button>
       </Group>
       {can("kpi.manage") && (
@@ -90,6 +135,7 @@ function CompanyKPIs() {
           {res.errors.slice(0, 50).map((e, i) => <div key={i}>Row {e.row}: {e.errors.join("; ")}</div>)}
         </Alert>
       )}
+      {entry && cards.data && <MonthEntry cards={cards.data} year={Number(year)} onClose={() => setEntry(false)} />}
       {(cards.data ?? []).length === 0 ? <Text size="sm" c="dimmed">{t("common.noData")}</Text> : (
         <ScrollArea>
           <Table striped fz="sm" withColumnBorders>

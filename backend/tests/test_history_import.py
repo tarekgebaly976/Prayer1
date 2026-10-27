@@ -194,3 +194,32 @@ def test_nightly_kpi_snapshot_job_saves_values(world):
         assert snapshot_month(db, plant, 2026, 1) == 20
     with SessionLocal() as db:
         assert db.execute(select(func.count()).select_from(KPISnapshot).where(KPISnapshot.scope_key == "plant")).scalar() == 20
+
+
+def test_company_kpi_month_entry_in_app(world):
+    admin, viewer = world.api("admin"), world.api("viewer")
+    head = ["kpi_name", "department", "unit", "higher_is_better", "cmms_kpi", "frequency", "row", "2026-01"]
+    admin.ok(
+        "post",
+        "/kpis/scorecard/commit",
+        files=_xlsx(
+            [head, ["MTTR - PM", "PM", "h", "no", "mttr", "", "Target", 2], ["Breakdowns", "", "count", "no", "", "", "Actual", 1]]
+        ),
+    )
+    cards = {c["name"]: c["id"] for c in viewer.ok("get", "/kpis/scorecard", params={"year": 2026})}
+    body = {
+        "period": "2026-11",
+        "values": [{"id": cards["MTTR - PM"], "actual": 1.8, "target": 2}, {"id": cards["Breakdowns"], "actual": 0, "target": None}],
+    }
+    assert viewer.put("/kpis/scorecard/month", body).status_code == 403
+    assert admin.ok("put", "/kpis/scorecard/month", body) == {"changed": 2}
+    assert admin.ok("put", "/kpis/scorecard/month", body) == {"changed": 0}  # same values again
+    got = {c["name"]: c["months"] for c in viewer.ok("get", "/kpis/scorecard", params={"year": 2026})}
+    assert got["MTTR - PM"][10] == {"target": 2.0, "actual": 1.8} and got["Breakdowns"][10] == {"target": None, "actual": 0.0}
+    assert got["MTTR - PM"][0] == {"target": 2.0, "actual": None}  # other months untouched
+    clear = {"period": "2026-11", "values": [{"id": cards["Breakdowns"], "actual": None, "target": None}]}
+    assert admin.ok("put", "/kpis/scorecard/month", clear) == {"changed": 1}
+    assert viewer.ok("get", "/kpis/scorecard", params={"year": 2026})[1]["months"][10] == {"target": None, "actual": None}
+    assert admin.put("/kpis/scorecard/month", {"period": "2026-13", "values": []}).status_code == 422
+    bad = {"period": "2026-11", "values": [{"id": "00000000-0000-0000-0000-000000000000", "actual": 1}]}
+    assert admin.put("/kpis/scorecard/month", bad).status_code == 422

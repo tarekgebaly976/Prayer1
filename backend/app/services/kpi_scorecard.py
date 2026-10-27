@@ -261,3 +261,33 @@ def commit(db: Session, plant: Plant, p: dict[str, Any]) -> dict[str, int]:
             if v.target is None and v.actual is None and v.id is not None:
                 db.delete(v)
     return {"kpis_created": created, "saved": saved, "cleared": cleared}
+
+
+def save_month(db: Session, plant: Plant, month: date, values: list[dict[str, Any]]) -> int:
+    """Set target and actual of one month for the given KPIs (None clears a value). Returns the KPIs changed."""
+    cards = {c.id: c for c in db.execute(select(KPIScorecard).where(KPIScorecard.plant_id == plant.id)).scalars()}
+    unknown = [str(v["id"]) for v in values if v["id"] not in cards]
+    if unknown:
+        raise ValueError(f"Unknown KPI: {', '.join(unknown)}")
+    rows = {
+        v.scorecard_id: v
+        for v in db.execute(
+            select(KPIScorecardValue).where(KPIScorecardValue.plant_id == plant.id, KPIScorecardValue.period_start == month)
+        ).scalars()
+    }
+    changed = 0
+    for item in values:
+        v = rows.get(item["id"])
+        if v is None:
+            if item["actual"] is None and item["target"] is None:
+                continue
+            v = KPIScorecardValue(plant_id=plant.id, scorecard_id=item["id"], period_start=month)
+            db.add(v)
+        before = tuple(None if x is None else float(x) for x in (v.target, v.actual))
+        v.target, v.actual = item["target"], item["actual"]
+        if before != (item["target"], item["actual"]):
+            changed += 1
+        if v.target is None and v.actual is None and v.id is not None:
+            db.delete(v)
+    db.flush()
+    return changed

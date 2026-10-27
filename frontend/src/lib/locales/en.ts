@@ -85,7 +85,7 @@ export const en = {
     exportXlsx: "Export XLSX", exportPdf: "Export PDF", numerator: "Numerator", denominator: "Denominator", production: "Production data",
     budget: "Budget", tons: "Tons produced", goodTons: "Good tons", plannedH: "Planned hours", runH: "Run hours", ideal: "Ideal rate (t/h)",
     notice: "Values are computed only from recorded data. Unavailable KPIs show why.",
-    manual: "Company KPIs", manualHint: "The plant's own KPI sheet: a target and an actual per month for each KPI, by department if needed. Download the template, let your team fill it, then upload it. KPIs linked to a CMMS KPI are also shown next to the calculated values.", actual: "Actual", target: "Target", ytd: "YTD avg", deleteConfirm: "Delete KPI {{name}} and all its values?",
+    manual: "Company KPIs", manualHint: "The plant's own KPI sheet: a target and an actual per month for each KPI, by department if needed. Download the template, let your team fill it, then upload it. KPIs linked to a CMMS KPI are also shown next to the calculated values.", actual: "Actual", target: "Target", ytd: "YTD avg", enterMonth: "Enter month", month: "Month", deleteConfirm: "Delete KPI {{name}} and all its values?",
     year: "Year", downloadTemplate: "Download template", upload: "Upload filled template", values: "values", cleared: "cleared", calculated: "Calculated", manualSeries: "Company KPI" },
   scan: { title: "Scan equipment QR code", start: "Start camera", stop: "Stop", manual: "Or enter the code", notSupported: "Camera not available — enter the code manually.", found: "Opening" },
   admin: { users: "Users", newUser: "New user", departments: "Departments", failureCodes: "Failure codes", workflow: "Workflow", plant: "Plant settings",

@@ -157,6 +157,29 @@ def scorecard_commit(
     return r
 
 
+class MonthValueIn(In):
+    id: uuid.UUID
+    actual: float | None = None
+    target: float | None = None
+
+
+class MonthIn(In):
+    period: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    values: list[MonthValueIn] = Field(max_length=500)
+
+
+@router.put("/scorecard/month")
+def scorecard_month(body: MonthIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """Enter one month for every company KPI from the app (no Excel)."""
+    month = date(int(body.period[:4]), int(body.period[5:]), 1)
+    try:
+        n = sc.save_month(db, ctx.plant, month, [v.model_dump() for v in body.values])
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    audit(db, "kpi.scorecard_month", user_id=ctx.user.id, plant_id=ctx.plant_id, data={"period": body.period, "changed": n})
+    return {"changed": n}
+
+
 @router.delete("/scorecard/{card_id}", status_code=204)
 def scorecard_delete(
     card_id: uuid.UUID, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")
