@@ -177,6 +177,17 @@ def tree_children(
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
+class CodesIn(In):
+    ids: list[uuid.UUID] = Field(max_length=5000)
+
+
+@router.post("/codes")
+def asset_codes(body: CodesIn, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """Asset code per id, for lists that show many assets (the plant may have thousands)."""
+    rows = db.execute(select(Asset.id, Asset.code).where(Asset.plant_id == ctx.plant_id, Asset.id.in_(set(body.ids)))).all()
+    return {str(i): c for i, c in rows}
+
+
 @router.post("", response_model=AssetOut, status_code=201)
 def create_asset(body: AssetIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> Asset:
     if ctx.department_id and body.department_id != ctx.department_id:

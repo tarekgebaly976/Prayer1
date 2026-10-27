@@ -7,16 +7,16 @@ import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
-import { AssetPicker, DataTable, PageHeader, StatusBadge } from "@/components/ui";
+import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
-import { fmtDate, useMut, useQ } from "@/lib/hooks";
+import { fmtDate, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
-import type { Asset, Page } from "@/lib/types";
+import type { Page } from "@/lib/types";
 
 interface Plan { id: string; code: string; name: string; asset_id: string; job_plan_id: string; trigger: string; frequency_unit: string | null; frequency_interval: number | null;
   schedule_basis: string; meter_interval: number | null; next_due_date: string | null; last_completed_date: string | null; is_active: boolean; lead_days: number; horizon_days: number }
 interface JobPlan { id: string; code: string; name: string; estimated_hours: number; trade: string | null; requires_loto: boolean; requires_permit: boolean; requires_testing: boolean }
-interface Occ { id: string; pm_plan_id: string; due_date: string; original_due_date: string; status: string; work_order_id: string | null; request_reason: string | null; requested_new_date: string | null }
+interface Occ { id: string; pm_plan_id: string; plan_code: string | null; asset_id: string | null; due_date: string; original_due_date: string; status: string; work_order_id: string | null; request_reason: string | null; requested_new_date: string | null }
 
 function NewJobPlan({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
@@ -139,17 +139,19 @@ function PM() {
   const [np, setNp] = useState(false);
   const [imp, setImp] = useState(false);
   const [runRes, setRunRes] = useState<string | null>(null);
-  const plans = useQ<Page<Plan>>("/pm/plans", { limit: 500 });
+  const [search, setSearch] = useState("");
+  const [planOff, setPlanOff] = useState(0);
+  const [occOff, setOccOff] = useState(0);
+  const plans = useQ<Page<Plan>>("/pm/plans", { limit: 100, offset: planOff, q: search });
   const jobs = useQ<JobPlan[]>("/pm/job-plans");
-  const occ = useQ<Page<Occ>>("/pm/occurrences", { limit: 500, status: ["scheduled", "generated", "deferred", "deferral_requested", "cancellation_requested"] });
+  const occ = useQ<Page<Occ>>("/pm/occurrences", { limit: 100, offset: occOff, status: ["scheduled", "generated", "deferred", "deferral_requested", "cancellation_requested"] });
   const approvals = useQ<Page<Occ>>("/pm/occurrences", { limit: 200, status: ["deferral_requested", "cancellation_requested"] });
-  const assets = useQ<Page<Asset>>("/assets", { limit: 500 });
-  const amap = new Map((assets.data?.items ?? []).map((a) => [a.id, a.code]));
-  const pmap = new Map((plans.data?.items ?? []).map((p) => [p.id, p.code]));
+  const amap = useAssetCodes([...(plans.data?.items ?? []), ...(occ.data?.items ?? []), ...(approvals.data?.items ?? [])].map((x) => x.asset_id));
   const run = useMut(() => post<{ work_orders_created: number; occurrences_created: number }>("/pm/scheduler/run", {}), { success: false,
     onDone: (r) => setRunRes(`${r.occurrences_created} occurrences, ${r.work_orders_created} work orders created`) });
   const occCols = [
-    { key: "p", label: t("pm.plans"), render: (o: Occ) => pmap.get(o.pm_plan_id) },
+    { key: "p", label: t("pm.plans"), render: (o: Occ) => o.plan_code },
+    { key: "as", label: t("common.asset"), render: (o: Occ) => (o.asset_id ? amap.get(o.asset_id) : "") },
     { key: "d", label: t("common.dueDate"), render: (o: Occ) => <>{o.due_date}{o.due_date !== o.original_due_date && ` (${o.original_due_date})`}</> },
     { key: "s", label: t("common.status"), render: (o: Occ) => <StatusBadge value={o.status} /> },
     { key: "r", label: t("common.reason"), render: (o: Occ) => o.request_reason ? `${o.request_reason}${o.requested_new_date ? ` → ${o.requested_new_date}` : ""}` : "" },
@@ -172,6 +174,7 @@ function PM() {
           <Tabs.Tab value="approvals">{t("pm.approvals")} ({approvals.data?.total ?? 0})</Tabs.Tab><Tabs.Tab value="jobs">{t("pm.jobPlans")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="plans" pt="md">
+          <TextInput mb="sm" maw={360} placeholder={t("common.search")} value={search} onChange={(e) => { setSearch(e.currentTarget.value); setPlanOff(0); }} />
           <DataTable rows={plans.data?.items} columns={[
             { key: "c", label: t("common.code"), render: (p) => p.code }, { key: "n", label: t("common.name"), render: (p) => p.name },
             { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
@@ -179,8 +182,9 @@ function PM() {
             { key: "l", label: t("pm.lastDone"), render: (p) => fmtDate(p.last_completed_date) },
             { key: "d", label: t("pm.nextDue"), render: (p) => fmtDate(p.next_due_date) },
             { key: "s", label: t("common.active"), render: (p) => (p.is_active ? "✓" : "—") }]} />
+          <Pager page={plans.data} setPage={(p) => setPlanOff((p - 1) * 100)} />
         </Tabs.Panel>
-        <Tabs.Panel value="schedule" pt="md"><DataTable rows={occ.data?.items} columns={occCols} /></Tabs.Panel>
+        <Tabs.Panel value="schedule" pt="md"><DataTable rows={occ.data?.items} columns={occCols} /><Pager page={occ.data} setPage={(p) => setOccOff((p - 1) * 100)} /></Tabs.Panel>
         <Tabs.Panel value="approvals" pt="md"><DataTable rows={approvals.data?.items} columns={occCols} /></Tabs.Panel>
         <Tabs.Panel value="jobs" pt="md">
           <DataTable rows={jobs.data} columns={[

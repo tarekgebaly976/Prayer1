@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { DataTable, PageHeader, Pager, StatusBadge, UserPicker } from "@/components/ui";
 import { download, post } from "@/lib/api";
-import { fmtDate, fmtMoney, useMut, useQ } from "@/lib/hooks";
+import { fmtDate, fmtMoney, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Asset, Page, WorkOrder } from "@/lib/types";
 
@@ -30,8 +30,7 @@ function List() {
   const [bulk, setBulk] = useState(false);
   const [tech, setTech] = useState<string | null>(null);
   const data = useQ<Page<WorkOrder>>("/work-orders", { q, status, type, open_only: openOnly, overdue, limit: 50, offset });
-  const assets = useQ<Page<Asset>>("/assets", { limit: 500 });
-  const amap = new Map((assets.data?.items ?? []).map((a) => [a.id, a.code]));
+  const amap = useAssetCodes((data.data?.items ?? []).map((w) => w.asset_id));
   const bulkAssign = useMut(() => post("/work-orders/bulk-assign", { work_order_ids: sel, user_ids: [tech], force: false }), { onDone: () => { setBulk(false); setSel([]); } });
   return (
     <>

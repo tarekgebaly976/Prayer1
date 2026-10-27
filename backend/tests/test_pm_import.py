@@ -135,6 +135,8 @@ def test_lube_import_creates_lubricants_routes_and_points(world):
     weekly = api.get("/lubrication/points", params={"route_id": routes["LR-PM-W"]["id"]}).json()
     assert [(pt["code"], pt["frequency_days"]) for pt in weekly] == [("PM-DRYER-L01", 7), ("PM-DRYER-L02", 7)]
     assert weekly[0]["next_due_date"] == "2026-11-03"
+    yearly = api.get("/lubrication/points", params={"route_id": routes["LR-PM-Y"]["id"]}).json()[0]
+    assert 0 <= (date.fromisoformat(yearly["next_due_date"]) - date.today()).days < 366  # no start date: spread over the first year
     assert {lb["code"] for lb in api.get("/lubrication/lubricants").json()} == {"GR-EP2", "OIL-220"}
     again = api.ok("post", "/imports/lube_plans/preview", files=_xlsx([LUBE_HEADER, rows[1][:12] + ["PM-DRYER-L01"]]))
     assert again["invalid"] == 1 and "already exists" in again["errors"][0]["errors"][0]

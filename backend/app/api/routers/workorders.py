@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -325,8 +325,8 @@ def list_work_orders(
     db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     q: str | None = None,
-    status: list[WOStatus] | None = None,
-    type: list[WOType] | None = None,
+    status: list[WOStatus] | None = Query(None),
+    type: list[WOType] | None = Query(None),
     priority: Priority | None = None,
     asset_id: uuid.UUID | None = None,
     department_id: uuid.UUID | None = None,

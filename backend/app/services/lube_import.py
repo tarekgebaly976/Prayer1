@@ -17,7 +17,7 @@ from app.models.tenancy import Department, Plant
 from app.services.assets import new_qr_token
 from app.services.common import audit, plant_today
 from app.services.imports import _date, _num, _s
-from app.services.pm_import import parse_frequency
+from app.services.pm_import import parse_frequency, spread_start
 
 UNIT_DAYS = {FrequencyUnit.DAY: 1, FrequencyUnit.WEEK: 7, FrequencyUnit.MONTH: 30, FrequencyUnit.YEAR: 365}
 
@@ -161,7 +161,9 @@ def commit_lube_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid
                 frequency_days=r["days"],
                 route_id=routes[r["route"]].id,
                 route_seq=seq[r["route"]],
-                next_due_date=r["start"] or today,
+                # Without a start date, points of one machine and frequency share a day inside the first cycle,
+                # so routes are spread over the cycle instead of all falling due on the import day.
+                next_due_date=r["start"] or spread_start(f"{r['asset'].code}-{r['days']}", FrequencyUnit.DAY, r["days"], today),
                 qr_token=new_qr_token(),
             )
         )

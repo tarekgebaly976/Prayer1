@@ -153,3 +153,21 @@ def test_meter_based_pm_triggers_on_reading(world):
     wos = planner.get("/work-orders").json()
     assert wos["total"] == 1 and "PM-OIL" in wos["items"][0]["title"]
     assert planner.get(f"/assets/{line['id']}").json()["operating_hours"] == 8050
+
+
+def test_lists_filter_by_status_and_show_plan_and_asset(world):
+    """Status filters reach the API (they were once read from the request body and silently ignored)."""
+    planner = world.api("planner")
+    today = plant_today(world.plant)
+    line, _, plan = _plan(world, planner, start=today.isoformat())
+    planner.ok("post", "/pm/scheduler/run", {})
+    occ = planner.get("/pm/occurrences", params={"status": ["generated"]}).json()
+    assert occ["total"] == 1 and occ["items"][0]["plan_code"] == "PM-W" and occ["items"][0]["asset_id"] == line["id"]
+    assert planner.get("/pm/occurrences", params={"status": ["deferral_requested", "cancellation_requested"]}).json()["total"] == 0
+    assert planner.get("/pm/occurrences").json()["total"] == 5
+    assert planner.get("/work-orders", params={"status": ["closed"]}).json()["total"] == 0
+    assert planner.get("/work-orders", params={"type": ["corrective"]}).json()["total"] == 0
+    assert planner.get("/pm/plans", params={"q": "weekl"}).json()["total"] == 1
+    assert planner.get("/pm/plans", params={"q": "nothing"}).json()["total"] == 0
+    codes = planner.ok("post", "/assets/codes", {"ids": [line["id"], str(plan["id"])]})
+    assert codes == {line["id"]: "PM1"}  # unknown ids are skipped

@@ -3,7 +3,7 @@
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ApiError, get, type Query } from "./api";
+import { ApiError, get, post, type Query } from "./api";
 import { useSession } from "./session";
 
 /** Query bound to the active plant (plant id is part of the cache key → no cross-plant cache bleed). */
@@ -15,6 +15,19 @@ export function useQ<T>(path: string | null, query?: Query, opts?: Partial<UseQu
     enabled: !!plant && !!path && (opts?.enabled ?? true),
     ...opts,
   } as UseQueryOptions<T>);
+}
+
+/** Code of each asset id shown in a list (plants have thousands of assets, so they are looked up by id). */
+export function useAssetCodes(ids: (string | null | undefined)[]): Map<string, string> {
+  const { plant } = useSession();
+  const uniq = [...new Set(ids.filter((x): x is string => !!x))].sort();
+  const q = useQuery<Record<string, string>>({
+    queryKey: [plant?.plant_id, "/assets/codes", uniq],
+    queryFn: () => post<Record<string, string>>("/assets/codes", { ids: uniq }),
+    enabled: !!plant && uniq.length > 0,
+    staleTime: 300_000,
+  });
+  return new Map(Object.entries(q.data ?? {}));
 }
 
 export function useMut<TArgs, TRes = unknown>(fn: (a: TArgs) => Promise<TRes>, opts?: { success?: string | false; onDone?: (r: TRes) => void }) {

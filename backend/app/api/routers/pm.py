@@ -1,9 +1,9 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -202,13 +202,16 @@ def list_plans(
     page: PageQ = Depends(),
     asset_id: uuid.UUID | None = None,
     active: bool | None = None,
+    q: str | None = None,
 ) -> dict:
-    q = select(PMPlan).where(PMPlan.plant_id == ctx.plant_id)
+    stmt = select(PMPlan).where(PMPlan.plant_id == ctx.plant_id)
+    if q:
+        stmt = stmt.where(or_(PMPlan.code.ilike(f"%{q}%"), PMPlan.name.ilike(f"%{q}%")))
     if asset_id:
-        q = q.where(PMPlan.asset_id == asset_id)
+        stmt = stmt.where(PMPlan.asset_id == asset_id)
     if active is not None:
-        q = q.where(PMPlan.is_active.is_(active))
-    return paginate(db, q.order_by(PMPlan.next_due_date.asc().nulls_last(), PMPlan.code), page, PlanOut)
+        stmt = stmt.where(PMPlan.is_active.is_(active))
+    return paginate(db, stmt.order_by(PMPlan.next_due_date.asc().nulls_last(), PMPlan.code), page, PlanOut)
 
 
 @router.post("/plans", response_model=PlanOut, status_code=201)
@@ -265,6 +268,8 @@ class OccOut(ORM):
     request_reason: str | None
     requested_new_date: date | None
     requested_by_id: uuid.UUID | None
+    plan_code: str | None = None
+    asset_id: uuid.UUID | None = None
 
 
 @router.get("/occurrences")
@@ -273,12 +278,10 @@ def list_occurrences(
     db: Session = Depends(get_db, scope="function"),
     page: PageQ = Depends(),
     plan_id: uuid.UUID | None = None,
-    status: list[OccurrenceStatus] | None = None,
+    status: list[OccurrenceStatus] | None = Query(None),
     due_from: date | None = None,
     due_to: date | None = None,
 ) -> dict:
-    from fastapi import Query  # noqa: F401
-
     q = select(PMOccurrence).where(PMOccurrence.plant_id == ctx.plant_id)
     if plan_id:
         q = q.where(PMOccurrence.pm_plan_id == plan_id)
@@ -288,7 +291,13 @@ def list_occurrences(
         q = q.where(PMOccurrence.due_date >= due_from)
     if due_to:
         q = q.where(PMOccurrence.due_date <= due_to)
-    return paginate(db, q.order_by(PMOccurrence.due_date), page, OccOut)
+    res = paginate(db, q.order_by(PMOccurrence.due_date, PMOccurrence.id), page, OccOut)
+    ids = {o.pm_plan_id for o in res["items"]}
+    plans = {p.id: p for p in db.execute(select(PMPlan).where(PMPlan.id.in_(ids))).scalars()} if ids else {}
+    for o in res["items"]:
+        if (pl := plans.get(o.pm_plan_id)) is not None:
+            o.plan_code, o.asset_id = pl.code, pl.asset_id
+    return res
 
 
 class ChangeRequestIn(In):

@@ -9,7 +9,7 @@ import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
-import { fmtDate, fmtNum, useMut, useQ } from "@/lib/hooks";
+import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Asset, Page } from "@/lib/types";
 
@@ -64,8 +64,7 @@ function PdM() {
     warning_low: "" as number | string, alarm_low: "" as number | string, auto_create_wo: false, external_tag: "", recommended_action: "" });
   const points = useQ<MPoint[]>("/pdm/points");
   const alerts = useQ<Page<CAlert>>("/pdm/alerts", { open_only: openOnly, limit: 50, offset });
-  const assets = useQ<Page<Asset>>("/assets", { limit: 500 });
-  const amap = new Map((assets.data?.items ?? []).map((a) => [a.id, a.code]));
+  const amap = useAssetCodes([...(points.data ?? []), ...(alerts.data?.items ?? [])].map((x) => x.asset_id));
   const pmap = new Map((points.data ?? []).map((p) => [p.id, p]));
   const n = (v: number | string) => (v === "" ? null : Number(v));
   const create = useMut(() => post("/pdm/points", { ...f, warning_high: n(f.warning_high), alarm_high: n(f.alarm_high), warning_low: n(f.warning_low), alarm_low: n(f.alarm_low),

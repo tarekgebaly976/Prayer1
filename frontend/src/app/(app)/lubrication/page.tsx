@@ -8,7 +8,7 @@ import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, DeptSelect, PageHeader, StatusBadge, UserPicker } from "@/components/ui";
 import { post } from "@/lib/api";
-import { fmtDate, fmtNum, useMut, useQ } from "@/lib/hooks";
+import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Asset, Page } from "@/lib/types";
 
@@ -26,8 +26,7 @@ function Lube() {
   const points = useQ<Point[]>("/lubrication/points");
   const tasks = useQ<Task[]>("/lubrication/tasks");
   const cons = useQ<{ lubricant: string; product: string; unit: string; quantity: number; tasks: number }[]>("/lubrication/consumption");
-  const assets = useQ<Page<Asset>>("/assets", { limit: 500 });
-  const amap = new Map((assets.data?.items ?? []).map((a) => [a.id, a.code]));
+  const amap = useAssetCodes((points.data ?? []).map((p) => p.asset_id));
   const lmap = new Map((lubs.data ?? []).map((l) => [l.id, `${l.code} ${l.product}`]));
   const rmap = new Map((routes.data ?? []).map((r) => [r.id, r.code]));
   const gen = useMut((id: string) => post<{ number: string | null; message: string | null }>(`/lubrication/routes/${id}/generate`, {}), { success: false,
