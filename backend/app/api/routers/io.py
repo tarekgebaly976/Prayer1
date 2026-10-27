@@ -16,7 +16,7 @@ from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
 from app.services import imports as imp
 from app.services import kpi as kpisvc
-from app.services import lube_import, pdm_import, pm_import, reports
+from app.services import lube_import, part_usage, pdm_import, pm_import, reports
 from app.services.common import plant_today
 
 router = APIRouter(tags=["import/export"])
@@ -291,6 +291,104 @@ def export_assets(ctx: Ctx = Depends(require("report.export")), db: Session = De
             ]
         )
     return Response("﻿" + buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": 'attachment; filename="assets.csv"'})
+
+
+def _usage_filters(db: Session, ctx: Ctx, asset_id: uuid.UUID | None):
+    asset = None
+    if asset_id:
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.plant_id != ctx.plant_id:
+            raise HTTPException(404, "Asset not found")
+    return asset
+
+
+@router.get("/reports/parts-used")
+def parts_used_report(
+    ctx: Ctx = Depends(require("wo.view")),
+    db: Session = Depends(get_db, scope="function"),
+    start: date | None = None,
+    end: date | None = None,
+    asset_id: uuid.UUID | None = None,
+    part_id: uuid.UUID | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Spare parts used per work order and machine (asset filter includes everything below it)."""
+    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_id)
+    rows = [part_usage.row(*r) for r in db.execute(q).all()]
+    by_part: dict[str, dict] = {}
+    for r in rows:
+        k = r["part_code"] or r["description"]
+        e = by_part.setdefault(
+            k, {"part_code": r["part_code"], "description": r["description"], "uom": r["uom"], "quantity": 0.0, "cost": 0.0}
+        )
+        e["quantity"] += float(r["quantity"])
+        e["cost"] += float(r["total_cost"])
+    return {
+        "total": len(rows),
+        "total_cost": round(sum(float(r["total_cost"]) for r in rows), 2),
+        "items": rows[offset : offset + min(max(limit, 1), 500)],
+        "by_part": sorted(by_part.values(), key=lambda e: -e["cost"])[:50],
+    }
+
+
+@router.get("/exports/parts-used.xlsx")
+def parts_used_xlsx(
+    ctx: Ctx = Depends(require("report.export")),
+    db: Session = Depends(get_db, scope="function"),
+    start: date | None = None,
+    end: date | None = None,
+    asset_id: uuid.UUID | None = None,
+    part_id: uuid.UUID | None = None,
+) -> Response:
+    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_id)
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = "Parts used"
+    ws.append(
+        [
+            "Date",
+            "Work order",
+            "WO type",
+            "WO title",
+            "Machine code",
+            "Machine",
+            "Part code",
+            "Description",
+            "Qty",
+            "UoM",
+            f"Unit cost ({ctx.plant.currency})",
+            f"Total ({ctx.plant.currency})",
+            "Note",
+        ]
+    )
+    for r in (part_usage.row(*x) for x in db.execute(q).all()):
+        ws.append(
+            [
+                r["used_on"],
+                r["work_order"],
+                str(r["wo_type"]),
+                _csv_safe(r["wo_title"]),
+                r["asset_code"],
+                _csv_safe(r["asset_name"]),
+                r["part_code"],
+                _csv_safe(r["description"]),
+                float(r["quantity"]),
+                r["uom"],
+                float(r["unit_cost"]),
+                float(r["total_cost"]),
+                _csv_safe(r["note"]),
+            ]
+        )
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="parts_used.xlsx"'},
+    )
 
 
 @router.get("/exports/kpis.xlsx")

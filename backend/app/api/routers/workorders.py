@@ -13,7 +13,7 @@ from app.core.errors import DomainError
 from app.models.assets import Asset, FailureCode
 from app.models.enums import OPEN_WO_STATUSES, FailureCodeKind, Priority, RequestStatus, WOStatus, WOType
 from app.models.identity import User
-from app.models.inventory import InventoryTransaction, Part, Reservation, Supplier, Warehouse
+from app.models.inventory import InventoryTransaction, Part, PartUsage, Reservation, Supplier, Warehouse
 from app.models.lubrication import LubeTask, LubricationPoint
 from app.models.workorders import (
     WOChecklistItem,
@@ -26,6 +26,7 @@ from app.models.workorders import (
 )
 from app.schemas.common import ORM, In
 from app.services import inventory as inv
+from app.services import part_usage as usage
 from app.services import workorders as svc
 from app.services.common import audit, next_number, plant_today, utcnow
 from app.services.notifications import notify_permission
@@ -75,7 +76,9 @@ def _asset(db: Session, ctx: Ctx, asset_id: uuid.UUID) -> Asset:
 
 
 @router.post("/work-requests", response_model=RequestOut, status_code=201)
-def create_request(body: RequestIn, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
+def create_request(
+    body: RequestIn, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")
+) -> WorkRequest:
     a = _asset(db, ctx, body.asset_id)
     r = WorkRequest(plant_id=ctx.plant_id, number=next_number(db, ctx.plant, "WR"), created_by_id=ctx.user.id, **body.model_dump())
     db.add(r)
@@ -113,7 +116,9 @@ def list_requests(
 
 
 @router.get("/work-requests/{rid}", response_model=RequestOut)
-def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
+def get_request(
+    rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")
+) -> WorkRequest:
     r = db.get(WorkRequest, rid)
     if r is None or r.plant_id != ctx.plant_id or (not ctx.has("wo.view") and r.created_by_id != ctx.user.id):
         raise HTTPException(404, "Request not found")
@@ -121,7 +126,9 @@ def get_request(rid: uuid.UUID, ctx: Ctx = Depends(require("request.create")), d
 
 
 @router.post("/work-requests/{rid}/triage", response_model=RequestOut)
-def triage(rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db, scope="function")) -> WorkRequest:
+def triage(
+    rid: uuid.UUID, body: TriageIn, ctx: Ctx = Depends(require("request.triage")), db: Session = Depends(get_db, scope="function")
+) -> WorkRequest:
     r = db.execute(
         select(WorkRequest).where(WorkRequest.id == rid, WorkRequest.plant_id == ctx.plant_id).with_for_update(key_share=True)
     ).scalar_one_or_none()
@@ -455,6 +462,7 @@ def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Sess
         .where(InventoryTransaction.work_order_id == wo.id)
         .order_by(InventoryTransaction.created_at)
     ).all()
+    used = db.execute(usage.report_query(ctx.plant_id).where(PartUsage.work_order_id == wo.id)).all()
     comments = db.execute(select(WOComment).where(WOComment.work_order_id == wo.id).order_by(WOComment.created_at)).scalars().all()
     lube = db.execute(
         select(LubeTask, LubricationPoint)
@@ -520,6 +528,7 @@ def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Sess
             }
             for r, p, w in res
         ],
+        "parts_used": [usage.row(*r) for r in used],
         "transactions": [
             {
                 "id": t.id,
@@ -566,7 +575,9 @@ def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Sess
 
 
 @router.patch("/work-orders/{wo_id}", response_model=WOOut)
-def update_wo(wo_id: uuid.UUID, body: WOUpdate, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
+def update_wo(
+    wo_id: uuid.UUID, body: WOUpdate, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     data = body.model_dump(exclude_unset=True)
     version = data.pop("version", None)
@@ -599,7 +610,9 @@ class StatusIn(In):
 
 
 @router.post("/work-orders/{wo_id}/status", response_model=WOOut)
-def set_status(wo_id: uuid.UUID, body: StatusIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
+def set_status(
+    wo_id: uuid.UUID, body: StatusIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     # Technicians may only move work they are assigned to.
     if (
@@ -620,14 +633,18 @@ class AssignIn(In):
 
 
 @router.post("/work-orders/{wo_id}/assign")
-def assign(wo_id: uuid.UUID, body: AssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")) -> dict:
+def assign(
+    wo_id: uuid.UUID, body: AssignIn, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     warnings = svc.assign(db, ctx, wo, body.user_ids, body.lead_id, body.force)
     return {"warnings": warnings, "assignees": [a.user_id for a in wo.assignments]}
 
 
 @router.delete("/work-orders/{wo_id}/assign/{user_id}", status_code=204)
-def unassign(wo_id: uuid.UUID, user_id: uuid.UUID, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")) -> None:
+def unassign(
+    wo_id: uuid.UUID, user_id: uuid.UUID, ctx: Ctx = Depends(require("wo.assign")), db: Session = Depends(get_db, scope="function")
+) -> None:
     wo = get_wo(db, ctx, wo_id, lock=True)
     wo.assignments = [a for a in wo.assignments if a.user_id != user_id]
     audit(db, "wo.unassign", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="work_order", entity_id=wo.id, data={"user": user_id})
@@ -684,7 +701,9 @@ class TestIn(In):
 
 
 @router.post("/work-orders/{wo_id}/test-result", response_model=WOOut)
-def test_result(wo_id: uuid.UUID, body: TestIn, ctx: Ctx = Depends(require("wo.review")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
+def test_result(
+    wo_id: uuid.UUID, body: TestIn, ctx: Ctx = Depends(require("wo.review")), db: Session = Depends(get_db, scope="function")
+) -> WorkOrder:
     wo = get_wo(db, ctx, wo_id, lock=True)
     if wo.status not in (WOStatus.IN_PROGRESS, WOStatus.AWAITING_REVIEW):
         raise DomainError("Test results are recorded during execution or review", "invalid_state", 409)
@@ -712,7 +731,11 @@ def _require_execute(ctx: Ctx, wo: WorkOrder) -> None:
 
 @router.patch("/work-orders/{wo_id}/checklist/{item_id}")
 def update_checklist(
-    wo_id: uuid.UUID, item_id: uuid.UUID, body: ChecklistUpdate, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")
+    wo_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: ChecklistUpdate,
+    ctx: Ctx = Depends(require("wo.execute")),
+    db: Session = Depends(get_db, scope="function"),
 ) -> dict:
     wo = get_wo(db, ctx, wo_id)
     _require_execute(ctx, wo)
@@ -748,7 +771,9 @@ class ChecklistAdd(In):
 
 
 @router.post("/work-orders/{wo_id}/checklist", status_code=201)
-def add_checklist(wo_id: uuid.UUID, body: ChecklistAdd, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_checklist(
+    wo_id: uuid.UUID, body: ChecklistAdd, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     from sqlalchemy import func
 
     wo = get_wo(db, ctx, wo_id)
@@ -768,7 +793,9 @@ class LaborIn(In):
 
 
 @router.post("/work-orders/{wo_id}/labor", status_code=201)
-def add_labor(wo_id: uuid.UUID, body: LaborIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_labor(
+    wo_id: uuid.UUID, body: LaborIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     if not (_is_assignee(ctx, wo) or ctx.has("wo.assign")):
         raise HTTPException(403, "You are not assigned to this work order")
@@ -786,7 +813,9 @@ class ServiceIn(In):
 
 
 @router.post("/work-orders/{wo_id}/services", status_code=201)
-def add_service(wo_id: uuid.UUID, body: ServiceIn, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_service(
+    wo_id: uuid.UUID, body: ServiceIn, ctx: Ctx = Depends(require("wo.edit")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     from decimal import Decimal
 
     wo = get_wo(db, ctx, wo_id, lock=True)
@@ -806,7 +835,9 @@ class CommentIn(In):
 
 
 @router.post("/work-orders/{wo_id}/comments", status_code=201)
-def add_comment(wo_id: uuid.UUID, body: CommentIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_comment(
+    wo_id: uuid.UUID, body: CommentIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     wo = get_wo(db, ctx, wo_id)
     c = WOComment(work_order_id=wo.id, user_id=ctx.user.id, body=body.body, created_at=utcnow())
     db.add(c)
@@ -828,8 +859,84 @@ def _part_wh(db: Session, ctx: Ctx, part_id: uuid.UUID, wh_id: uuid.UUID) -> tup
     return p, w
 
 
+class PartUsageIn(In):
+    part_id: uuid.UUID | None = None
+    description: str | None = Field(None, max_length=300)  # when the item is not in the spare-parts list
+    quantity: float = Field(gt=0)
+    uom: str | None = Field(None, max_length=16)
+    unit_cost: float | None = Field(None, ge=0)  # blank = the item's book cost
+    used_on: date | None = None
+    note: str | None = None
+
+
+def _can_record_parts(ctx: Ctx) -> None:
+    if "wo.execute" not in ctx.permissions and "inventory.transact" not in ctx.permissions:
+        raise HTTPException(403, "Missing permission: wo.execute")
+
+
+@router.post("/work-orders/{wo_id}/parts-used", status_code=201)
+def add_part_used(
+    wo_id: uuid.UUID, body: PartUsageIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    """Record a spare part used on this work order without moving warehouse stock."""
+    _can_record_parts(ctx)
+    wo = get_wo(db, ctx, wo_id, lock=True)
+    part = None
+    if body.part_id:
+        part = db.get(Part, body.part_id)
+        if part is None or part.plant_id != ctx.plant_id:
+            raise HTTPException(422, "Part not found")
+    u = usage.record(
+        db,
+        ctx.plant,
+        wo,
+        ctx.user.id,
+        body.quantity,
+        part=part,
+        description=body.description,
+        uom=body.uom,
+        unit_cost=body.unit_cost,
+        used_on=body.used_on,
+        note=body.note,
+    )
+    audit(
+        db,
+        "wo.part_used",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="work_order",
+        entity_id=wo.id,
+        data={"part": part.code if part else body.description, "qty": body.quantity, "cost": u.total_cost},
+    )
+    a = db.get(Asset, wo.asset_id)
+    return {**usage.row(u, wo, a, part), "wo_material_cost": float(wo.actual_material_cost)}  # type: ignore[arg-type]
+
+
+@router.delete("/work-orders/{wo_id}/parts-used/{usage_id}", status_code=204)
+def delete_part_used(
+    wo_id: uuid.UUID, usage_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> None:
+    _can_record_parts(ctx)
+    wo = get_wo(db, ctx, wo_id, lock=True)
+    u = db.get(PartUsage, usage_id)
+    if u is None or u.work_order_id != wo.id:
+        raise HTTPException(404, "Record not found")
+    audit(
+        db,
+        "wo.part_used_removed",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="work_order",
+        entity_id=wo.id,
+        data={"qty": float(u.quantity), "cost": float(u.total_cost)},
+    )
+    usage.remove(db, wo, u)
+
+
 @router.post("/work-orders/{wo_id}/reservations", status_code=201)
-def reserve(wo_id: uuid.UUID, body: ReserveIn, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db, scope="function")) -> dict:
+def reserve(
+    wo_id: uuid.UUID, body: ReserveIn, ctx: Ctx = Depends(require("inventory.reserve")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     wo = get_wo(db, ctx, wo_id)
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = inv.reserve(db, ctx.plant, wo, p, w, body.quantity, ctx.user.id)
@@ -864,7 +971,9 @@ class IssueIn(In):
 
 
 @router.post("/work-orders/{wo_id}/issues", status_code=201)
-def issue(wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")) -> dict:
+def issue(
+    wo_id: uuid.UUID, body: IssueIn, ctx: Ctx = Depends(require("inventory.transact")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     wo = get_wo(db, ctx, wo_id, lock=True)
     p, w = _part_wh(db, ctx, body.part_id, body.warehouse_id)
     r = None

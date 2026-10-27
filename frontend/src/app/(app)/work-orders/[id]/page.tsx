@@ -8,6 +8,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Attachments } from "@/components/Attachments";
+import { PartsUsed } from "@/components/PartsUsed";
 import { KV, Loading, PageHeader, Section, StatusBadge, UserPicker } from "@/components/ui";
 import { del, download, patch, post } from "@/lib/api";
 import { fmtDate, fmtMoney, fmtNum, fromLocalInput, toLocalInput, useMut, useQ } from "@/lib/hooks";
@@ -80,6 +81,7 @@ function Materials({ d }: { d: WODetail }) {
   const ready = f.part_id && f.warehouse_id && Number(f.quantity) > 0;
   return (
     <Stack>
+      <PartsUsed woId={wo.id} rows={d.parts_used} currency={wo.currency} editable={!["closed", "cancelled"].includes(wo.status)} />
       {(can("inventory.reserve") || can("inventory.transact")) && (
         <Group align="end" wrap="wrap">
           <Select label={t("wo.part")} searchable w={280} value={f.part_id} onChange={(v) => setF({ ...f, part_id: v })}

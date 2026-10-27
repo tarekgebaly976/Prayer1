@@ -39,6 +39,7 @@ export interface WODetail {
   services: { id: UUID; description: string; cost: number; po_reference: string | null }[];
   reservations: { id: UUID; part_id: UUID; part_code: string; description: string; warehouse: string; warehouse_id: UUID; quantity: number; qty_issued: number; status: string; uom: string }[];
   transactions: { id: UUID; part_code: string; type: string; quantity: number; unit_cost: number; total_cost: number; at: string }[];
+  parts_used: PartUsed[];
   history: { from: string | null; to: string; by: string; at: string; comment: string | null }[];
   comments: { id: UUID; user: string; body: string; at: string }[];
   lube_tasks: { id: UUID; point_code: string; component: string | null; location: string | null; lubricant: string | null; lubricant_id: UUID;
@@ -53,3 +54,9 @@ export interface Part { id: UUID; code: string; description: string; oem_part_nu
   is_critical_spare: boolean; min_qty: number; max_qty: number; reorder_point: number; safety_stock: number; average_cost: number; unit_price: number; currency: string;
   qty_on_hand?: number; qty_reserved?: number; qty_available?: number; qty_on_order?: number; is_obsolete: boolean; lead_time_days: number | null }
 export interface Warehouse { id: UUID; code: string; name: string }
+
+export interface PartUsed {
+  id: UUID; used_on: string; work_order_id: UUID; work_order: string; wo_title: string; wo_type: string; asset_id: UUID; asset_code: string;
+  asset_name: string; part_id: UUID | null; part_code: string | null; description: string; quantity: number; uom: string; unit_cost: number;
+  total_cost: number; note: string | null;
+}

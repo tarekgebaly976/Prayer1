@@ -181,3 +181,31 @@ class StockoutEvent(Base, PlantScoped):
     requested_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3))
     available_qty: Mapped[Decimal] = mapped_column(Numeric(14, 3))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PartUsage(Base, PlantScoped, Attributed):
+    """Spare parts used on a work order, recorded without moving warehouse stock.
+
+    For plants whose store system is not connected: it answers "which part, how many, on which work order and
+    machine, at what cost" while stock levels stay untouched. The machine is copied from the work order so the
+    record keeps its history if the work order is later re-pointed."""
+
+    __tablename__ = "part_usages"
+    __table_args__ = (
+        Index("ix_part_usage_wo", "work_order_id"),
+        Index("ix_part_usage_asset_time", "asset_id", "used_on"),
+        CheckConstraint("quantity > 0", name="qty_pos"),
+        CheckConstraint("part_id IS NOT NULL OR description IS NOT NULL", name="part_or_text"),
+    )
+    id: Mapped[uuid.UUID] = uuid_pk()
+    work_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="CASCADE"))
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"))
+    part_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("parts.id"), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(300))  # free text when the part is not in the item list
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3))
+    uom: Mapped[str] = mapped_column(String(16), default="EA")
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=0)
+    total_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    used_on: Mapped[date] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

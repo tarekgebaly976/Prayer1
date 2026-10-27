@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PartsUsedReport } from "@/components/PartsUsed";
 import { DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtMoney, fmtNum, useMut, useQ } from "@/lib/hooks";
@@ -60,7 +61,9 @@ function Inventory() {
       </>} />
       <Tabs defaultValue="parts">
         <Tabs.List><Tabs.Tab value="parts">{t("inv.parts")}</Tabs.Tab><Tabs.Tab value="pos">{t("inv.pos")}</Tabs.Tab>
-          <Tabs.Tab value="valuation">{t("inv.valuation")}</Tabs.Tab><Tabs.Tab value="aging">{t("inv.aging")}</Tabs.Tab></Tabs.List>
+          <Tabs.Tab value="valuation">{t("inv.valuation")}</Tabs.Tab><Tabs.Tab value="aging">{t("inv.aging")}</Tabs.Tab>
+          <Tabs.Tab value="used">{t("used.report")}</Tabs.Tab></Tabs.List>
+        <Tabs.Panel value="used" pt="md"><PartsUsedReport /></Tabs.Panel>
         <Tabs.Panel value="parts" pt="md">
           <Group mb="sm">
             <TextInput placeholder={t("common.search")} value={q} onChange={(e) => { setQ(e.currentTarget.value); setOffset(0); }} />
