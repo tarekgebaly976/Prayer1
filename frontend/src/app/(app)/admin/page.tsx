@@ -14,11 +14,45 @@ interface PlantCfg { id: string; code: string; name: string; timezone: string; c
 interface Audit { id: number; at: string; user_id: string | null; action: string; entity_type: string | null; entity_id: string | null; data: Record<string, unknown>; ip: string | null }
 interface Job { id: string; job: string; status: string; started_at: string; finished_at: string | null; error: string | null; details: Record<string, unknown> }
 
+function EditUser({ m, roleOpts, onClose }: { m: Member; roleOpts: { value: string; label: string }[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const u = m.user;
+  const [f, setF] = useState({ email: u.email, full_name: u.full_name, employee_no: u.employee_no ?? "", trade: u.trade ?? "",
+    hourly_rate: (u.hourly_rate ?? "") as number | string, role: m.role_code, department_id: m.department_id });
+  const [pw, setPw] = useState("");
+  const save = useMut(() => patch(`/users/${u.id}`, { ...f, employee_no: f.employee_no || null, trade: f.trade || null,
+    hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) }), { onDone: onClose });
+  const reset = useMut(() => post(`/users/${u.id}/reset-password`, { password: pw }), { success: t("admin.passwordReset"), onDone: () => setPw("") });
+  const remove = useMut(() => del(`/users/${u.id}`), { success: t("admin.removed"), onDone: onClose });
+  return (
+    <Modal opened onClose={onClose} title={`${t("admin.editUser")}: ${u.full_name}`}>
+      <Stack>
+        <TextInput label={t("common.email")} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.currentTarget.value })} />
+        <TextInput label={t("common.name")} value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.currentTarget.value })} />
+        <Select label={t("common.role")} data={roleOpts} value={f.role} onChange={(v) => setF({ ...f, role: v ?? f.role })} allowDeselect={false} />
+        <DeptSelect clearable value={f.department_id} onChange={(v) => setF({ ...f, department_id: v })} label={`${t("common.department")} (${t("common.optional")})`} />
+        <SimpleGrid cols={3}><TextInput label="Trade" value={f.trade} onChange={(e) => setF({ ...f, trade: e.currentTarget.value })} />
+          <TextInput label="Employee #" value={f.employee_no} onChange={(e) => setF({ ...f, employee_no: e.currentTarget.value })} />
+          <NumberInput label="Rate/h" min={0} value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} /></SimpleGrid>
+        <Button disabled={!f.email || f.full_name.length < 2} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button>
+        <Group align="end">
+          <TextInput label={t("admin.newPassword")} type="password" description="≥ 12 characters, 3 of: lower, upper, digit, symbol" value={pw}
+            onChange={(e) => setPw(e.currentTarget.value)} style={{ flex: 1 }} />
+          <Button variant="light" disabled={pw.length < 12} loading={reset.isPending} onClick={() => reset.mutate(undefined)}>{t("admin.resetPassword")}</Button>
+        </Group>
+        <Button color="red" variant="subtle" loading={remove.isPending}
+          onClick={() => { if (window.confirm(t("admin.removeConfirm", { name: u.full_name }))) remove.mutate(undefined); }}>{t("admin.remove")}</Button>
+      </Stack>
+    </Modal>
+  );
+}
+
 function Users() {
   const { t } = useTranslation();
   const users = useQ<Member[]>("/users");
   const roles = useQ<{ code: string; name: string }[]>("/roles");
   const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState<Member | null>(null);
   const [f, setF] = useState({ email: "", full_name: "", password: "", role: "technician", department_id: null as string | null, trade: "", employee_no: "", hourly_rate: "" as number | string });
   const create = useMut(() => post("/users", { ...f, trade: f.trade || null, employee_no: f.employee_no || null, hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) }), { onDone: () => setOpen(false) });
   const toggle = useMut((m: Member) => patch(`/users/${m.user.id}`, { is_active: !m.is_active }));
@@ -30,7 +64,9 @@ function Users() {
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
         { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
         { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
-        { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> }]} />
+        { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
+        { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
+      {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}
       <Modal opened={open} onClose={() => setOpen(false)} title={t("admin.newUser")}>
         <Stack>
           <TextInput label={t("common.email")} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.currentTarget.value })} />

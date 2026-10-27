@@ -90,7 +90,9 @@ def list_departments(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, 
 
 
 @router.post("/departments", response_model=DepartmentOut, status_code=201)
-def create_department(body: DepartmentIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> Department:
+def create_department(
+    body: DepartmentIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")
+) -> Department:
     d = Department(plant_id=ctx.plant_id, **body.model_dump())
     db.add(d)
     try:
@@ -133,6 +135,9 @@ class UserCreate(In):
 
 
 class MembershipUpdate(In):
+    email: EmailStr | None = None
+    full_name: str | None = Field(None, min_length=2, max_length=200)
+    employee_no: str | None = None
     role: str | None = None
     department_id: uuid.UUID | None = None
     is_active: bool | None = None
@@ -188,6 +193,10 @@ def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db
         db.flush()
     elif user.organization_id != ctx.plant.organization_id:
         raise HTTPException(409, "Email belongs to another organization")
+    elif not db.execute(select(Membership.id).where(Membership.user_id == user.id, Membership.is_active.is_(True))).first():
+        # Re-adding someone removed earlier: the form's details and password replace the old ones (history is kept).
+        user.full_name, user.password_hash, user.password_changed_at = body.full_name, hash_password(body.password), utcnow()
+        user.employee_no, user.trade, user.hourly_rate, user.is_active = body.employee_no, body.trade, body.hourly_rate, True
     m = Membership(user_id=user.id, plant_id=ctx.plant_id, role_id=role.id, department_id=body.department_id)
     db.add(m)
     try:
@@ -223,6 +232,14 @@ def update_membership(
         m.department_id = data["department_id"]
     user = db.get(User, user_id)
     assert user is not None
+    if data.get("email") and data["email"].lower() != user.email:
+        if db.execute(select(User.id).where(User.email == data["email"].lower())).first():
+            raise HTTPException(409, "Another user already has this e-mail")
+        user.email = data["email"].lower()
+    if data.get("full_name"):
+        user.full_name = data["full_name"]
+    if "employee_no" in data:
+        user.employee_no = data["employee_no"]
     if "trade" in data:
         user.trade = data["trade"]
     if "hourly_rate" in data:
@@ -238,6 +255,55 @@ def update_membership(
     db.refresh(m)
     audit(db, "user.update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user_id, data=data)
     return {"user": user, "role_code": m.role.code, "department_id": m.department_id, "is_active": m.is_active and user.is_active}
+
+
+class PasswordResetIn(In):
+    password: str
+
+
+def _member(db: Session, ctx: Ctx, user_id: uuid.UUID) -> tuple[Membership, User]:
+    m = db.execute(select(Membership).where(Membership.user_id == user_id, Membership.plant_id == ctx.plant_id)).scalar_one_or_none()
+    user = db.get(User, user_id)
+    if m is None or user is None:
+        raise HTTPException(404, "Member not found")
+    if user.is_system_admin and not ctx.user.is_system_admin:
+        raise HTTPException(403, "Only system administrators can change a system administrator")
+    return m, user
+
+
+def _revoke_sessions(db: Session, user_id: uuid.UUID) -> None:
+    for s in db.execute(select(UserSession).where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))).scalars():
+        s.revoked_at = utcnow()
+
+
+@router.post("/users/{user_id}/reset-password", status_code=204)
+def reset_user_password(
+    user_id: uuid.UUID, body: PasswordResetIn, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")
+) -> None:
+    """Administrator sets a new temporary password (the user should change it after signing in)."""
+    _, user = _member(db, ctx, user_id)
+    try:
+        validate_password_strength(body.password)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    user.password_hash, user.password_changed_at = hash_password(body.password), utcnow()
+    user.failed_login_count, user.locked_until = 0, None
+    _revoke_sessions(db, user.id)
+    audit(db, "user.password_reset", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user.id)
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def remove_user(user_id: uuid.UUID, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> None:
+    """Remove a user from this plant. Their name stays on past work orders, labour and audit records; adding the same
+    e-mail again later restores access."""
+    if user_id == ctx.user.id:
+        raise HTTPException(409, "You cannot remove yourself")
+    m, user = _member(db, ctx, user_id)
+    db.delete(m)
+    db.flush()
+    if not db.execute(select(Membership.id).where(Membership.user_id == user.id, Membership.is_active.is_(True))).first():
+        _revoke_sessions(db, user.id)
+    audit(db, "user.remove", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user.id, data={"email": user.email})
 
 
 @router.get("/roles")
