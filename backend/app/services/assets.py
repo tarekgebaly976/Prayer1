@@ -76,3 +76,32 @@ def change_status(db: Session, asset: Asset, status: AssetStatus, user_id: uuid.
 
 def subtree_ids(db: Session, asset: Asset) -> list[uuid.UUID]:
     return list(db.execute(select(Asset.id).where(Asset.plant_id == asset.plant_id, Asset.path.startswith(asset.path))).scalars())
+
+
+def repair_paths(db: Session, plant_id: uuid.UUID, apply: bool = False) -> dict:
+    """Recompute every asset's materialized path from parent_id (the source of truth). Subtree queries (labels,
+    parts-used per machine, asset history with children) use the path, so a path left behind by an old import or a
+    direct database edit hides assets from them. Assets whose parent is missing or that sit in a cycle become roots."""
+    rows = db.execute(select(Asset.id, Asset.parent_id, Asset.path).where(Asset.plant_id == plant_id)).all()
+    parent = {r.id: r.parent_id for r in rows}
+    current = {r.id: r.path for r in rows}
+    kids: dict[uuid.UUID | None, list[uuid.UUID]] = {}
+    for aid, pid in parent.items():
+        kids.setdefault(pid if pid in parent else None, []).append(aid)
+    expected: dict[uuid.UUID, str] = {}
+    stack = [(aid, "/") for aid in kids.get(None, [])]
+    while stack:
+        aid, base = stack.pop()
+        expected[aid] = f"{base}{aid}/"
+        stack.extend((k, expected[aid]) for k in kids.get(aid, []))
+    orphans = [aid for aid in parent if aid not in expected]  # unreachable from a root: a parent cycle
+    for aid in orphans:
+        expected[aid] = f"/{aid}/"
+    wrong = {aid: p for aid, p in expected.items() if current[aid] != p}
+    if apply:
+        for aid, p in wrong.items():
+            values: dict = {"path": p}
+            if aid in orphans:
+                values["parent_id"] = None
+            db.execute(update(Asset).where(Asset.id == aid).values(**values).execution_options(synchronize_session=False))
+    return {"assets": len(rows), "paths_wrong": len(wrong), "cycles_broken": len(orphans), "applied": apply}

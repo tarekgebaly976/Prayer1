@@ -6,6 +6,7 @@
   python -m app.cli reset-password --email admin@example.com   # new password from CMMS_NEW_PASSWORD or prompt
   python -m app.cli sync-rbac
   python -m app.cli run-scheduler [--plant-code X]
+  python -m app.cli repair-asset-paths --plant-code PM1 [--apply]   # rebuild asset tree paths from parents
   python -m app.cli spread-lube --plant-code PM1 [--apply]   # one-time: spread never-done lube points over their cycle
 """
 
@@ -128,6 +129,20 @@ def spread_lube(a: argparse.Namespace) -> None:
         print("Dry run only. Add --apply to make these changes.")
 
 
+def repair_paths(a: argparse.Namespace) -> None:
+    from app.services.assets import repair_paths as repair
+
+    with SessionLocal() as db, db.begin():
+        plants = db.execute(select(Plant).where(Plant.code == a.plant_code)).scalars().all()
+        if len(plants) != 1:
+            raise ValueError(f"plant code {a.plant_code!r} matches {len(plants)} plants")
+        r = repair(db, plants[0].id, apply=a.apply)
+    for k, v in r.items():
+        print(f"{k}: {v}")
+    if not a.apply and r["paths_wrong"]:
+        print("Dry run only. Add --apply to fix them.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="cmms")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -145,6 +160,9 @@ def main() -> None:
     sub.add_parser("sync-rbac")
     r = sub.add_parser("run-scheduler")
     r.add_argument("--plant-code")
+    rp2 = sub.add_parser("repair-asset-paths")
+    rp2.add_argument("--plant-code", required=True)
+    rp2.add_argument("--apply", action="store_true")
     sl = sub.add_parser("spread-lube")
     sl.add_argument("--plant-code", required=True)
     sl.add_argument("--apply", action="store_true")
@@ -163,6 +181,8 @@ def main() -> None:
         print("RBAC synchronised")
     elif a.cmd == "run-scheduler":
         run_sched(a)
+    elif a.cmd == "repair-asset-paths":
+        repair_paths(a)
     elif a.cmd == "spread-lube":
         spread_lube(a)
 

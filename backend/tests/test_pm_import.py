@@ -279,3 +279,30 @@ def test_qr_label_sheets_for_assets_and_lubrication_points(world):
     r = api.get("/lubrication/points/labels.pdf", params={"route_id": route["id"]})
     assert r.status_code == 200 and r.content[:4] == b"%PDF" and _pages(r.content) == 1
     assert world.api("tech").get("/lubrication/points/labels.pdf", params={"under": line["id"]}).status_code == 200
+
+
+def test_repair_asset_paths_restores_subtrees(world):
+    import uuid as _uuid
+
+    from sqlalchemy import update
+
+    from app.core.db import SessionLocal
+    from app.models.assets import Asset
+    from app.services.assets import repair_paths
+
+    api = world.api("planner")
+    line = mk_asset(api, world, "RP-LINE")
+    unit = mk_asset(api, world, "RP-UNIT", level="unit", parent=line["id"])
+    mk_asset(api, world, "RP-ASM", level="assembly", parent=unit["id"])
+    with SessionLocal() as db, db.begin():  # a path left behind by an old import
+        db.execute(update(Asset).where(Asset.code == "RP-ASM").values(path=f"/{_uuid.uuid4()}/"))
+    r = api.get("/assets/labels.pdf", params={"under": line["id"]})
+    assert r.status_code == 200 and _pages(r.content) == 1
+    with SessionLocal() as db, db.begin():
+        dry = repair_paths(db, world.plant.id)
+        assert dry["paths_wrong"] == 1 and dry["applied"] is False
+        assert repair_paths(db, world.plant.id, apply=True)["paths_wrong"] == 1
+    with SessionLocal() as db:
+        assert repair_paths(db, world.plant.id)["paths_wrong"] == 0
+        asm = db.query(Asset).filter(Asset.code == "RP-ASM").one()
+        assert asm.path.endswith(f"{unit['id']}/{asm.id}/") and asm.path.startswith(f"/{line['id']}/")
