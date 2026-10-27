@@ -244,3 +244,88 @@ def assert_wo_lube_done(db: Session, wo: WorkOrder) -> str | None:
         if n:
             return f"{n} lubrication task(s) not recorded"
     return None
+
+
+NOT_STARTED = (WOStatus.TRIAGE, WOStatus.AWAITING_APPROVAL, WOStatus.APPROVED, WOStatus.PLANNED, WOStatus.SCHEDULED)
+
+
+def spread_due_dates(db: Session, plant: Plant, today: date | None = None, apply: bool = False) -> dict:
+    """One-time fix for points imported before start dates were spread: every never-done calendar point that is due
+    (or overdue) gets a first due date inside its cycle (per machine and frequency, as the import now does). Their
+    pending tasks on route work orders nobody has started are removed; work orders left empty are cancelled.
+    Points with work in progress are left alone. Dry run unless `apply`."""
+    from app.models.enums import FrequencyUnit
+    from app.models.workorders import WOStatusHistory
+    from app.services.pm_import import spread_start
+
+    today = today or plant_today(plant)
+    points = db.execute(
+        select(LubricationPoint, Asset.code)
+        .join(Asset, Asset.id == LubricationPoint.asset_id)
+        .where(
+            LubricationPoint.plant_id == plant.id,
+            LubricationPoint.is_active.is_(True),
+            LubricationPoint.frequency_days.is_not(None),
+            LubricationPoint.last_done_date.is_(None),
+            LubricationPoint.next_due_date <= today,
+        )
+    ).all()
+    moved, skipped, new_dates = 0, 0, []
+    removed: dict[uuid.UUID, int] = {}  # work order -> tasks removed from it
+    for p, asset_code in points:
+        tasks = db.execute(
+            select(LubeTask, WorkOrder.status)
+            .outerjoin(WorkOrder, WorkOrder.id == LubeTask.work_order_id)
+            .where(LubeTask.point_id == p.id, LubeTask.status == LubeTaskStatus.PENDING)
+        ).all()
+        if any(st is not None and st not in NOT_STARTED for _, st in tasks):
+            skipped += 1
+            continue
+        moved += 1
+        nd = spread_start(f"{asset_code}-{p.frequency_days}", FrequencyUnit.DAY, p.frequency_days, today)
+        new_dates.append(nd)
+        for t, _ in tasks:
+            if t.work_order_id:
+                removed[t.work_order_id] = removed.get(t.work_order_id, 0) + 1
+            if apply:
+                db.delete(t)
+        if apply:
+            p.next_due_date = nd
+    db.flush()
+    cancelled = 0
+    for wid, n in removed.items():
+        left = db.execute(select(func.count()).select_from(LubeTask).where(LubeTask.work_order_id == wid)).scalar_one()
+        if (left if apply else left - n) > 0:
+            continue
+        cancelled += 1
+        if apply:
+            wo = db.get(WorkOrder, wid)
+            assert wo is not None
+            db.add(
+                WOStatusHistory(
+                    work_order_id=wo.id,
+                    from_status=wo.status.value,
+                    to_status=WOStatus.CANCELLED.value,
+                    changed_by_id=None,
+                    changed_at=utcnow(),
+                    comment="Lubrication due dates spread over their cycle; points rescheduled",
+                )
+            )
+            wo.status = WOStatus.CANCELLED
+    due_soon = sum(1 for d in new_dates if d <= today + timedelta(days=7))
+    if apply:
+        audit(
+            db,
+            "lube.due_dates_spread",
+            plant_id=plant.id,
+            entity_type="plant",
+            entity_id=plant.id,
+            data={"points": moved, "skipped": skipped, "work_orders_cancelled": cancelled},
+        )
+    return {
+        "points_rescheduled": moved,
+        "points_skipped_in_progress": skipped,
+        "work_orders_cancelled": cancelled,
+        "points_due_next_7_days": due_soon,
+        "applied": apply,
+    }

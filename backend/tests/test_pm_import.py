@@ -197,3 +197,51 @@ def test_plan_imports_check_each_permission(world):
     for kind in ("pm_plans", "lube_plans", "pdm_plans"):
         assert tech.post(f"/imports/{kind}/preview", files=_xlsx([["asset_code"], ["X"]])).status_code == 403
     assert world.api("planner").post("/imports/nope/preview", files=_xlsx([["a"], ["b"]])).status_code == 404
+
+
+def test_spread_lube_reschedules_points_imported_due_today(world):
+    from sqlalchemy import select
+
+    from app.core.db import SessionLocal
+    from app.models.enums import WOStatus
+    from app.models.lubrication import LubeRoute, LubricationPoint
+    from app.models.tenancy import Plant
+    from app.models.workorders import WorkOrder
+    from app.services.common import plant_today
+    from app.services.lubrication import run_routes, spread_due_dates
+
+    api = world.api("planner")
+    today = plant_today(world.plant)
+    for c in ("M1", "M2", "M3"):
+        mk_asset(api, world, c)
+    rows = [LUBE_HEADER] + [
+        [c, "Bearing", "GR-EP2", "Mobilux EP 2", "grease", "", 10, "g", "", f, "", today.isoformat(), ""]
+        for c in ("M1", "M2", "M3") for f in ("monthly", "yearly")
+    ]  # an explicit start date of today = how the first imports scheduled every point
+    api.ok("post", "/imports/lube_plans/commit", files=_xlsx(rows))
+    with SessionLocal() as db, db.begin():
+        plant = db.get(Plant, world.plant.id)
+        assert len(run_routes(db, plant, today)) == 2  # monthly and yearly route work orders, 3 points each
+        yearly = db.execute(select(LubeRoute).where(LubeRoute.plant_id == plant.id, LubeRoute.code == "LR-PM-Y")).scalar_one()
+        wo = db.execute(select(WorkOrder).where(WorkOrder.title.like("%LR-PM-Y%"))).scalar_one()
+        wo.status = WOStatus.IN_PROGRESS  # someone already started the yearly route
+
+    with SessionLocal() as db, db.begin():
+        plant = db.get(Plant, world.plant.id)
+        dry = spread_due_dates(db, plant, today)
+        assert (dry["points_rescheduled"], dry["points_skipped_in_progress"], dry["work_orders_cancelled"]) == (3, 3, 1)
+        assert db.execute(select(LubricationPoint.next_due_date).where(LubricationPoint.plant_id == plant.id)).scalars().all() == [today] * 6
+    with SessionLocal() as db, db.begin():
+        plant = db.get(Plant, world.plant.id)
+        assert spread_due_dates(db, plant, today, apply=True)["work_orders_cancelled"] == 1
+    with SessionLocal() as db:
+        monthly = db.execute(select(WorkOrder).where(WorkOrder.title.like("%LR-PM-M %"))).scalar_one()
+        assert monthly.status == WOStatus.CANCELLED
+        pts = db.execute(select(LubricationPoint).where(LubricationPoint.plant_id == world.plant.id)).scalars().all()
+        for p in pts:
+            if p.route_id == yearly.id:
+                assert p.next_due_date == today  # in progress: untouched
+            else:
+                assert 0 <= (p.next_due_date - today).days < 30
+        assert len({p.next_due_date for p in pts if p.route_id != yearly.id}) > 1  # spread, not one day
+        assert spread_due_dates(db, db.get(Plant, world.plant.id), today)["points_rescheduled"] <= 3  # idempotent-ish

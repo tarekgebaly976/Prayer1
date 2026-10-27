@@ -6,6 +6,7 @@
   python -m app.cli reset-password --email admin@example.com   # new password from CMMS_NEW_PASSWORD or prompt
   python -m app.cli sync-rbac
   python -m app.cli run-scheduler [--plant-code X]
+  python -m app.cli spread-lube --plant-code PM1 [--apply]   # one-time: spread never-done lube points over their cycle
 """
 
 import argparse
@@ -113,6 +114,20 @@ def run_sched(a: argparse.Namespace) -> None:
                 print(p.code, run_scheduler(db, p))
 
 
+def spread_lube(a: argparse.Namespace) -> None:
+    from app.services.lubrication import spread_due_dates
+
+    with SessionLocal() as db, db.begin():
+        plant = db.execute(select(Plant).where(Plant.code == a.plant_code)).scalars().all()
+        if len(plant) != 1:
+            raise ValueError(f"plant code {a.plant_code!r} matches {len(plant)} plants")
+        r = spread_due_dates(db, plant[0], apply=a.apply)
+    for k, v in r.items():
+        print(f"{k}: {v}")
+    if not a.apply:
+        print("Dry run only. Add --apply to make these changes.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="cmms")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -130,6 +145,9 @@ def main() -> None:
     sub.add_parser("sync-rbac")
     r = sub.add_parser("run-scheduler")
     r.add_argument("--plant-code")
+    sl = sub.add_parser("spread-lube")
+    sl.add_argument("--plant-code", required=True)
+    sl.add_argument("--apply", action="store_true")
     a = ap.parse_args()
     if a.cmd == "bootstrap":
         bootstrap(a)
@@ -145,6 +163,8 @@ def main() -> None:
         print("RBAC synchronised")
     elif a.cmd == "run-scheduler":
         run_sched(a)
+    elif a.cmd == "spread-lube":
+        spread_lube(a)
 
 
 if __name__ == "__main__":
