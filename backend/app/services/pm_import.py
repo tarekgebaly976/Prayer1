@@ -18,6 +18,7 @@ from app.models.assets import Asset
 from app.models.enums import FrequencyUnit, PMTrigger, Priority, ScheduleBasis
 from app.models.pm import JobPlan, JobPlanTask, PMPlan
 from app.models.tenancy import Plant
+from app.models.workorders import PERMIT_TYPES
 from app.services import pm as pmsvc
 from app.services.common import audit, plant_today
 from app.services.imports import _date, _num, _s
@@ -142,6 +143,16 @@ def validate_pm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
         except ValueError:
             errs.append("priority must be P1, P2, P3 or P4")
             prio = Priority.P3_MEDIUM
+        permit_s = (_s(r.get("permit")) or "").lower().replace(" ", "_")
+        permits: list[str] = []
+        if permit_s in YES:
+            permits = ["cold_work"]
+        elif permit_s and permit_s not in ("no", "n", "false", "0", "none"):
+            permits = [p.strip("_") for p in re.split(r"[,;/]+", permit_s) if p.strip("_")]
+            unknown = [p for p in permits if p not in PERMIT_TYPES]
+            if unknown:
+                errs.append(f"unknown permit type: {', '.join(unknown)}")
+        loto = (_s(r.get("loto")) or "").lower() in YES
         rec = {"row": i, "code": None, "errors": errs}
         out.append(rec)
         if errs or asset is None or freq is None or not task:
@@ -157,6 +168,8 @@ def validate_pm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
                 "trade": trade,
                 "rows": [],
                 "texts": [],
+                "permits": [],
+                "loto": False,
                 "tasks": [],
                 "minutes": 0.0,
                 "crew": 1,
@@ -170,6 +183,8 @@ def validate_pm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
         g["tasks"].extend(split_steps(task))
         g["minutes"] += float(minutes)
         g["crew"] = max(g["crew"], int(crew))
+        g["permits"].extend(p for p in permits if p not in g["permits"])
+        g["loto"] = g["loto"] or loto
         g["shutdown"] = g["shutdown"] or (_s(r.get("shutdown_required")) or "").lower() in YES
         if start:  # earliest date given in the group; blank rows do not pull it back to today
             g["start"] = min(g["start"] or start, start)
@@ -208,6 +223,9 @@ def commit_pm_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid.U
             estimated_hours=max(round(g["minutes"] / 60, 2), 0.25),
             crew_size=g["crew"],
             safety_precautions="Machine shutdown required (offline task)." if g["shutdown"] else None,
+            requires_permit=bool(g["permits"]),
+            permit_types=",".join(g["permits"]) or None,
+            requires_loto=g["loto"],
         )
         items = g["tasks"]
         if len(items) > MAX_STEPS:

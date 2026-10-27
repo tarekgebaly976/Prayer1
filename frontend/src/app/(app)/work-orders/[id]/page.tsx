@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Attachments } from "@/components/Attachments";
 import { PartsUsed } from "@/components/PartsUsed";
+import { LotoRegister, PermitSignoff } from "@/components/Safety";
 import { KV, Loading, PageHeader, Section, StatusBadge, UserPicker } from "@/components/ui";
 import { del, download, patch, post } from "@/lib/api";
 import { fmtDate, fmtMoney, fmtNum, fromLocalInput, toLocalInput, useMut, useQ } from "@/lib/hooks";
@@ -125,7 +126,6 @@ export default function WODetailPage() {
   const [force, setForce] = useState(false);
   const [labor, setLabor] = useState<{ work_date: string; hours: number | string; is_overtime: boolean; notes: string }>({ work_date: new Date().toISOString().slice(0, 10), hours: 1, is_overtime: false, notes: "" });
   const [test, setTest] = useState({ test_result: "", test_passed: true });
-  const [permit, setPermit] = useState("");
   const [comment, setComment] = useState("");
   const [svc, setSvc] = useState({ description: "", cost: 0 as number | string, po_reference: "" });
   const [lube, setLube] = useState<Record<string, number | string>>({});
@@ -142,7 +142,6 @@ export default function WODetailPage() {
       production_loss_tons: w.production_loss_tons ?? "" });
     setPlan({ planned_start: toLocalInput(w.planned_start), planned_end: toLocalInput(w.planned_end), due_date: w.due_date ?? "", estimated_hours: w.estimated_hours ?? "",
       priority: w.priority, requires_loto: w.requires_loto, requires_permit: w.requires_permit, requires_testing: w.requires_testing, supervisor_id: w.supervisor_id });
-    setPermit(w.permit_reference ?? "");
   }
 
   const saveExec = useMut(() => patch(`/work-orders/${id}`, {
@@ -155,7 +154,6 @@ export default function WODetailPage() {
   }));
   const assign = useMut(() => post(`/work-orders/${id}/assign`, { user_ids: [assignee], lead_id: assignee, force }));
   const unassign = useMut((uid: string) => del(`/work-orders/${id}/assign/${uid}`));
-  const signoff = useMut(() => post(`/work-orders/${id}/safety-signoff`, { permit_reference: permit || null }));
   const recordTest = useMut(() => post(`/work-orders/${id}/test-result`, test));
   const addLabor = useMut(() => post(`/work-orders/${id}/labor`, { ...labor, hours: Number(labor.hours), notes: labor.notes || null }));
   const addComment = useMut(() => post(`/work-orders/${id}/comments`, { body: comment }), { onDone: () => setComment("") });
@@ -182,7 +180,10 @@ export default function WODetailPage() {
       </PageHeader>
       {(w.requires_loto || w.requires_permit) && (
         <Alert color={w.safety_signed_at ? "teal" : "red"} mb="md" title={t("wo.safety")}>
-          {w.requires_loto && <div>• {t("wo.loto")}</div>}{w.requires_permit && <div>• {t("wo.permit")} {w.permit_reference ? `(${w.permit_reference})` : ""}</div>}
+          {w.requires_loto && <div>• {t("wo.loto")} — {d.loto.filter((x) => !x.removed_at).length} 🔒</div>}
+          {w.requires_permit && <div>• {t("wo.permit")} {w.permit_reference ? `(${w.permit_reference})` : ""}
+            {w.permit_types ? ` · ${w.permit_types.split(",").map((p) => t(`safety.types.${p}`)).join(", ")}` : ""}
+            {w.permit_valid_until ? ` · ${t("safety.validUntil")} ${fmtDate(w.permit_valid_until, plant?.timezone, true)}` : ""}</div>}
           {w.safety_requirements && <div>{w.safety_requirements}</div>}
           {w.safety_signed_at ? <div>{t("wo.signedBy")}: {d.safety_signed_by} · {fmtDate(w.safety_signed_at, plant?.timezone, true)}</div> : null}
         </Alert>
@@ -236,13 +237,13 @@ export default function WODetailPage() {
                 <NumberInput label={t("wo.productionLoss")} min={0} value={exec.production_loss_tons as number | string} onChange={(v) => setExec({ ...exec, production_loss_tons: v })} />
               </SimpleGrid>
             </Section>
+            {(w.requires_loto || d.loto.length > 0) && (
+              <Section title={t("safety.lotoRegister")}><LotoRegister woId={w.id} rows={d.loto} status={w.status} /></Section>
+            )}
             <Grid>
               <Grid.Col span={{ base: 12, md: 6 }}>
                 <Section title={t("wo.safetySign")}>
-                  <Group align="end">
-                    <TextInput label={t("wo.permitRef")} value={permit} onChange={(e) => setPermit(e.currentTarget.value)} disabled={!can("wo.safety_signoff") || finished} />
-                    <Button disabled={!can("wo.safety_signoff") || finished} loading={signoff.isPending} onClick={() => signoff.mutate(undefined)}>{t("wo.safetySign")}</Button>
-                  </Group>
+                  <PermitSignoff key={`${w.id}:${w.version}`} wo={w} />
                 </Section>
               </Grid.Col>
               <Grid.Col span={{ base: 12, md: 6 }}>

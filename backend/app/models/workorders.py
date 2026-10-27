@@ -89,6 +89,8 @@ class WorkOrder(Base, PlantScoped, Timestamped, Attributed):
     requires_loto: Mapped[bool] = mapped_column(Boolean, default=False)
     requires_permit: Mapped[bool] = mapped_column(Boolean, default=False)
     permit_reference: Mapped[str | None] = mapped_column(String(80))
+    permit_types: Mapped[str | None] = mapped_column(String(200))  # comma-separated PERMIT_TYPES codes
+    permit_valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     safety_requirements: Mapped[str | None] = mapped_column(Text)
     safety_signed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     safety_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -213,3 +215,24 @@ class WOComment(Base):
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     data: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+PERMIT_TYPES = ("cold_work", "hot_work", "electrical", "confined_space", "work_at_height", "excavation", "lifting", "chemical")
+ENERGY_TYPES = ("electrical", "mechanical", "hydraulic", "pneumatic", "steam", "thermal", "chemical", "gravity", "other")
+
+
+class LotoIsolation(Base, PlantScoped):
+    """One isolation point of a work order's LOTO: locked when recorded, released before the work order can complete."""
+
+    __tablename__ = "loto_isolations"
+    __table_args__ = (Index("ix_loto_wo", "work_order_id"),)
+    id: Mapped[uuid.UUID] = uuid_pk()
+    work_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("work_orders.id", ondelete="CASCADE"))
+    point: Mapped[str] = mapped_column(String(200))  # e.g. "MCC-3 breaker Q12", "Steam valve HV-204"
+    energy_type: Mapped[str] = mapped_column(String(20))
+    lock_number: Mapped[str | None] = mapped_column(String(40))
+    zero_energy_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    applied_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    removed_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

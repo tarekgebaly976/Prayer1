@@ -62,6 +62,8 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("shutdown_required", "yes / offline if the machine must be stopped, otherwise no / online"),
         ("start_date", "YYYY-MM-DD of the first due date (blank = spread evenly over the first cycle)"),
         ("priority", "P1 | P2 | P3 | P4 (blank = P3)"),
+        ("permit", "blank/no, yes (= cold_work) or types: cold_work, hot_work, electrical, confined_space, work_at_height, excavation, lifting, chemical"),
+        ("loto", "yes if energy isolation (lock-out / tag-out) is required, otherwise no"),
     ],
     "lube_plans": [
         ("asset_code", "Code of an existing asset"),

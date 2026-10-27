@@ -23,7 +23,7 @@ from app.models.inventory import Reservation
 from app.models.pm import JobPlan, JobPlanTask, PMOccurrence
 from app.models.shifts import RosterEntry
 from app.models.tenancy import Plant
-from app.models.workorders import WOAssignment, WOChecklistItem, WOLabor, WorkOrder, WOStatusHistory
+from app.models.workorders import LotoIsolation, WOAssignment, WOChecklistItem, WOLabor, WorkOrder, WOStatusHistory
 from app.services.common import audit, next_number, plant_today, utcnow
 from app.services.notifications import notify, notify_permission
 from app.services.workflow import get_transition
@@ -71,6 +71,7 @@ def create_work_order(
         wo.estimated_hours = job_plan.estimated_hours
         wo.requires_loto = wo.requires_loto or job_plan.requires_loto
         wo.requires_permit = wo.requires_permit or job_plan.requires_permit
+        wo.permit_types = wo.permit_types or job_plan.permit_types
         wo.requires_testing = wo.requires_testing or job_plan.requires_testing
         wo.safety_requirements = job_plan.safety_precautions
         if not wo.description:
@@ -126,8 +127,38 @@ def _settings(plant: Plant) -> dict:
     return plant.settings or {}
 
 
+def locks_on(db: Session, wo: WorkOrder) -> int:
+    """Isolation points still locked on this work order."""
+    return db.execute(
+        select(func.count()).select_from(LotoIsolation).where(LotoIsolation.work_order_id == wo.id, LotoIsolation.removed_at.is_(None))
+    ).scalar_one()
+
+
+def check_safety_ready(db: Session, wo: WorkOrder) -> None:
+    """Conditions for the supervisor's LOTO / permit sign-off."""
+    errors: list[str] = []
+    if wo.requires_permit and not wo.permit_reference:
+        errors.append("Permit reference is required")
+    if wo.permit_valid_until and wo.permit_valid_until < utcnow():
+        errors.append("The permit has expired")
+    if wo.requires_loto:
+        rows = (
+            db.execute(select(LotoIsolation).where(LotoIsolation.work_order_id == wo.id, LotoIsolation.removed_at.is_(None)))
+            .scalars()
+            .all()
+        )
+        if not rows:
+            errors.append("Record at least one LOTO isolation point (lock applied) before sign-off")
+        elif not all(r.zero_energy_verified for r in rows):
+            errors.append("Zero energy must be verified on every isolation point")
+    if errors:
+        raise DomainError("; ".join(errors), "safety_not_ready", 409)
+
+
 def check_completion_guards(db: Session, plant: Plant, wo: WorkOrder) -> None:
     errors: list[str] = []
+    if locks_on(db, wo):
+        errors.append("Remove all LOTO locks (isolation register) before completing the work")
     if (wo.requires_loto or wo.requires_permit) and not wo.safety_signed_at:
         errors.append("Safety (LOTO/permit) sign-off is required")
     if wo.requires_permit and not wo.permit_reference:
@@ -172,6 +203,8 @@ def change_status(db: Session, ctx: Ctx, wo: WorkOrder, to: WOStatus, comment: s
         raise DomainError("Planned start date is required to schedule", "missing_planned_start", 409)
     if to == WOStatus.IN_PROGRESS and (wo.requires_loto or wo.requires_permit) and not wo.safety_signed_at:
         raise DomainError("LOTO / permit sign-off is required before work starts", "safety_signoff_required", 409)
+    if to == WOStatus.IN_PROGRESS and wo.requires_permit and wo.permit_valid_until and wo.permit_valid_until < utcnow():
+        raise DomainError("The permit has expired; renew it before work restarts", "permit_expired", 409)
     if to == WOStatus.COMPLETED:
         check_completion_guards(db, plant, wo)
     if to == WOStatus.CLOSED:

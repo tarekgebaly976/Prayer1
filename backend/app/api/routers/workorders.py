@@ -16,6 +16,9 @@ from app.models.identity import User
 from app.models.inventory import InventoryTransaction, Part, PartUsage, Reservation, Supplier, Warehouse
 from app.models.lubrication import LubeTask, LubricationPoint
 from app.models.workorders import (
+    ENERGY_TYPES,
+    PERMIT_TYPES,
+    LotoIsolation,
     WOChecklistItem,
     WOComment,
     WOLabor,
@@ -276,6 +279,8 @@ class WOOut(ORM):
     requires_loto: bool
     requires_permit: bool
     permit_reference: str | None
+    permit_types: str | None
+    permit_valid_until: datetime | None
     safety_requirements: str | None
     safety_signed_by_id: uuid.UUID | None
     safety_signed_at: datetime | None
@@ -529,6 +534,22 @@ def wo_detail(wo_id: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Sess
             for r, p, w in res
         ],
         "parts_used": [usage.row(*r) for r in used],
+        "loto": [
+            {
+                "id": r.id,
+                "point": r.point,
+                "energy_type": r.energy_type,
+                "lock_number": r.lock_number,
+                "zero_energy_verified": r.zero_energy_verified,
+                "applied_by": users.get(r.applied_by_id) if r.applied_by_id else None,
+                "applied_at": r.applied_at,
+                "removed_by": users.get(r.removed_by_id) if r.removed_by_id else None,
+                "removed_at": r.removed_at,
+            }
+            for r in db.execute(
+                select(LotoIsolation).where(LotoIsolation.work_order_id == wo.id).order_by(LotoIsolation.applied_at)
+            ).scalars()
+        ],
         "transactions": [
             {
                 "id": t.id,
@@ -668,6 +689,8 @@ def bulk_assign(body: BulkAssignIn, ctx: Ctx = Depends(require("wo.assign")), db
 
 class SafetyIn(In):
     permit_reference: str | None = None
+    permit_types: list[str] | None = None
+    permit_valid_until: datetime | None = None
     note: str | None = None
 
 
@@ -678,8 +701,16 @@ def safety_signoff(
     wo = get_wo(db, ctx, wo_id, lock=True)
     if body.permit_reference:
         wo.permit_reference = body.permit_reference
+    if body.permit_types is not None:
+        bad = [p for p in body.permit_types if p not in PERMIT_TYPES]
+        if bad:
+            raise HTTPException(422, f"Unknown permit type: {', '.join(bad)}")
+        wo.permit_types = ",".join(dict.fromkeys(body.permit_types)) or None
+    if body.permit_valid_until is not None:
+        wo.permit_valid_until = body.permit_valid_until
     if wo.requires_permit and not wo.permit_reference:
         raise DomainError("Permit reference is required for sign-off", "permit_required", 422)
+    svc.check_safety_ready(db, wo)
     wo.safety_signed_by_id, wo.safety_signed_at = ctx.user.id, utcnow()
     audit(
         db,
@@ -693,6 +724,102 @@ def safety_signoff(
     )
     db.flush()
     return wo
+
+
+class LotoIn(In):
+    point: str = Field(min_length=2, max_length=200)
+    energy_type: str = "electrical"
+    lock_number: str | None = Field(None, max_length=40)
+    zero_energy_verified: bool = False
+
+
+def _loto_allowed(ctx: Ctx) -> None:
+    if "wo.execute" not in ctx.permissions and "wo.safety_signoff" not in ctx.permissions:
+        raise HTTPException(403, "Missing permission: wo.execute")
+
+
+def _loto(db: Session, wo: WorkOrder, iid: uuid.UUID) -> LotoIsolation:
+    r = db.get(LotoIsolation, iid)
+    if r is None or r.work_order_id != wo.id:
+        raise HTTPException(404, "Isolation point not found")
+    return r
+
+
+@router.post("/work-orders/{wo_id}/loto", status_code=201)
+def apply_lock(
+    wo_id: uuid.UUID, body: LotoIn, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    """Record an isolation point as locked out (lock applied now by the current user)."""
+    _loto_allowed(ctx)
+    wo = get_wo(db, ctx, wo_id, lock=True)
+    if wo.status in (WOStatus.CLOSED, WOStatus.CANCELLED, WOStatus.COMPLETED):
+        raise DomainError("Cannot add locks to a finished work order", "wo_finished", 409)
+    if body.energy_type not in ENERGY_TYPES:
+        raise HTTPException(422, f"energy_type must be one of: {', '.join(ENERGY_TYPES)}")
+    r = LotoIsolation(
+        plant_id=ctx.plant_id,
+        work_order_id=wo.id,
+        point=body.point.strip(),
+        energy_type=body.energy_type,
+        lock_number=body.lock_number,
+        zero_energy_verified=body.zero_energy_verified,
+        applied_by_id=ctx.user.id,
+        applied_at=utcnow(),
+    )
+    db.add(r)
+    db.flush()
+    audit(
+        db,
+        "wo.loto_applied",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="work_order",
+        entity_id=wo.id,
+        data={"point": r.point, "lock": r.lock_number, "verified": r.zero_energy_verified},
+        ip=ctx.ip,
+    )
+    return {"id": r.id}
+
+
+@router.post("/work-orders/{wo_id}/loto/{iid}/verify", status_code=204)
+def verify_lock(
+    wo_id: uuid.UUID, iid: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> None:
+    _loto_allowed(ctx)
+    wo = get_wo(db, ctx, wo_id, lock=True)
+    r = _loto(db, wo, iid)
+    r.zero_energy_verified = True
+    audit(
+        db,
+        "wo.loto_verified",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="work_order",
+        entity_id=wo.id,
+        data={"point": r.point},
+    )
+
+
+@router.post("/work-orders/{wo_id}/loto/{iid}/remove", status_code=204)
+def remove_lock(
+    wo_id: uuid.UUID, iid: uuid.UUID, ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get_db, scope="function")
+) -> None:
+    """Release a lock (work finished on that isolation point); required before the work order can complete."""
+    _loto_allowed(ctx)
+    wo = get_wo(db, ctx, wo_id, lock=True)
+    r = _loto(db, wo, iid)
+    if r.removed_at is None:
+        r.removed_by_id, r.removed_at = ctx.user.id, utcnow()
+        audit(
+            db,
+            "wo.loto_removed",
+            user_id=ctx.user.id,
+            plant_id=ctx.plant_id,
+            entity_type="work_order",
+            entity_id=wo.id,
+            data={"point": r.point, "lock": r.lock_number},
+            ip=ctx.ip,
+        )
 
 
 class TestIn(In):

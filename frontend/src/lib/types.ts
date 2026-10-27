@@ -24,6 +24,7 @@ export interface WorkOrder {
   actual_labor_hours: number; actual_labor_cost: number; actual_material_cost: number; actual_service_cost: number; actual_cost: number;
   currency: string; downtime_hours: number | null; production_impact: string | null; production_loss_tons: number | null;
   requires_loto: boolean; requires_permit: boolean; permit_reference: string | null; safety_requirements: string | null;
+  permit_types: string | null; permit_valid_until: string | null;
   safety_signed_by_id: UUID | null; safety_signed_at: string | null; requires_testing: boolean; test_result: string | null;
   test_passed: boolean | null; tested_at: string | null; findings: string | null; recommendations: string | null; root_cause: string | null;
   corrective_action: string | null; is_repeat_failure: boolean; pm_occurrence_id: UUID | null; condition_alert_id: UUID | null;
@@ -40,6 +41,7 @@ export interface WODetail {
   reservations: { id: UUID; part_id: UUID; part_code: string; description: string; warehouse: string; warehouse_id: UUID; quantity: number; qty_issued: number; status: string; uom: string }[];
   transactions: { id: UUID; part_code: string; type: string; quantity: number; unit_cost: number; total_cost: number; at: string }[];
   parts_used: PartUsed[];
+  loto: LotoPoint[];
   history: { from: string | null; to: string; by: string; at: string; comment: string | null }[];
   comments: { id: UUID; user: string; body: string; at: string }[];
   lube_tasks: { id: UUID; point_code: string; component: string | null; location: string | null; lubricant: string | null; lubricant_id: UUID;
@@ -59,4 +61,9 @@ export interface PartUsed {
   id: UUID; used_on: string; work_order_id: UUID; work_order: string; wo_title: string; wo_type: string; asset_id: UUID; asset_code: string;
   asset_name: string; part_id: UUID | null; part_code: string | null; description: string; quantity: number; uom: string; unit_cost: number;
   total_cost: number; note: string | null;
+}
+
+export interface LotoPoint {
+  id: UUID; point: string; energy_type: string; lock_number: string | null; zero_energy_verified: boolean; applied_by: string | null;
+  applied_at: string; removed_by: string | null; removed_at: string | null;
 }

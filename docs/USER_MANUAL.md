@@ -20,24 +20,34 @@ describe the symptom, tick **Breakdown** if the machine is stopped — superviso
 
 ## 4. Technicians: doing the work
 1. **My work** lists work orders assigned to you, sorted by due date. ⚠ marks jobs needing LOTO/permit.
-2. Open a job. If LOTO/permit is required, the supervisor must sign off first — the *In progress* button is refused
-   until then.
+2. Open a job. If LOTO is required, record every isolation point in the **LOTO isolation register** (Checklist tab)
+   when you apply the lock: point, energy type, lock/tag number, and tick *Zero energy verified* after testing.
+   The supervisor then signs off the LOTO / permit — the *In progress* button is refused until then.
 3. Press **Move to: In progress**.
 4. **Checklist** tab: tap OK / Not OK, enter readings (out-of-range readings are flagged), record lubrication tasks
    (only the specified lubricant or an approved alternative is accepted).
 5. Record findings, root cause, failure codes, downtime; add **photos** in *Attachments* (camera opens on phones).
 6. **Labor** tab: book your hours (you can only book your own time).
-7. **Move to: Awaiting review / test** when done.
+7. **Materials** tab → *Spare parts used*: record every part fitted (search by code or description, or type a
+   description for items not in the list). This does not change store stock; it builds the history of parts per
+   work order and machine and adds the cost to the work order.
+8. **Remove lock** for each isolation point when the work is finished — the work order cannot be completed while
+   a lock is still applied.
+9. **Move to: Awaiting review / test** when done.
 
 Scan an equipment QR label with **Scan QR** to open its page: history, spare parts (BOM), manuals, meters.
 
 ## 5. Supervisors
 * *Work requests*: accept (creates a work order) or reject with a reason.
 * Approve work orders, assign technicians (*Details* tab — conflicts with leave or overlapping jobs are flagged),
-  sign off LOTO/permits, record test results, complete and close work. Emergency breakdowns may go straight to
+  sign off LOTO/permits (permit number, permit types such as cold/hot work, electrical, confined space, work at
+  height, and validity — an expired permit blocks sign-off and restart; every isolation point must be verified),
+  record test results, complete and close work. Emergency breakdowns may go straight to
   *In progress*; closing them needs the emergency-closure permission.
 * Completion is blocked until required checklist items, test results, failure codes (corrective/emergency) and root
   cause (emergency) are present — the message lists what is missing.
+* *Spare parts → Parts used*: parts fitted per machine (a machine includes everything below it), per part and per
+  period, with Excel export.
 * *Shifts & handover*: confirm handovers written by the outgoing shift (you cannot confirm your own).
 * *PM → Approvals*: approve or reject deferral/cancellation requests (you cannot approve your own request).
 
@@ -58,6 +68,8 @@ Scan an equipment QR label with **Scan QR** to open its page: history, spare par
     (e.g. `LR-PM-W`), and new lubricant codes are created from the row.
   * Condition monitoring: one row per measurement point with its alarm limits; points of the same equipment and
     frequency get one predictive reading round.
+  * Optional `permit` (`yes` or types such as `cold_work`, `hot_work;work_at_height`) and `loto` (`yes`/`no`) columns
+    put the safety requirements on every work order the plan generates.
   * A blank `start_date` spreads the first due dates evenly over the first cycle, so a bulk import does not make
     every plan due on the same day.
 * *Shutdowns*: work packages with durations and predecessors; the critical path is calculated and shown in red on the

@@ -40,6 +40,9 @@ def test_full_lifecycle_request_to_technical_closure(world):
     assert tech2.post(f"/work-orders/{wo_id}/status", {"to": "in_progress"}).status_code == 403  # not assigned
     r = tech.post(f"/work-orders/{wo_id}/status", {"to": "in_progress"})
     assert r.status_code == 409 and "LOTO" in r.text
+    assert sup.post(f"/work-orders/{wo_id}/safety-signoff", {}).status_code == 409  # no isolation point recorded yet
+    lock = tech.ok("post", f"/work-orders/{wo_id}/loto", {"point": "MCC-12 breaker Q3", "lock_number": "L-17",
+                                                          "zero_energy_verified": True}, status=201)
     sup.ok("post", f"/work-orders/{wo_id}/safety-signoff", {"note": "LOTO applied at MCC-12"})
     tech.ok("post", f"/work-orders/{wo_id}/status", {"to": "in_progress"})
     tech.ok("post", f"/work-orders/{wo_id}/labor", {"work_date": datetime.now(UTC).date().isoformat(), "hours": 3})
@@ -49,7 +52,8 @@ def test_full_lifecycle_request_to_technical_closure(world):
     assert tech.patch(f"/work-orders/{wo_id}", {"priority": "P1"}).status_code == 403  # planning field
     tech.ok("post", f"/work-orders/{wo_id}/status", {"to": "awaiting_review"})
     r = sup.post(f"/work-orders/{wo_id}/status", {"to": "completed"})
-    assert r.status_code == 409 and "test" in r.text.lower()
+    assert r.status_code == 409 and "test" in r.text.lower() and "LOTO locks" in r.text
+    tech.ok("post", f"/work-orders/{wo_id}/loto/{lock['id']}/remove", status=204)
     sup.ok("post", f"/work-orders/{wo_id}/test-result", {"test_result": "Run 30 min, 2.1 mm/s, 58 °C", "test_passed": True})
     sup.ok("post", f"/work-orders/{wo_id}/status", {"to": "completed"})
     assert tech.post(f"/work-orders/{wo_id}/status", {"to": "closed"}).status_code == 403

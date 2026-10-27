@@ -57,6 +57,7 @@ class JobPlanIn(In):
     requires_loto: bool = False
     requires_permit: bool = False
     requires_testing: bool = False
+    permit_types: str | None = None
     tasks: list[TaskIn] = Field(default_factory=list)
     materials: list[MaterialIn] = Field(default_factory=list)
 
@@ -74,6 +75,7 @@ class JobPlanOut(ORM):
     requires_loto: bool
     requires_permit: bool
     requires_testing: bool
+    permit_types: str | None
 
 
 @router.get("/job-plans", response_model=list[JobPlanOut])
@@ -230,7 +232,9 @@ def create_plan(body: PlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Sess
 
 
 @router.patch("/plans/{plan_id}", response_model=PlanOut)
-def update_plan(plan_id: uuid.UUID, body: PlanUpdate, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> PMPlan:
+def update_plan(
+    plan_id: uuid.UUID, body: PlanUpdate, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")
+) -> PMPlan:
     p = db.get(PMPlan, plan_id)
     if p is None or p.plant_id != ctx.plant_id:
         raise HTTPException(404, "PM plan not found")
