@@ -8,7 +8,8 @@ import { useTranslation } from "react-i18next";
 import { del, download, post } from "@/lib/api";
 import { fmtDate, fmtMoney, fmtNum, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
-import type { Asset, Page, Part, PartUsed } from "@/lib/types";
+import type { Page, Part, PartUsed } from "@/lib/types";
+import { AssetPicker } from "@/components/ui";
 
 /** Searchable spare-part picker that queries the server, so it works with thousands of items. */
 export function PartSearch({ value, onChange, label }: { value: string | null; onChange: (id: string | null, part?: Part) => void; label: string }) {
@@ -19,17 +20,6 @@ export function PartSearch({ value, onChange, label }: { value: string | null; o
   return (
     <Select label={label} searchable clearable w={340} value={value} searchValue={search} onSearchChange={setSearch} filter={({ options }) => options}
       onChange={(v) => onChange(v, items.find((p) => p.id === v))} data={items.map((p) => ({ value: p.id, label: `${p.code} — ${p.description}` }))} />
-  );
-}
-
-/** Server-side searchable asset picker (works with thousands of assets). */
-export function AssetSearch({ value, onChange, label }: { value: string | null; onChange: (id: string | null) => void; label: string }) {
-  const [search, setSearch] = useState("");
-  const [q] = useDebouncedValue(search, 300);
-  const res = useQ<Page<Asset>>("/assets", { q: q || undefined, limit: 30 });
-  return (
-    <Select label={label} searchable clearable w={340} value={value} searchValue={search} onSearchChange={setSearch} filter={({ options }) => options}
-      onChange={onChange} data={(res.data?.items ?? []).map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))} />
   );
 }
 
@@ -47,7 +37,7 @@ export function PartsUsedReport() {
   return (
     <Stack>
       <Group align="end" wrap="wrap">
-        <AssetSearch label={t("used.machine")} value={f.asset_id} onChange={(v) => { setF({ ...f, asset_id: v }); setOffset(0); }} />
+        <AssetPicker clearable label={t("used.machine")} value={f.asset_id} onChange={(v) => { setF({ ...f, asset_id: v }); setOffset(0); }} />
         <PartSearch label={t("used.part")} value={f.part_id} onChange={(v) => { setF({ ...f, part_id: v }); setOffset(0); }} />
         <TextInput type="date" label={t("used.from")} value={f.start} onChange={(e) => setF({ ...f, start: e.currentTarget.value })} />
         <TextInput type="date" label={t("used.to")} value={f.end} onChange={(e) => setF({ ...f, end: e.currentTarget.value })} />

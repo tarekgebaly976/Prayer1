@@ -115,6 +115,7 @@ def list_assets(
     q: str | None = None,
     department_id: uuid.UUID | None = None,
     level: AssetLevel | None = None,
+    levels: str | None = None,  # comma-separated, e.g. "production_line,unit" for the top of the tree
     criticality: Criticality | None = None,
     status: AssetStatus | None = None,
     under: uuid.UUID | None = None,
@@ -127,6 +128,12 @@ def list_assets(
         stmt = stmt.where(Asset.department_id == department_id)
     if level:
         stmt = stmt.where(Asset.level == level)
+    if levels:
+        try:
+            wanted = [AssetLevel(x.strip()) for x in levels.split(",") if x.strip()]
+        except ValueError as e:
+            raise HTTPException(422, "Unknown asset level") from e
+        stmt = stmt.where(Asset.level.in_(wanted))
     if criticality:
         stmt = stmt.where(Asset.criticality == criticality)
     if status:
@@ -138,9 +145,14 @@ def list_assets(
 
 
 @router.get("/tree")
-def tree_children(ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function"),
-                  department_id: uuid.UUID | None = None, parent_id: uuid.UUID | None = None,
-                  limit: int = Query(200, ge=1, le=1000), offset: int = Query(0, ge=0)) -> dict:
+def tree_children(
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
+    department_id: uuid.UUID | None = None,
+    parent_id: uuid.UUID | None = None,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+) -> dict:
     """Lazy-loaded, paginated tree level: children of a parent (or top-level lines of a department)."""
     base = _dept_filter(ctx, select(Asset).where(Asset.plant_id == ctx.plant_id))
     base = base.where(Asset.parent_id == parent_id) if parent_id else base.where(Asset.parent_id.is_(None))
@@ -148,8 +160,15 @@ def tree_children(ctx: Ctx = Depends(require("asset.view")), db: Session = Depen
         base = base.where(Asset.department_id == department_id)
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
     rows = db.execute(base.order_by(Asset.code).limit(limit).offset(offset)).scalars().all()
-    counts = dict(db.execute(select(Asset.parent_id, func.count()).where(Asset.parent_id.in_([r.id for r in rows]))
-                             .group_by(Asset.parent_id)).all()) if rows else {}
+    counts = (
+        dict(
+            db.execute(
+                select(Asset.parent_id, func.count()).where(Asset.parent_id.in_([r.id for r in rows])).group_by(Asset.parent_id)
+            ).all()
+        )
+        if rows
+        else {}
+    )
     items = []
     for a in rows:
         node = AssetNode.model_validate(a)
@@ -196,7 +215,9 @@ def get_asset(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db
 
 
 @router.get("/{asset_id}/ancestors", response_model=list[AssetNode])
-def ancestors(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")) -> list[Asset]:
+def ancestors(
+    asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+) -> list[Asset]:
     a = _get(db, ctx, asset_id)
     ids = [uuid.UUID(x) for x in a.path.strip("/").split("/") if x]
     rows = {r.id: r for r in db.execute(select(Asset).where(Asset.id.in_(ids), Asset.plant_id == ctx.plant_id)).scalars()}
@@ -204,7 +225,9 @@ def ancestors(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db
 
 
 @router.patch("/{asset_id}", response_model=AssetOut)
-def update_asset(asset_id: uuid.UUID, body: AssetUpdate, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> Asset:
+def update_asset(
+    asset_id: uuid.UUID, body: AssetUpdate, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")
+) -> Asset:
     a = _get(db, ctx, asset_id)
     data = body.model_dump(exclude_unset=True)
     if "parent_id" in data:
@@ -227,7 +250,9 @@ def update_asset(asset_id: uuid.UUID, body: AssetUpdate, ctx: Ctx = Depends(requ
 
 
 @router.get("/{asset_id}/qr.png")
-def asset_qr(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")) -> StreamingResponse:
+def asset_qr(
+    asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+) -> StreamingResponse:
     a = _get(db, ctx, asset_id)
     img = qrcode.make(f"cmms:asset:{a.qr_token}")
     buf = io.BytesIO()
@@ -238,7 +263,10 @@ def asset_qr(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db:
 
 @router.get("/{asset_id}/history")
 def asset_history(
-    asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function"), include_children: bool = True
+    asset_id: uuid.UUID,
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
+    include_children: bool = True,
 ) -> dict:
     a = _get(db, ctx, asset_id)
     ids = svc.subtree_ids(db, a) if include_children else [a.id]
@@ -335,7 +363,9 @@ def get_bom(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: 
 
 
 @router.post("/{asset_id}/bom", status_code=201)
-def add_bom(asset_id: uuid.UUID, body: BOMIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_bom(
+    asset_id: uuid.UUID, body: BOMIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     _get(db, ctx, asset_id)
     p = db.get(Part, body.part_id)
     if p is None or p.plant_id != ctx.plant_id:
@@ -350,7 +380,9 @@ def add_bom(asset_id: uuid.UUID, body: BOMIn, ctx: Ctx = Depends(require("asset.
 
 
 @router.delete("/{asset_id}/bom/{bom_id}", status_code=204)
-def del_bom(asset_id: uuid.UUID, bom_id: uuid.UUID, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> None:
+def del_bom(
+    asset_id: uuid.UUID, bom_id: uuid.UUID, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")
+) -> None:
     _get(db, ctx, asset_id)
     b = db.get(AssetBOM, bom_id)
     if b is None or b.asset_id != asset_id:
@@ -382,13 +414,17 @@ class MeterOut(ORM):
 
 
 @router.get("/{asset_id}/meters", response_model=list[MeterOut])
-def list_meters(asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")) -> list[Meter]:
+def list_meters(
+    asset_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+) -> list[Meter]:
     _get(db, ctx, asset_id)
     return list(db.execute(select(Meter).where(Meter.asset_id == asset_id)).scalars())
 
 
 @router.post("/{asset_id}/meters", response_model=MeterOut, status_code=201)
-def create_meter(asset_id: uuid.UUID, body: MeterIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> Meter:
+def create_meter(
+    asset_id: uuid.UUID, body: MeterIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")
+) -> Meter:
     _get(db, ctx, asset_id)
     m = Meter(plant_id=ctx.plant_id, asset_id=asset_id, **body.model_dump())
     db.add(m)
@@ -414,7 +450,10 @@ def add_meter_reading(
 
 @router.get("/meters/{meter_id}/readings")
 def meter_readings(
-    meter_id: uuid.UUID, ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function"), limit: int = Query(200, le=2000)
+    meter_id: uuid.UUID,
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
+    limit: int = Query(200, le=2000),
 ) -> list[dict]:
     m = db.get(Meter, meter_id)
     if m is None or m.plant_id != ctx.plant_id:
@@ -437,7 +476,9 @@ class DowntimeIn(In):
 
 
 @router.post("/{asset_id}/downtime", status_code=201)
-def add_downtime(asset_id: uuid.UUID, body: DowntimeIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")) -> dict:
+def add_downtime(
+    asset_id: uuid.UUID, body: DowntimeIn, ctx: Ctx = Depends(require("wo.execute")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     _get(db, ctx, asset_id)
     if body.ended_at and body.ended_at < body.started_at:
         raise HTTPException(422, "ended_at must be after started_at")

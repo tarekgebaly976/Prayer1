@@ -15,14 +15,27 @@ def test_hierarchy_example_and_rules(world):
     anc = api.get(f"/assets/{brg['id']}/ancestors").json()
     assert [a["code"] for a in anc] == ["PM1", "PM1-WIRE", "PM1-WIRE-UTW", "PM1-WIRE-UTW-DR1", "PM1-WIRE-UTW-DR1-BRG"]
     # a unit cannot be placed under a component; a non-line cannot be top-level; parent must share department
-    assert api.post("/assets", {"code": "BAD", "name": "b", "department_id": str(world.depts["PM"].id), "level": "unit",
-                                "parent_id": brg["id"]}).status_code == 422
-    assert api.post("/assets", {"code": "BAD2", "name": "b", "department_id": str(world.depts["PM"].id),
-                                "level": "unit"}).status_code == 422
-    assert api.post("/assets", {"code": "BAD3", "name": "b", "department_id": str(world.depts["SP"].id), "level": "unit",
-                                "parent_id": pm["id"]}).status_code == 422
-    assert api.post("/assets", {"code": "PM1", "name": "dup", "department_id": str(world.depts["PM"].id),
-                                "level": "production_line"}).status_code == 409
+    assert (
+        api.post(
+            "/assets", {"code": "BAD", "name": "b", "department_id": str(world.depts["PM"].id), "level": "unit", "parent_id": brg["id"]}
+        ).status_code
+        == 422
+    )
+    assert (
+        api.post("/assets", {"code": "BAD2", "name": "b", "department_id": str(world.depts["PM"].id), "level": "unit"}).status_code == 422
+    )
+    assert (
+        api.post(
+            "/assets", {"code": "BAD3", "name": "b", "department_id": str(world.depts["SP"].id), "level": "unit", "parent_id": pm["id"]}
+        ).status_code
+        == 422
+    )
+    assert (
+        api.post(
+            "/assets", {"code": "PM1", "name": "dup", "department_id": str(world.depts["PM"].id), "level": "production_line"}
+        ).status_code
+        == 409
+    )
     sub = api.get("/assets", params={"under": wire["id"]}).json()
     assert sub["total"] == 3
     tree = api.get("/assets/tree", params={"parent_id": pm["id"]}).json()
@@ -66,13 +79,17 @@ def test_asset_import_preview_errors_duplicates_and_commit(world):
     api = world.api("planner")
     mk_asset(api, world, "EXISTING")
     header = ["code", "name", "department_code", "parent_code", "level", "criticality"]
-    bad = _xlsx([header,
-                 ["SP1", "Stock prep", "SP", "", "production_line", "A"],
-                 ["SP1-PULP", "Pulper", "SP", "SP1", "unit", "A"],
-                 ["SP1-PULP", "Pulper again", "SP", "SP1", "unit", "B"],  # duplicate in file
-                 ["EXISTING", "dup", "PM", "", "production_line", "A"],   # duplicate in DB
-                 ["X1", "bad level", "SP", "SP1", "rotor", "Z"],
-                 ["ORPHAN", "orphan", "SP", "NOPE", "unit", "C"]])
+    bad = _xlsx(
+        [
+            header,
+            ["SP1", "Stock prep", "SP", "", "production_line", "A"],
+            ["SP1-PULP", "Pulper", "SP", "SP1", "unit", "A"],
+            ["SP1-PULP", "Pulper again", "SP", "SP1", "unit", "B"],  # duplicate in file
+            ["EXISTING", "dup", "PM", "", "production_line", "A"],  # duplicate in DB
+            ["X1", "bad level", "SP", "SP1", "rotor", "Z"],
+            ["ORPHAN", "orphan", "SP", "NOPE", "unit", "C"],
+        ]
+    )
     files = {"file": ("assets.xlsx", bad, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
     p = api.ok("post", "/imports/assets/preview", files=files)
     assert p["total"] == 6 and p["invalid"] == 4
@@ -92,7 +109,23 @@ def test_asset_import_preview_errors_duplicates_and_commit(world):
 
 def test_export_csv_formula_injection_neutralised(world):
     api = world.api("planner")
-    api.ok("post", "/assets", {"code": "L1", "name": "=HYPERLINK(\"x\")", "department_id": str(world.depts["PM"].id),
-                               "level": "production_line"}, status=201)
+    api.ok(
+        "post",
+        "/assets",
+        {"code": "L1", "name": '=HYPERLINK("x")', "department_id": str(world.depts["PM"].id), "level": "production_line"},
+        status=201,
+    )
     r = api.get("/exports/assets.csv")
     assert "'=HYPERLINK" in r.text
+
+
+def test_list_filters_by_several_levels_for_tree_top(world):
+    api = world.api("planner")
+    line = mk_asset(api, world, "PM1")
+    unit = mk_asset(api, world, "PM1-DRY", level="unit", parent=line["id"])
+    mk_asset(api, world, "PM1-DRY-CYL", level="assembly", parent=unit["id"])
+    sp = mk_asset(api, world, "SP1", dept="SP")
+    top = api.ok("get", "/assets", params={"levels": "production_line,unit"})
+    assert [a["code"] for a in top["items"]] == ["PM1", "PM1-DRY", "SP1"] and sp["id"] in {a["id"] for a in top["items"]}
+    assert api.get("/assets", params={"levels": "planet"}).status_code == 422
+    assert [a["code"] for a in api.ok("get", "/assets", params={"q": "cyl"})["items"]] == ["PM1-DRY-CYL"]

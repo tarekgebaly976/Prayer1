@@ -1,7 +1,8 @@
 "use client";
 
 import { Badge, Button, Center, Group, Loader, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, type BadgeProps } from "@mantine/core";
-import type { ReactNode } from "react";
+import { useDebouncedValue } from "@mantine/hooks";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQ } from "@/lib/hooks";
 import type { Asset, Member, Page } from "@/lib/types";
@@ -91,12 +92,38 @@ export function Section({ title, children, actions }: { title: string; children:
   );
 }
 
-export function AssetPicker({ value, onChange, label, required }: { value: string | null; onChange: (v: string | null) => void; label?: string; required?: boolean }) {
+const LEVEL_INDENT: Record<string, number> = { production_line: 0, unit: 1, assembly: 2, sub_assembly: 3, component: 4 };
+
+/**
+ * Asset picker that searches the server, so it works with thousands of assets. With nothing typed it lists the top
+ * of the hierarchy (production lines and units of every department); typing searches code and name across all levels.
+ */
+export function AssetPicker({ value, onChange, label, required, clearable }: {
+  value: string | null; onChange: (v: string | null) => void; label?: string; required?: boolean; clearable?: boolean;
+}) {
   const { t } = useTranslation();
-  const q = useQ<Page<Asset>>("/assets", { limit: 500 });
+  const [search, setSearch] = useState("");
+  const [q] = useDebouncedValue(search.trim(), 300);
+  const [picked, setPicked] = useState<Asset | null>(null);
+  const res = useQ<Page<Asset>>("/assets", q ? { q, limit: 50 } : { levels: "production_line,unit", limit: 200 });
+  const items = res.data?.items ?? [];
+  // Keep the chosen asset displayable even when it is not in the current result list (e.g. an existing value).
+  const known = picked?.id === value ? picked : items.find((a) => a.id === value) ?? null;
+  const current = useQ<Asset>(value && !known ? `/assets/${value}` : null);
+  const selected = known ?? current.data ?? null;
+  const list = selected && !items.some((a) => a.id === selected.id) ? [selected, ...items] : items;
+  const byId = new Map(list.map((a) => [a.id, a]));
+  const labelOf = (a: Asset) => `${a.code} — ${a.name}`;
   return (
-    <Select label={label ?? t("common.asset")} searchable required={required} value={value} onChange={onChange} nothingFoundMessage={t("common.noData")}
-      data={(q.data?.items ?? []).map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))} limit={200} />
+    <Select label={label ?? t("common.asset")} searchable clearable={clearable} required={required} value={value}
+      placeholder={t("common.search")} nothingFoundMessage={res.isFetching ? "…" : t("common.noData")}
+      searchValue={search} onSearchChange={setSearch} filter={({ options }) => options}
+      onChange={(v) => { setPicked(v ? byId.get(v) ?? null : null); onChange(v); }}
+      data={list.map((a) => ({ value: a.id, label: labelOf(a) }))}
+      renderOption={({ option }) => {
+        const a = byId.get(option.value);
+        return <Text size="sm" pl={(LEVEL_INDENT[a?.level ?? "component"] ?? 0) * 12} fw={a && LEVEL_INDENT[a.level] === 0 ? 700 : 400}>{option.label}</Text>;
+      }} maxDropdownHeight={360} />
   );
 }
 
