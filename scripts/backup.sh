@@ -3,6 +3,8 @@
 #   scripts/backup.sh [backup_dir]            (Docker Compose deployment; run from repo root)
 # Produces: cmms_<ts>.dump (pg_dump custom format), storage_<ts>.tar.gz, SHA256SUMS, manifest.json.
 # Store backups OUTSIDE the host (object storage with encryption + versioning). Never commit them.
+# Off-host copy: if BACKUP_UPLOAD_URL (an object-storage pre-authenticated request URL for a bucket, ending in /o/)
+# is set in the environment or in the env file, each backup is also uploaded there (see scripts/set-backup-upload.sh).
 set -euo pipefail
 DIR="${1:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
@@ -22,4 +24,11 @@ printf '{"timestamp":"%s","migration":"%s","row_counts":%s}\n' "$TS" "$REV" "$RO
 pg_restore --list "$DIR/cmms_$TS.dump" > /dev/null 2>&1 || "${COMPOSE[@]}" exec -T db pg_restore --list < "$DIR/cmms_$TS.dump" > /dev/null
 echo "[backup] verified dump is readable"
 find "$DIR" -type f -mtime +"$RETENTION_DAYS" \( -name 'cmms_*.dump' -o -name 'storage_*.tar.gz' -o -name 'manifest_*.json' -o -name 'SHA256SUMS_*' \) -delete
+URL="${BACKUP_UPLOAD_URL:-$(grep -s '^BACKUP_UPLOAD_URL=' "${ENV_FILE:-deploy/.env}" | cut -d= -f2- || true)}"
+if [[ -n "$URL" ]]; then
+  for f in "cmms_$TS.dump" "storage_$TS.tar.gz" "manifest_$TS.json" "SHA256SUMS_$TS"; do
+    curl -fsS --retry 3 -T "$DIR/$f" "${URL%/}/${TS:0:8}/$f" > /dev/null
+  done
+  echo "[backup] uploaded off-host copy to object storage (${TS:0:8}/)"
+fi
 echo "[backup] done: $DIR/cmms_$TS.dump ($(du -h "$DIR/cmms_$TS.dump" | cut -f1)), migration $REV"

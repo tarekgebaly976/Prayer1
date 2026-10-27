@@ -50,3 +50,12 @@ runtime role can read restored data.
 * Enable automated daily backups + PITR; retention ≥ 14 days; deletion protection on.
 * Run the logical backup weekly as well (portable, protects against provider-level issues).
 * Quarterly: restore the latest backup into staging, run `scripts/verify_restore.sh`-equivalent checks and the E2E suite.
+
+## Off-host copy to Oracle Object Storage (single-server install)
+1. Console → Storage → Buckets → *Create bucket* (Standard tier, private). Always Free includes 20 GB.
+2. Open the bucket → *Pre-authenticated requests* → *Create*: target *Bucket*, access *Permit object writes*,
+   expiry far in the future. Copy the URL (it ends with `/o/`) — it is a secret, do not share it.
+3. On the server: `cd /opt/cmms && sudo bash scripts/set-backup-upload.sh`, paste the URL (not echoed). It is stored in
+   `deploy/.env` and a test backup is uploaded immediately; afterwards every nightly backup is uploaded to
+   `<yyyymmdd>/` in the bucket.
+4. Optional: a bucket lifecycle rule deleting objects older than 30 days keeps usage under the free 20 GB.
