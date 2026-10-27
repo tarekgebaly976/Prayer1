@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { LabelPrint } from "@/components/LabelPrint";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, DeptSelect, PageHeader, StatusBadge, UserPicker } from "@/components/ui";
 import { post } from "@/lib/api";
@@ -34,6 +35,7 @@ function Lube() {
   const [msg, setMsg] = useState<string | null>(null);
   const [modal, setModal] = useState<"lub" | "route" | "point" | "alt" | null>(null);
   const [imp, setImp] = useState(false);
+  const [labels, setLabels] = useState(false);
   const [lf, setLf] = useState({ code: "", manufacturer: "", product: "", kind: "grease", viscosity_grade: "", specification: "" });
   const [rf, setRf] = useState({ code: "", name: "", department_id: null as string | null, lead_days: 2 as number | string });
   const [pf, setPf] = useState({ code: "", asset_id: null as string | null, component: "", lubricant_id: null as string | null, quantity: 10 as number | string, unit: "g",
@@ -49,11 +51,13 @@ function Lube() {
       <PageHeader title={t("nav.lubrication")} actions={can("lube.manage") ? <>
         <Button onClick={() => setModal("point")}>{t("common.add")}: {t("lube.points")}</Button>
         <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>
+        <Button variant="light" onClick={() => setLabels(true)}>{t("labels.button")}</Button>
         <Button variant="light" onClick={() => setModal("route")}>{t("common.add")}: {t("lube.routes")}</Button>
         <Button variant="light" onClick={() => setModal("lub")}>{t("common.add")}: {t("lube.lubricants")}</Button>
         {can("lube.approve_alternative") && <Button variant="default" onClick={() => setModal("alt")}>{t("lube.approveAlt")}</Button>}
       </> : null} />
       <PlanImport kind="lube_plans" title={t("planImport.lube")} opened={imp} onClose={() => setImp(false)} />
+      <LabelPrint kind="lube" opened={labels} onClose={() => setLabels(false)} />
       <Alert color="yellow" mb="md">{t("lube.mixWarning")}</Alert>
       {msg && <Alert color="teal" mb="md" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
       <Tabs defaultValue="points">

@@ -36,6 +36,10 @@ describe the symptom, tick **Breakdown** if the machine is stopped — superviso
 9. **Move to: Awaiting review / test** when done.
 
 Scan an equipment QR label with **Scan QR** to open its page: history, spare parts (BOM), manuals, meters.
+**Print QR labels** (Assets page, an asset's page, Lubrication page) makes a PDF of A4 label sheets with 24 labels
+(3 × 8, 70 × 37 mm): QR code, code, name and location. Choose an asset (it and everything below it), levels and
+department, or a lubrication route; *Labels already used on the first sheet* starts lower on a partly used sheet.
+Print at 100% / actual size. At most 2,400 labels (100 sheets) per PDF.
 
 ## 5. Supervisors
 * *Work requests*: accept (creates a work order) or reject with a reason.

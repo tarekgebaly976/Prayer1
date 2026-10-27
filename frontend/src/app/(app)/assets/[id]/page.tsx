@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Attachments } from "@/components/Attachments";
 import { DataTable, KV, Loading, PageHeader, Section, StatusBadge } from "@/components/ui";
+import { LabelPrint } from "@/components/LabelPrint";
 import { blobUrl, patch, post } from "@/lib/api";
 import { fmtDate, fmtMoney, fmtNum, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
@@ -50,6 +51,7 @@ function Detail() {
   const parts = useQ<Page<Part>>(can("asset.edit") && can("inventory.view") ? "/inventory/parts" : null, { limit: 500 });
   const [qr, setQr] = useState<string | null>(null);
   const [req, setReq] = useState(false);
+  const [labels, setLabels] = useState(false);
   const [edit, setEdit] = useState<Record<string, unknown> | null>(null);
   const [bomF, setBomF] = useState<{ part_id: string | null; quantity: number | string }>({ part_id: null, quantity: 1 });
   const [meterName, setMeterName] = useState("");
@@ -119,7 +121,11 @@ function Detail() {
               <Section title={t("asset.qr")}>
                 {qr && <Image src={qr} alt="QR" w={180} />}
                 <Text size="xs" c="dimmed" className="mono">cmms:asset:{x.qr_token}</Text>
-                <Button size="xs" mt="xs" variant="default" onClick={() => window.print()}>Print</Button>
+                <Group gap="xs" mt="xs">
+                  <Button size="xs" variant="default" onClick={() => setLabels(true)}>{t("labels.button")}</Button>
+                  <Button size="xs" variant="subtle" onClick={() => window.print()}>{t("labels.printPage")}</Button>
+                </Group>
+                <LabelPrint kind="assets" under={x.id} opened={labels} onClose={() => setLabels(false)} />
               </Section>
             </Grid.Col>
           </Grid>

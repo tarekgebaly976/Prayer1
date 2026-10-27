@@ -216,7 +216,8 @@ def test_spread_lube_reschedules_points_imported_due_today(world):
         mk_asset(api, world, c)
     rows = [LUBE_HEADER] + [
         [c, "Bearing", "GR-EP2", "Mobilux EP 2", "grease", "", 10, "g", "", f, "", today.isoformat(), ""]
-        for c in ("M1", "M2", "M3") for f in ("monthly", "yearly")
+        for c in ("M1", "M2", "M3")
+        for f in ("monthly", "yearly")
     ]  # an explicit start date of today = how the first imports scheduled every point
     api.ok("post", "/imports/lube_plans/commit", files=_xlsx(rows))
     with SessionLocal() as db, db.begin():
@@ -230,7 +231,9 @@ def test_spread_lube_reschedules_points_imported_due_today(world):
         plant = db.get(Plant, world.plant.id)
         dry = spread_due_dates(db, plant, today)
         assert (dry["points_rescheduled"], dry["points_skipped_in_progress"], dry["work_orders_cancelled"]) == (3, 3, 1)
-        assert db.execute(select(LubricationPoint.next_due_date).where(LubricationPoint.plant_id == plant.id)).scalars().all() == [today] * 6
+        assert (
+            db.execute(select(LubricationPoint.next_due_date).where(LubricationPoint.plant_id == plant.id)).scalars().all() == [today] * 6
+        )
     with SessionLocal() as db, db.begin():
         plant = db.get(Plant, world.plant.id)
         assert spread_due_dates(db, plant, today, apply=True)["work_orders_cancelled"] == 1
@@ -245,3 +248,34 @@ def test_spread_lube_reschedules_points_imported_due_today(world):
                 assert 0 <= (p.next_due_date - today).days < 30
         assert len({p.next_due_date for p in pts if p.route_id != yearly.id}) > 1  # spread, not one day
         assert spread_due_dates(db, db.get(Plant, world.plant.id), today)["points_rescheduled"] <= 3  # idempotent-ish
+
+
+def _pages(pdf: bytes) -> int:
+    import re
+
+    return len(re.findall(rb"/Type /Page[^s]", pdf))
+
+
+def test_qr_label_sheets_for_assets_and_lubrication_points(world):
+    api = world.api("planner")
+    line = mk_asset(api, world, "LBL-LINE")
+    for i in range(30):
+        mk_asset(api, world, f"LBL-U{i:02d}", level="unit", parent=line["id"])
+    mk_asset(api, world, "OTHER-LINE")
+    r = api.get("/assets/labels.pdf", params={"under": line["id"]})
+    assert r.status_code == 200 and r.content[:4] == b"%PDF" and r.headers["content-type"] == "application/pdf"
+    assert _pages(r.content) == 2  # 31 labels: 24 + 7
+    assert _pages(api.get("/assets/labels.pdf", params={"under": line["id"], "levels": "production_line"}).content) == 1
+    assert _pages(api.get("/assets/labels.pdf", params={"under": line["id"], "skip": 17}).content) == 2  # 7 + 24 exactly
+    assert _pages(api.get("/assets/labels.pdf", params={"under": line["id"], "skip": 18}).content) == 3
+    assert api.get("/assets/labels.pdf", params={"skip": 24}).status_code == 422
+    assert api.get("/assets/labels.pdf", params={"levels": "nope"}).status_code == 422
+
+    rows = [LUBE_HEADER] + [
+        [f"LBL-U{i:02d}", "DE bearing", "GR-EP2", "Mobilux EP 2", "grease", "", 20, "g", "", "weekly", "", "", ""] for i in range(3)
+    ]
+    api.ok("post", "/imports/lube_plans/commit", files=_xlsx(rows))
+    route = api.get("/lubrication/routes").json()[0]
+    r = api.get("/lubrication/points/labels.pdf", params={"route_id": route["id"]})
+    assert r.status_code == 200 and r.content[:4] == b"%PDF" and _pages(r.content) == 1
+    assert world.api("tech").get("/lubrication/points/labels.pdf", params={"under": line["id"]}).status_code == 200

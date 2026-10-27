@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -16,9 +16,11 @@ from app.core.db import get_db
 from app.models.assets import Asset, AssetBOM, AssetStatusHistory, DowntimeEvent, Meter, MeterReading
 from app.models.enums import AssetLevel, AssetStatus, Criticality
 from app.models.inventory import Part
+from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
 from app.schemas.common import ORM, In
 from app.services import assets as svc
+from app.services import labels
 from app.services.common import audit, utcnow
 
 router = APIRouter(prefix="/assets", tags=["assets"])
@@ -142,6 +144,49 @@ def list_assets(
         root = _get(db, ctx, under)
         stmt = stmt.where(Asset.path.startswith(root.path), Asset.id != root.id)
     return paginate(db, stmt.order_by(Asset.code), page, AssetOut)
+
+
+@router.get("/labels.pdf")
+def asset_labels(
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
+    under: uuid.UUID | None = None,
+    levels: str | None = None,
+    department_id: uuid.UUID | None = None,
+    criticality: Criticality | None = None,
+    skip: int = Query(0, ge=0, le=labels.PER_SHEET - 1),
+) -> Response:
+    """QR label sheets (A4, 24 per sheet) for an asset and everything below it, or a filtered list."""
+    stmt = _dept_filter(ctx, select(Asset).where(Asset.plant_id == ctx.plant_id, Asset.status != AssetStatus.DECOMMISSIONED))
+    if under:
+        stmt = stmt.where(Asset.path.startswith(_get(db, ctx, under).path))
+    if levels:
+        try:
+            stmt = stmt.where(Asset.level.in_([AssetLevel(x.strip()) for x in levels.split(",") if x.strip()]))
+        except ValueError as e:
+            raise HTTPException(422, "Unknown asset level") from e
+    if department_id:
+        stmt = stmt.where(Asset.department_id == department_id)
+    if criticality:
+        stmt = stmt.where(Asset.criticality == criticality)
+    rows = db.execute(stmt.order_by(Asset.code).limit(labels.MAX_LABELS + 1)).scalars().all()
+    if len(rows) > labels.MAX_LABELS:
+        raise HTTPException(422, f"More than {labels.MAX_LABELS} labels; narrow the selection (area, level or department)")
+    depts = {d.id: d.code for d in db.execute(select(Department).where(Department.plant_id == ctx.plant_id)).scalars()}
+    items = [
+        labels.Label(
+            f"cmms:asset:{a.qr_token}",
+            a.code,
+            a.name,
+            a.location or f"{depts.get(a.department_id, '')} · {a.level.value.replace('_', ' ')}",
+        )
+        for a in rows
+    ]
+    return Response(
+        labels.sheet_pdf(items, skip, "Asset QR labels"),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="asset_qr_labels.pdf"'},
+    )
 
 
 @router.get("/tree")

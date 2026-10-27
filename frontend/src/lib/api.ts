@@ -78,7 +78,10 @@ export const del = <T>(path: string) => api<T>("DELETE", path);
 /** Authenticated download (blob) for exports/reports/attachments, preserving cookies and plant header. */
 export async function download(path: string, query?: Query, filename?: string): Promise<void> {
   const res = await fetch(`/api/v1${path}${qs(query)}`, { headers: currentPlant ? { "X-Plant-Id": currentPlant } : {}, credentials: "same-origin" });
-  if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`);
+  if (!res.ok) {
+    const detail = await res.json().then((j: { detail?: unknown }) => (typeof j.detail === "string" ? j.detail : null)).catch(() => null);
+    throw new ApiError(res.status, detail ?? `Download failed (${res.status})`);
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
