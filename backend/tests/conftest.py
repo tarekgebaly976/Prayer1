@@ -61,7 +61,7 @@ def _schema():
 def _clean():
     yield
     eng = create_engine(OWNER_URL)
-    keep = {"roles", "permissions", "role_permissions", "alembic_version"}
+    keep = {"roles", "permissions", "role_permissions", "kpi_definitions", "alembic_version"}  # reference catalogues
     tables = [t.name for t in Base.metadata.sorted_tables if t.name not in keep]
     with eng.begin() as c:
         c.execute(text("TRUNCATE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))

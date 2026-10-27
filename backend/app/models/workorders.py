@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,10 +50,14 @@ class WorkOrder(Base, PlantScoped, Timestamped, Attributed):
         Index("ix_wo_plant_status", "plant_id", "status"),
         Index("ix_wo_plant_asset", "plant_id", "asset_id"),
         Index("ix_wo_plant_created", "plant_id", "created_at"),
+        Index("ix_wo_external_ref", "plant_id", "external_ref", unique=True, postgresql_where=text("external_ref IS NOT NULL")),
         CheckConstraint("estimated_hours IS NULL OR estimated_hours >= 0", name="est_hours_nonneg"),
     )
     id: Mapped[uuid.UUID] = uuid_pk()
     number: Mapped[str] = mapped_column(String(40))
+    # "cmms" for work created here; "migrated" for history imported from a previous system (kept read-only).
+    source: Mapped[str] = mapped_column(String(20), default="cmms", server_default="cmms")
+    external_ref: Mapped[str | None] = mapped_column(String(60))  # id in the previous system, e.g. RM-38692
     type: Mapped[WOType] = enum_col(WOType)
     status: Mapped[WOStatus] = enum_col(WOStatus, default=WOStatus.TRIAGE)
     priority: Mapped[Priority] = enum_col(Priority, default=Priority.P3_MEDIUM)

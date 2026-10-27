@@ -27,7 +27,7 @@ from app.models.enums import (
     WOType,
 )
 from app.models.identity import Membership, Role
-from app.models.inventory import InventoryTransaction, StockoutEvent
+from app.models.inventory import InventoryTransaction, PartUsage, StockoutEvent
 from app.models.lubrication import LubeTask
 from app.models.pdm import ConditionAlert
 from app.models.pm import PMOccurrence, PMPlan
@@ -521,7 +521,7 @@ def oee(db: Session, s: Scope) -> KPIResult:
 
 # 11, 12, 19 ------------------------------------------------------------------
 def cost_rows(db: Session, s: Scope) -> list[dict]:
-    """Maintenance cost on a transaction-date basis: labor (work date), materials (issue/return date),
+    """Maintenance cost on a transaction-date basis: labor (work date), materials (issue/return or used-on date),
     contractor services (entry date). Each row is attributed to its work order's department and asset."""
     ids = _asset_ids(db, s)
     rows: list[dict] = []
@@ -536,6 +536,12 @@ def cost_rows(db: Session, s: Scope) -> list[dict]:
     )
     for tx, w in db.execute(q).all():
         rows.append({"kind": "material", "amount": -float(tx.total_cost), "wo": w})
+    # Parts recorded as used without a stock movement (store not connected, or migrated history).
+    qp = _wo_scope(select(PartUsage, WorkOrder).join(WorkOrder, WorkOrder.id == PartUsage.work_order_id), s, ids).where(
+        PartUsage.used_on >= s.start, PartUsage.used_on <= s.end
+    )
+    for pu, w in db.execute(qp).all():
+        rows.append({"kind": "material", "amount": float(pu.total_cost), "wo": w})
     q2 = _wo_scope(select(WOService, WorkOrder).join(WorkOrder, WorkOrder.id == WOService.work_order_id), s, ids).where(
         WOService.created_at >= s.t0, WOService.created_at < s.t1
     )

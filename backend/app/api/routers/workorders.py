@@ -246,6 +246,8 @@ class AssignmentOut(ORM):
 class WOOut(ORM):
     id: uuid.UUID
     number: str
+    source: str
+    external_ref: str | None
     type: WOType
     status: WOStatus
     priority: Priority

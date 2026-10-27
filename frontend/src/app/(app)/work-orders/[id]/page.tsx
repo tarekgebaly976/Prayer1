@@ -170,6 +170,7 @@ export default function WODetailPage() {
   return (
     <>
       <PageHeader title={`${w.number} · ${w.title}`} actions={<>
+        {w.source === "migrated" && <Badge color="gray" variant="outline">{t("planImport.migrated")} · {w.external_ref}</Badge>}
         <Button variant="default" onClick={() => void download(`/reports/work-orders/${w.id}.pdf`)}>{t("wo.pdf")}</Button>
       </>}>
         <Group gap="xs">

@@ -93,3 +93,7 @@ denominator, 12-month trend and the underlying records. If data is missing the K
 values are never estimated. Export XLSX/PDF. Work order PDF reports are on each work order.
 Enter daily production (tonnes, hours) and monthly budgets in the *Production data / Budget* tab — needed for cost
 per ton, OEE and budget vs actual.
+KPI values kept outside the system (e.g. a manual 2026 sheet) go in the *Manual KPIs* tab: pick the year,
+*Download template* (one row per KPI, one column per month, already filled with saved values), fill the yellow
+cells and upload it (requires KPI management). A blank cell keeps the saved value, `x` deletes it. The KPI trend
+chart shows the manual values next to the calculated ones.

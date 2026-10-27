@@ -14,9 +14,9 @@ from app.core.db import get_db
 from app.models.assets import Asset
 from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
+from app.services import history_import, lube_import, part_usage, pdm_import, pm_import, reports
 from app.services import imports as imp
 from app.services import kpi as kpisvc
-from app.services import lube_import, part_usage, pdm_import, pm_import, reports
 from app.services.common import plant_today
 
 router = APIRouter(tags=["import/export"])
@@ -98,6 +98,13 @@ PLAN_IMPORTS = {
     "pm_plans": (pm_import.validate_pm_plans, pm_import.commit_pm_plans, pm_import.preview_dict, "pm.manage"),
     "lube_plans": (lube_import.validate_lube_plans, lube_import.commit_lube_plans, lube_import.preview_dict, "lube.manage"),
     "pdm_plans": (pdm_import.validate_pdm_plans, pdm_import.commit_pdm_plans, pdm_import.preview_dict, "pdm.manage"),
+    "wo_history": (history_import.validate_wo_history, history_import.commit_wo_history, history_import.preview_dict, "plant.admin"),
+    "parts_history": (
+        history_import.validate_parts_history,
+        history_import.commit_parts_history,
+        history_import.preview_dict,
+        "plant.admin",
+    ),
 }
 
 

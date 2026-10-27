@@ -4,11 +4,11 @@ Revision ID: 0005
 Revises: 0004
 """
 
+import os
 from collections.abc import Sequence
 
-import os
-
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0005"

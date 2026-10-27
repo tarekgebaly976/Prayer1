@@ -4,6 +4,7 @@ import { Alert, Button, Code, FileInput, Group, Modal, NumberInput, Select, Simp
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PlanImport } from "@/components/PlanImport";
 import { DataTable, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { api, del, download, patch, post } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
@@ -192,6 +193,24 @@ function Jobs() {
   );
 }
 
+function HistoryImports() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState<"wo_history" | "parts_history" | null>(null);
+  return (
+    <Stack maw={700} gap="xs">
+      <Text size="sm" c="dimmed">{t("planImport.historyHelp")}</Text>
+      <Group>
+        <Button variant="light" onClick={() => setOpen("wo_history")}>{t("planImport.woHistory")}</Button>
+        <Button variant="light" onClick={() => setOpen("parts_history")}>{t("planImport.partsHistory")}</Button>
+      </Group>
+      <PlanImport kind="wo_history" title={t("planImport.woHistory")} opened={open === "wo_history"} onClose={() => setOpen(null)}
+        countLabel={t("planImport.breakdowns")} help={t("planImport.historyHelp")} />
+      <PlanImport kind="parts_history" title={t("planImport.partsHistory")} opened={open === "parts_history"} onClose={() => setOpen(null)}
+        countLabel={t("planImport.matchedParts")} help={t("planImport.historyHelp")} />
+    </Stack>
+  );
+}
+
 function PartsImport() {
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
@@ -227,7 +246,7 @@ export default function AdminPage() {
         <Tabs.Panel value="basics" pt="md"><Basics /></Tabs.Panel>
         <Tabs.Panel value="workflow" pt="md"><Workflow /></Tabs.Panel>
         <Tabs.Panel value="plant" pt="md"><PlantSettings /></Tabs.Panel>
-        <Tabs.Panel value="import" pt="md"><PartsImport /></Tabs.Panel>
+        <Tabs.Panel value="import" pt="md"><Stack><HistoryImports /><PartsImport /></Stack></Tabs.Panel>
         <Tabs.Panel value="tokens" pt="md"><Tokens /></Tabs.Panel>
         <Tabs.Panel value="audit" pt="md"><AuditLog /></Tabs.Panel>
         <Tabs.Panel value="jobs" pt="md"><Jobs /></Tabs.Panel>

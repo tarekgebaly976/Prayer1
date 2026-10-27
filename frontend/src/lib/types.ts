@@ -25,6 +25,7 @@ export interface WorkOrder {
   currency: string; downtime_hours: number | null; production_impact: string | null; production_loss_tons: number | null;
   requires_loto: boolean; requires_permit: boolean; permit_reference: string | null; safety_requirements: string | null;
   permit_types: string | null; permit_valid_until: string | null;
+  source: string; external_ref: string | null;
   safety_signed_by_id: UUID | null; safety_signed_at: string | null; requires_testing: boolean; test_result: string | null;
   test_passed: boolean | null; tested_at: string | null; findings: string | null; recommendations: string | null; root_cause: string | null;
   corrective_action: string | null; is_repeat_failure: boolean; pm_occurrence_id: UUID | null; condition_alert_id: UUID | null;

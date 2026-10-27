@@ -90,8 +90,41 @@ def next_number(db: Session, plant: Plant, key: str) -> str:
     return f"{seq.prefix}{str(value).zfill(seq.padding)}"
 
 
+LOWER_IS_BETTER = {
+    "backlog",
+    "overdue_work_orders",
+    "emergency_pct",
+    "mttr",
+    "cost_per_ton",
+    "repeat_failure_rate",
+    "breakdown_downtime",
+    "pdm_alerts",
+    "stockout_rate",
+}
+
+
+def sync_kpi_definitions(db: Session) -> None:
+    """Idempotently upsert the KPI catalogue; monthly KPI values (kpi_snapshots) reference it."""
+    from app.core.kpi_definitions import KPI_DEFINITIONS
+    from app.models.system import KPIDefinition
+
+    for d in KPI_DEFINITIONS:
+        vals = {
+            "name": d["name"],
+            "formula": d["formula"],
+            "unit": d["unit"][:20],
+            "source_data": d["source_data"],
+            "inclusion_rules": d["inclusion_rules"],
+            "higher_is_better": d["code"] not in LOWER_IS_BETTER,
+        }
+        db.execute(
+            pg_insert(KPIDefinition).values(code=d["code"], config={}, **vals).on_conflict_do_update(index_elements=["code"], set_=vals)
+        )
+
+
 def sync_rbac(db: Session) -> None:
-    """Idempotently upsert the permission catalogue and the default role matrix."""
+    """Idempotently upsert the permission catalogue, the default role matrix and the KPI catalogue."""
+    sync_kpi_definitions(db)
     for code, desc in PERMISSIONS.items():
         db.execute(
             pg_insert(Permission)

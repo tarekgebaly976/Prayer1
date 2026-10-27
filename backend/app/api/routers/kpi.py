@@ -1,7 +1,11 @@
+import io
 import uuid
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill
 from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -14,7 +18,7 @@ from app.models.system import KPISnapshot, MaintenanceBudget, ProductionRecord
 from app.models.tenancy import Department
 from app.schemas.common import In
 from app.services import kpi as svc
-from app.services.common import audit, plant_today
+from app.services.common import audit, plant_today, utcnow
 
 router = APIRouter(prefix="/kpis", tags=["kpi"])
 
@@ -67,6 +71,13 @@ def trend(
     today = plant_today(ctx.plant)
     out = []
     first = today.replace(day=1)
+    manual = {  # plant-level values entered from the previous system / manual reports
+        m.period_start: float(m.value)
+        for m in db.execute(
+            select(KPISnapshot).where(KPISnapshot.plant_id == ctx.plant_id, KPISnapshot.kpi_code == code, KPISnapshot.scope_key == MANUAL)
+        ).scalars()
+        if m.value is not None
+    }
     for i in range(min(months, 24) - 1, -1, -1):
         y, m = divmod(first.month - 1 - i, 12)
         ms = date(first.year + y, m + 1, 1)
@@ -79,9 +90,164 @@ def trend(
                 "value": None if r.value is None else round(r.value, 2),
                 "available": r.available,
                 "reason": r.reason,
+                "manual": manual.get(ms) if not (department_id or ctx.department_id) else None,
             }
         )
     return out
+
+
+MANUAL = "manual"
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _manual_values(db: Session, plant_id: uuid.UUID, year: int) -> dict[tuple[str, int], float]:
+    rows = db.execute(
+        select(KPISnapshot).where(
+            KPISnapshot.plant_id == plant_id,
+            KPISnapshot.scope_key == MANUAL,
+            KPISnapshot.period_start >= date(year, 1, 1),
+            KPISnapshot.period_start <= date(year, 12, 1),
+        )
+    ).scalars()
+    return {(r.kpi_code, r.period_start.month): float(r.value) for r in rows if r.value is not None}
+
+
+@router.get("/manual/values")
+def manual_values(
+    year: int = Query(ge=2000, le=2100), ctx: Ctx = Depends(require("kpi.view")), db: Session = Depends(get_db, scope="function")
+) -> list[dict]:
+    vals = _manual_values(db, ctx.plant_id, year)
+    return [
+        {"kpi_code": d["code"], "name": d["name"], "unit": d["unit"], "months": [vals.get((d["code"], m)) for m in range(1, 13)]}
+        for d in KPI_DEFINITIONS
+    ]
+
+
+@router.get("/manual/template.xlsx")
+def manual_template(
+    year: int = Query(ge=2000, le=2100), ctx: Ctx = Depends(require("kpi.view")), db: Session = Depends(get_db, scope="function")
+) -> Response:
+    """One row per KPI, one column per month, pre-filled with values already entered."""
+    vals = _manual_values(db, ctx.plant_id, year)
+    wb = Workbook()
+    ws = wb.active
+    assert ws is not None
+    ws.title = f"KPI {year}"
+    ws.append(["kpi_code", "kpi_name", "unit", *[f"{year}-{m:02d}" for m in range(1, 13)]])
+    fill = PatternFill("solid", fgColor="FFF2CC")
+    for d in KPI_DEFINITIONS:
+        ws.append([d["code"], d["name"], d["unit"], *[vals.get((d["code"], m)) for m in range(1, 13)]])
+    for row in ws.iter_rows(min_row=2, min_col=4, max_col=15):
+        for c in row:
+            c.fill = fill
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    ws.column_dimensions["A"].width, ws.column_dimensions["B"].width = 26, 40
+    ws.freeze_panes = "D2"
+    h = wb.create_sheet("instructions")
+    for line in (
+        "Fill the yellow cells with the monthly value of each KPI (numbers only, in the unit shown in column C).",
+        "Leave a cell empty to keep what is already stored; type x to delete a stored value.",
+        "Do not change columns A-C or the month headers. Rows can be deleted if a KPI is not tracked.",
+        "Values are stored as plant-level 'manual' figures and shown next to the values the CMMS calculates.",
+    ):
+        h.append([line])
+    h.column_dimensions["A"].width = 110
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="kpi_manual_{year}.xlsx"'},
+    )
+
+
+def _parse_manual(content: bytes) -> dict:
+    try:
+        ws = load_workbook(io.BytesIO(content), read_only=True, data_only=True).worksheets[0]
+    except Exception as e:  # noqa: BLE001 - malformed spreadsheets
+        raise HTTPException(422, f"Could not read file: {type(e).__name__}") from e
+    it = ws.iter_rows(values_only=True)
+    header = [str(h).strip() if h is not None else "" for h in next(it, [])]
+    months: dict[int, date] = {}
+    for i, h in enumerate(header):
+        try:
+            y, m = h.split("-")
+            months[i] = date(int(y), int(m), 1)
+        except ValueError:
+            continue
+    codes = {d["code"] for d in KPI_DEFINITIONS}
+    values, clears, errors = [], [], []
+    for rn, r in enumerate(it, start=2):
+        if r is None or all(v is None or str(v).strip() == "" for v in r):
+            continue
+        code = str(r[0]).strip() if r[0] is not None else ""
+        if code not in codes:
+            errors.append({"row": rn, "code": code, "errors": [f"unknown kpi_code {code or '(blank)'}"]})
+            continue
+        for i, ms in months.items():
+            v = r[i] if i < len(r) else None
+            if v is None or str(v).strip() == "":
+                continue
+            if str(v).strip().lower() == "x":
+                clears.append((code, ms))
+                continue
+            try:
+                values.append((code, ms, float(str(v).replace(",", "").replace("%", ""))))
+            except ValueError:
+                errors.append({"row": rn, "code": code, "errors": [f"{ms.isoformat()[:7]}: '{v}' is not a number"]})
+    if not months:
+        errors.append({"row": 1, "code": None, "errors": ["no month columns (YYYY-MM) found; use the downloaded template"]})
+    return {"values": values, "clears": clears, "errors": errors}
+
+
+@router.post("/manual/preview")
+def manual_preview(file: UploadFile = File(...), ctx: Ctx = Depends(require("kpi.manage"))) -> dict:
+    p = _parse_manual(file.file.read(5 * 1024 * 1024))
+    return {"values": len(p["values"]), "cleared": len(p["clears"]), "invalid": len(p["errors"]), "errors": p["errors"]}
+
+
+@router.post("/manual/commit")
+def manual_commit(
+    file: UploadFile = File(...), ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    p = _parse_manual(file.file.read(5 * 1024 * 1024))
+    if p["errors"]:
+        raise HTTPException(422, {"message": "The file has errors; nothing was saved", "errors": p["errors"]})
+    for code, ms in p["clears"]:
+        db.execute(
+            KPISnapshot.__table__.delete().where(
+                KPISnapshot.plant_id == ctx.plant_id,
+                KPISnapshot.kpi_code == code,
+                KPISnapshot.period_start == ms,
+                KPISnapshot.scope_key == MANUAL,
+            )
+        )
+    for code, ms, v in p["values"]:
+        me = (ms + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        db.execute(
+            pg_insert(KPISnapshot)
+            .values(
+                id=uuid.uuid4(),
+                plant_id=ctx.plant_id,
+                kpi_code=code,
+                period_start=ms,
+                period_end=me,
+                scope_key=MANUAL,
+                value=v,
+                available=True,
+                reason="Manual entry",
+                computed_at=utcnow(),
+            )
+            .on_conflict_do_update(
+                index_elements=["plant_id", "kpi_code", "period_start", "scope_key"],
+                set_={"value": v, "available": True, "computed_at": utcnow()},
+            )
+        )
+    audit(
+        db, "kpi.manual_import", user_id=ctx.user.id, plant_id=ctx.plant_id, data={"values": len(p["values"]), "cleared": len(p["clears"])}
+    )
+    return {"saved": len(p["values"]), "cleared": len(p["clears"])}
 
 
 @router.get("/{code}")
@@ -114,7 +280,9 @@ class ProductionIn(In):
 
 
 @router.put("/production")
-def upsert_production(body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+def upsert_production(
+    body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
     d = db.get(Department, body.department_id)
     if d is None or d.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department not found")
@@ -152,7 +320,10 @@ def upsert_production(body: ProductionIn, ctx: Ctx = Depends(require("kpi.manage
 
 @router.get("/production/records")
 def list_production(
-    ctx: Ctx = Depends(require("kpi.view")), db: Session = Depends(get_db, scope="function"), start: date | None = None, end: date | None = None
+    ctx: Ctx = Depends(require("kpi.view")),
+    db: Session = Depends(get_db, scope="function"),
+    start: date | None = None,
+    end: date | None = None,
 ) -> list[dict]:
     q = select(ProductionRecord).where(ProductionRecord.plant_id == ctx.plant_id)
     if start:

@@ -84,7 +84,9 @@ export const en = {
   kpi: { title: "Maintenance KPIs", formula: "Formula", source: "Source data", rules: "Inclusion rules", missing: "Missing data", drill: "Drill-down",
     exportXlsx: "Export XLSX", exportPdf: "Export PDF", numerator: "Numerator", denominator: "Denominator", production: "Production data",
     budget: "Budget", tons: "Tons produced", goodTons: "Good tons", plannedH: "Planned hours", runH: "Run hours", ideal: "Ideal rate (t/h)",
-    notice: "Values are computed only from recorded data. Unavailable KPIs show why." },
+    notice: "Values are computed only from recorded data. Unavailable KPIs show why.",
+    manual: "Manual KPIs", manualHint: "Monthly values from manual reports or the previous system. Download the template, let your team fill the yellow cells, then upload it. They are shown next to the values the CMMS calculates.",
+    year: "Year", downloadTemplate: "Download template", upload: "Upload filled template", values: "values", cleared: "cleared", calculated: "Calculated", manualSeries: "Manual" },
   scan: { title: "Scan equipment QR code", start: "Start camera", stop: "Stop", manual: "Or enter the code", notSupported: "Camera not available — enter the code manually.", found: "Opening" },
   admin: { users: "Users", newUser: "New user", departments: "Departments", failureCodes: "Failure codes", workflow: "Workflow", plant: "Plant settings",
     tokens: "Integration tokens", audit: "Audit log", jobs: "Background jobs", timezone: "Timezone", currency: "Currency", disable: "Disable",
@@ -107,7 +109,11 @@ export const en = {
     none: "No spare parts recorded yet." },
   planImport: { button: "Import plan", pm: "Import PM plan", lube: "Import lubrication plan", pdm: "Import condition-monitoring plan",
     help: "One row per task. Rows with the same equipment, frequency and trade become one plan, so each round is one work order.",
-    plans: "plans / routes to create", newLubricants: "new lubricants", created: "Imported {{n}} rows" },
+    plans: "plans / routes to create", newLubricants: "new lubricants", created: "Imported {{n}} rows",
+    woHistory: "Import work-order history", partsHistory: "Import spare-parts history", breakdowns: "breakdowns",
+    matchedParts: "lines matched to spare parts",
+    historyHelp: "Work orders from the previous system are imported as closed records marked 'Migrated'. Import the work orders first, then the spare parts that reference them.",
+    migrated: "Migrated" },
 } as const;
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };

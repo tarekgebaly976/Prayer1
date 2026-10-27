@@ -15,6 +15,12 @@
    * **Import**: parts (CSV/XLSX). Assets are imported from the Assets page. Always *Preview* first; *Import* is
      all-or-nothing and refused while any row has errors; download the error report to fix rows. Templates:
      `docs/templates/` or the *Download template* button.
+   * **History from a previous system** (Import tab, administrators): first *Work-order history* (one row per old
+     work order; `external_ref` is the old number and must be unique), then *Spare-parts history* (each line points
+     to a work order by `wo_external_ref`). Imported work orders are closed, read-only, numbered `MIG-<ref>` and
+     marked *Migrated*; rows with `breakdown = yes` become failure downtime events so MTBF/MTTR/availability include
+     them. Parts are matched to the spare-parts list by code (leading zeros ignored), otherwise kept as text; their
+     cost counts as material cost in the cost KPIs. Stock levels are not changed.
 3. Shifts: create shift definitions (via API `POST /api/v1/shifts/definitions`, or seeded), rotation patterns,
    teams; generate rosters from patterns; record leave/absence/overtime.
 
