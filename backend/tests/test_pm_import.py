@@ -184,6 +184,7 @@ def test_pdm_import_creates_points_and_predictive_rounds(world):
     points = {pt["code"]: pt for pt in api.get("/pdm/points").json()}
     assert set(points) == {"PM-PRESS-CM01", "PM-PRESS-CM02", "PM-PRESS-CM03", "PM-PRESS-CM04"}
     assert float(points["PM-PRESS-CM01"]["alarm_high"]) == 7.1
+    assert points["PM-PRESS-CM01"]["priority"] == 3  # no priority column: normal
     plans = {pl["code"]: pl for pl in api.get("/pm/plans").json()["items"]}
     assert set(plans) == {"PM-PRESS-CMM-RELI", "PM-PRESS-CMQ-ELEC"}
     rnd = plans["PM-PRESS-CMM-RELI"]

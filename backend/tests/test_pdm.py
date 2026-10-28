@@ -120,3 +120,32 @@ def test_priority_puts_critical_points_first_and_only_planning_roles_set_it(worl
     third = rel.ok("post", "/pdm/points", {"asset_id": line["id"], "technique": "ultrasound", "unit": "dB"}, status=201)
     order = [x["code"] for x in world.api("tech").ok("get", "/pdm/points")]
     assert order[:3] == [other["code"], p["code"], third["code"]]  # set priority, then critical status, then the rest
+
+
+def test_priorities_in_bulk_from_excel(world):
+    import io
+
+    from openpyxl import Workbook, load_workbook
+
+    rel, line, p = _point(world)
+    q = rel.ok("post", "/pdm/points", {"asset_id": line["id"], "technique": "temperature", "unit": "°C"}, status=201)
+    sheet = load_workbook(io.BytesIO(rel.get("/pdm/points/priority.xlsx").content)).active
+    assert [c.value for c in sheet[1]][:2] == ["point_code", "priority"] and sheet["B2"].value == "Normal"
+
+    def upload(rows, apply=False, who=rel):
+        wb = Workbook()
+        for r in [["point_code", "priority"], *rows]:
+            wb.active.append(r)
+        b = io.BytesIO()
+        wb.save(b)
+        f = {"file": ("prio.xlsx", b.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        return who.post("/pdm/points/priority/import", params={"apply": apply}, files=f)
+
+    bad = upload([[p["code"], "Critical"], ["NOPE", "high"], [q["code"], "urgent"]]).json()
+    assert bad["invalid"] == 2 and bad["changed"] == 1
+    assert upload([[p["code"], "Critical"], ["NOPE", "high"]], apply=True).status_code == 422  # all-or-nothing
+    assert world.api("tech").ok("get", "/pdm/points")[0]["code"] != p["code"]
+    assert upload([[p["code"], "critical"]], who=world.api("tech")).status_code == 403
+    ok = upload([[p["code"], "Critical"], [q["code"], 2]], apply=True).json()
+    assert ok["changed"] == 2 and ok["to"] == {"Critical": 1, "High": 1, "Normal": 0}
+    assert [x["code"] for x in world.api("tech").ok("get", "/pdm/points")][:2] == [p["code"], q["code"]]

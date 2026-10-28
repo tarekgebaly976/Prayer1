@@ -126,6 +126,7 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("trade", "Who takes the readings, e.g. Reliability (blank = Reliability)"),
         ("start_date", "YYYY-MM-DD first round (blank = spread evenly over the first cycle)"),
         ("point_code", "Optional; blank = generated from the asset code"),
+        ("priority", "critical | high | normal (blank = normal): critical points are listed first for technicians"),
     ],
 }
 

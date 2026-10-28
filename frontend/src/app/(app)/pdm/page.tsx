@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart } from "@mantine/charts";
-import { Alert, Badge, Button, Checkbox, CloseButton, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, CloseButton, FileInput, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -10,7 +10,7 @@ import { Guard } from "@/components/AppFrame";
 import { NewAsset } from "@/components/NewAsset";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
-import { post, put } from "@/lib/api";
+import { api, download, post, put } from "@/lib/api";
 import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Asset, Page } from "@/lib/types";
@@ -74,6 +74,35 @@ function PrioritySetter({ point }: { point: MPoint }) {
   );
 }
 
+interface PrioPreview { changed: number; unchanged: number; to: Record<string, number>; invalid: number; errors: { row: number; code: string | null; errors: string[] }[] }
+
+/** Many priorities at once: download every point with its priority, change the column in Excel, upload. */
+function PriorityExcel({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [file, setFile] = useState<File | null>(null);
+  const [res, setRes] = useState<PrioPreview | null>(null);
+  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
+  const close = () => { setFile(null); setRes(null); onClose(); };
+  const preview = useMut(() => api<PrioPreview>("POST", "/pdm/points/priority/import?apply=false", fd()), { success: false, onDone: setRes });
+  const commit = useMut(() => api("POST", "/pdm/points/priority/import?apply=true", fd()), { onDone: close });
+  return (
+    <Modal opened={opened} onClose={close} title={t("pdm.prioExcel")} size="lg">
+      <Stack>
+        <Text size="sm" c="dimmed">{t("pdm.prioExcelHint")}</Text>
+        <Button variant="light" w="fit-content" onClick={() => void download("/pdm/points/priority.xlsx")}>{t("pdm.prioDownload")}</Button>
+        <FileInput label={t("common.file")} accept=".xlsx,.csv" clearable value={file} onChange={(v) => { setFile(v); setRes(null); }} />
+        <Group><Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
+          <Button color="teal" disabled={!res || res.invalid > 0 || res.changed === 0} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("pdm.prioApply")}</Button></Group>
+        {res && <Alert color={res.invalid ? "orange" : "teal"} data-testid="prio-preview">
+          {t("pdm.prioChanged", { n: res.changed })} — {t("pdm.prio1")} {res.to.Critical ?? 0} · {t("pdm.prio2")} {res.to.High ?? 0} · {t("pdm.prio3")} {res.to.Normal ?? 0}
+          {" · "}{res.unchanged} {t("pdm.prioSame")} · {res.invalid} {t("asset.invalid")}
+          {res.errors.slice(0, 30).map((e, i) => <div key={i}>Row {e.row} {e.code ?? ""}: {e.errors.join("; ")}</div>)}
+        </Alert>}
+      </Stack>
+    </Modal>
+  );
+}
+
 function PdM() {
   const { t } = useTranslation();
   const sp = useSearchParams();
@@ -91,6 +120,7 @@ function PdM() {
   const [under, setUnder] = useState<string | null>(null);
   const [newAsset, setNewAsset] = useState(false);
   const [prioOnly, setPrioOnly] = useState(false);
+  const [prioXl, setPrioXl] = useState(false);
   const all = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
   const points = { ...all, data: prioOnly ? all.data?.filter((p) => p.priority < 3 || p.last_status === "critical") : all.data };
   const chosen = useQ<Asset>(f.asset_id ? `/assets/${f.asset_id}` : null);
@@ -111,12 +141,14 @@ function PdM() {
   </> : null;
   return (
     <>
-      <PageHeader title={t("nav.pdm")} actions={can("pdm.manage") ? <>
-        <Button onClick={() => setAdd(true)}>{t("pdm.newPoint")}</Button>
-        <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>
-      </> : null}>
+      <PageHeader title={t("nav.pdm")} actions={<>
+        {can("pdm.manage") && <Button onClick={() => setAdd(true)}>{t("pdm.newPoint")}</Button>}
+        {can("pdm.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>}
+        {can("pdm.prioritize") && <Button variant="default" onClick={() => setPrioXl(true)}>{t("pdm.prioExcel")}</Button>}
+      </>}>
         <Text size="sm" c="dimmed">{t("pdm.ruleNote")}</Text>
       </PageHeader>
+      <PriorityExcel opened={prioXl} onClose={() => setPrioXl(false)} />
       <PlanImport kind="pdm_plans" title={t("planImport.pdm")} opened={imp} onClose={() => setImp(false)} />
       <Tabs defaultValue={sp.get("tab") ?? "points"}>
         <Tabs.List><Tabs.Tab value="points">{t("pdm.points")}</Tabs.Tab><Tabs.Tab value="alerts">{t("pdm.alerts")}</Tabs.Tab></Tabs.List>

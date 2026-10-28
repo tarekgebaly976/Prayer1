@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import Field
 from sqlalchemy import case, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +18,7 @@ from app.models.pdm import ConditionAlert, ConditionReading, MeasurementPoint
 from app.models.tenancy import IntegrationToken, Plant
 from app.schemas.common import ORM, In
 from app.services import pdm as svc
+from app.services import pdm_priority
 from app.services.common import audit, utcnow
 
 router = APIRouter(prefix="/pdm", tags=["condition monitoring"])
@@ -151,6 +153,40 @@ def update_point(
     svc.validate_limits(p)
     audit(db, "pdm.point_update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="measurement_point", entity_id=p.id, data=data)
     return p
+
+
+@router.get("/points/priority.xlsx")
+def priority_export(ctx: Ctx = Depends(require("pdm.prioritize")), db: Session = Depends(get_db, scope="function")) -> Response:
+    """Every point with its priority; set the priority column and upload the file back."""
+    pts = list_points(ctx, db)
+    return Response(
+        pdm_priority.export_xlsx(db, ctx.plant, pts),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="measurement_point_priorities.xlsx"'},
+    )
+
+
+@router.post("/points/priority/import")
+def priority_import(
+    apply: bool = False,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("pdm.prioritize")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """apply=false: preview only. apply=true: save all changes, or nothing if any row has an error."""
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 5 MB)")
+    try:
+        checked = pdm_priority.check(db, ctx.plant, file.filename or "", content)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    if not apply:
+        return checked["preview"]
+    try:
+        return {**checked["preview"], **pdm_priority.apply(db, ctx.plant, checked, ctx.user.id)}
+    except ValueError as e:
+        raise HTTPException(422, {"message": str(e), **checked["preview"]}) from e
 
 
 class PriorityIn(In):

@@ -21,6 +21,7 @@ from app.services import pm as pmsvc
 from app.services.common import audit, plant_today
 from app.services.imports import _date, _num, _s
 from app.services.lube_import import UNIT_DAYS
+from app.services.pdm_priority import parse_priority
 from app.services.pm_import import _plan_code, parse_frequency, spread_start
 
 LIMITS = ("warning_high", "alarm_high", "warning_low", "alarm_low", "baseline")
@@ -61,6 +62,9 @@ def validate_pdm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
         except DomainError as e:
             errs.append(str(e))
         start = _date(r.get("start_date"), errs, "start_date")
+        prio = parse_priority(r.get("priority"))
+        if prio is None:
+            errs.append("priority must be critical, high or normal (or 1, 2, 3)")
         trade = (_s(r.get("trade")) or "Reliability").strip().title()
         pcode = _s(r.get("point_code"))
         if not pcode and asset is not None:
@@ -85,6 +89,7 @@ def validate_pdm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
             "unit": unit,
             "limits": limits,
             "freq": freq,
+            "priority": prio or 3,
         }
         out.append(rec)
         if asset is None or freq is None:
@@ -146,6 +151,7 @@ def commit_pdm_plans(db: Session, plant: Plant, rows: list[dict], user_id: uuid.
                     technique=rec["technique"],
                     unit=rec["unit"],
                     stale_after_hours=int(interval_h * 1.5),
+                    priority=rec["priority"],
                     **lim,
                 )
             )

@@ -50,3 +50,27 @@ test("reliability engineer marks a point Critical and it moves to the top of the
   await page.getByRole("button", { name: "Close" }).click(); // back to the full-width list
   await expect(prio).toBeHidden();
 });
+
+test("priorities in bulk: download the list, upload changes, preview, apply", async ({ page }) => {
+  await login(page, "planner");
+  await page.goto("/pdm");
+  await page.getByRole("button", { name: "Priorities (Excel)" }).click();
+  const dlg = page.getByRole("dialog");
+  const dl = page.waitForEvent("download");
+  await dlg.getByRole("button", { name: "Download points with priorities" }).click();
+  expect((await dl).suggestedFilename()).toBe("measurement_point_priorities.xlsx");
+  const csv = (prio: string) => ({ name: "prio.csv", mimeType: "text/csv", buffer: Buffer.from(`point_code,priority\nTMP-DR1-DS,${prio}\n`) });
+  await dlg.locator('input[type="file"]').setInputFiles(csv("High"));
+  await dlg.getByRole("button", { name: "Preview" }).click();
+  await expect(dlg.getByTestId("prio-preview")).toContainText("1 point(s) will change");
+  await dlg.getByRole("button", { name: "Apply priorities" }).click();
+  await expect(dlg).toBeHidden();
+  await expect(page.locator("tbody tr").first()).toContainText("TMP-DR1-DS");
+  await expect(page.locator("tbody tr").first()).toContainText("High");
+
+  await page.getByRole("button", { name: "Priorities (Excel)" }).click(); // put the demo data back
+  await dlg.locator('input[type="file"]').setInputFiles(csv("Normal"));
+  await dlg.getByRole("button", { name: "Preview" }).click();
+  await dlg.getByRole("button", { name: "Apply priorities" }).click();
+  await expect(dlg).toBeHidden();
+});
