@@ -18,6 +18,8 @@ from typing import Any
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -32,6 +34,8 @@ LEAVE = {"L", "LV", "LEAVE", "AL", "VAC", "V", "SL", "SICK"}
 ABSENCE = {"A", "ABS", "ABSENT"}
 OFF = {"O", "OFF", "R", "REST", "X", "-"}
 MAX_DAYS = 62
+WEEKEND = (4, 5)  # Friday, Saturday (date.weekday()); a plant can set settings["weekend_days"]
+SPARE_ROWS = 100  # empty rows under the names that also get the drop-down, for people typed in by hand
 
 
 def _norm(name: str) -> str:
@@ -88,11 +92,35 @@ def template_xlsx(db: Session, plant: Plant, start: date, end: date) -> bytes:
             row.append(_cell(e, shifts))
         ws.append(row)
     head = PatternFill("solid", fgColor="92D050")
+    weekend_head = PatternFill("solid", fgColor="F4B183")
+    weekend_cell = PatternFill("solid", fgColor="FBE5D6")
+    weekend = set((plant.settings or {}).get("weekend_days", WEEKEND))
+    last_row = ws.max_row + SPARE_ROWS
     for r in (1, 2):
         for c in ws[r]:
             c.font = Font(bold=True)
             if c.column > 1:
-                c.fill = head
+                c.fill = weekend_head if days[c.column - 2].weekday() in weekend else head
+    for i, d in enumerate(days, start=2):
+        col = get_column_letter(i)
+        ws.column_dimensions[col].width = 11
+        if d.weekday() in weekend:  # shaded only: a weekend can still be a duty day
+            for r in range(3, last_row + 1):
+                ws[f"{col}{r}"].fill = weekend_cell
+    # Drop-down with the plant's codes in every day cell; other values only warn, so nothing typed is lost.
+    codes = [*sorted(_shifts(db, plant)), "OFF", "L", "A"]
+    dv = DataValidation(
+        type="list",
+        formula1=f'"{",".join(codes)}"',
+        allow_blank=True,
+        errorStyle="warning",
+        showErrorMessage=True,
+        errorTitle="Roster code",
+        error=f"Use one of: {', '.join(codes)}",
+    )
+    ws.add_data_validation(dv)
+    if days:
+        dv.add(f"B3:{get_column_letter(len(days) + 1)}{last_row}")
     ws.column_dimensions["A"].width = 30
     ws.freeze_panes = "B3"
     h = wb.create_sheet("codes")

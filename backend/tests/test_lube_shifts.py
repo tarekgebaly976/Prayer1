@@ -266,6 +266,10 @@ def test_roster_import_from_plant_grid_with_shift_codes(world):
     ).active
     rows = {r[0]: r[1:] for r in tpl.iter_rows(min_row=3, values_only=True)}
     assert rows["Tech"] == ("D", "G", "N", "L") and rows["Fawaz  Hazazi"][3] == "A"  # template comes back pre-filled
+    dv = tpl.data_validations.dataValidation[0]
+    assert dv.formula1 == '"D,G,N,OFF,L,A"' and str(dv.sqref).startswith("B3:E")  # drop-down on every day cell
+    assert tpl["B1"].fill.fgColor.rgb.endswith("F4B183") and tpl["C1"].fill.fgColor.rgb.endswith("F4B183")  # Fri 30, Sat 31 shaded
+    assert tpl["D1"].fill.fgColor.rgb.endswith("92D050")
 
     off = [["Name", 30], ["Tech", "OFF"]]
     assert admin.ok("post", "/shifts/roster/import/commit", params=q, files=_roster_xlsx(off)) == {
