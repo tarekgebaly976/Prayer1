@@ -97,6 +97,8 @@ def template_xlsx(db: Session, plant: Plant, start: date, end: date) -> bytes:
     ws.freeze_panes = "B3"
     h = wb.create_sheet("codes")
     h.append(["code", "meaning"])
+    if not _shifts(db, plant):
+        h.append(["!", "No shift types yet: add D, N, G ... in Shifts & handover › Shift types, then download this template again"])
     for s in sorted(_shifts(db, plant).values(), key=lambda s: s.start_time):
         h.append([s.code, f"{s.name} {s.start_time:%H:%M}-{s.end_time:%H:%M}, {float(s.paid_hours):g} h"])
     h.append(["L", "Leave"])
