@@ -18,7 +18,7 @@ from app.models.pdm import ConditionAlert, ConditionReading, MeasurementPoint
 from app.models.tenancy import IntegrationToken, Plant
 from app.schemas.common import ORM, In
 from app.services import pdm as svc
-from app.services import pdm_priority
+from app.services import pdm_history, pdm_priority
 from app.services.common import audit, utcnow
 
 router = APIRouter(prefix="/pdm", tags=["condition monitoring"])
@@ -187,6 +187,39 @@ def priority_import(
         return checked["preview"]
     try:
         return {**checked["preview"], **pdm_priority.apply(db, ctx.plant, checked, ctx.user.id)}
+    except ValueError as e:
+        raise HTTPException(422, {"message": str(e), **checked["preview"]}) from e
+
+
+@router.get("/readings/template.xlsx")
+def history_template(ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> Response:
+    """Layout for importing past readings, with every point code listed in a second sheet."""
+    return Response(
+        pdm_history.template_xlsx(db, ctx.plant, list_points(ctx, db)),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="condition_readings_import.xlsx"'},
+    )
+
+
+@router.post("/readings/import")
+def history_import(
+    apply: bool = False,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("pdm.manage")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """Past readings (point_code, date, time, value, note). apply=false: preview; apply=true: import, or nothing if any row is wrong."""
+    content = file.file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 10 MB)")
+    try:
+        checked = pdm_history.check(db, ctx.plant, file.filename or "", content, ctx.in_department(MeasurementPoint.asset_id))
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    if not apply:
+        return checked["preview"]
+    try:
+        return {**checked["preview"], **pdm_history.commit(db, ctx.plant, checked, ctx.user.id)}
     except ValueError as e:
         raise HTTPException(422, {"message": str(e), **checked["preview"]}) from e
 

@@ -149,3 +149,46 @@ def test_priorities_in_bulk_from_excel(world):
     ok = upload([[p["code"], "Critical"], [q["code"], 2]], apply=True).json()
     assert ok["changed"] == 2 and ok["to"] == {"Critical": 1, "High": 1, "Normal": 0}
     assert [x["code"] for x in world.api("tech").ok("get", "/pdm/points")][:2] == [p["code"], q["code"]]
+
+
+def test_history_import_adds_past_readings_without_alerts(world):
+    import io
+    from datetime import date
+
+    from openpyxl import Workbook, load_workbook
+
+    rel, line, p = _point(world)  # warning 4.5, alarm 7.1
+    sheets = load_workbook(io.BytesIO(rel.get("/pdm/readings/template.xlsx").content))
+    assert [c.value for c in sheets["Readings"][1]] == ["point_code", "date", "time", "value", "note"]
+    assert sheets["points"]["A2"].value == p["code"]
+
+    def upload(rows, apply=False):
+        wb = Workbook()
+        for r in [["point_code", "date", "time", "value", "note"], *rows]:
+            wb.active.append(r)
+        b = io.BytesIO()
+        wb.save(b)
+        f = {"file": ("hist.xlsx", b.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        return rel.post("/pdm/readings/import", params={"apply": apply}, files=f)
+
+    rows = [
+        [p["code"], date(2026, 4, 6), None, 3.2, "Day shift"],
+        [p["code"], "2026-08-20", "14:30", 5.0, None],
+        [p["code"], "2026-10-22", None, 8.1, None],
+    ]
+    bad = upload(
+        rows + [["NOPE", "2026-04-06", None, 1, None], [p["code"], "2099-01-01", None, 1, None], [p["code"], "2026-04-06", None, 3.3, None]]
+    ).json()
+    assert bad["invalid"] == 3 and bad["readings"] == 3
+    assert upload(rows + [["NOPE", "2026-04-06", None, 1, None]], apply=True).status_code == 422  # all-or-nothing
+    ok = upload(rows, apply=True).json()
+    assert (ok["imported"], ok["points_updated"], ok["by_status"]["critical"], ok["by_status"]["warning"]) == (3, 1, 1, 1)
+    assert upload(rows).json()["already"] == 3  # re-import adds nothing
+    trend = rel.ok("get", f"/pdm/points/{p['id']}/readings")["readings"]
+    assert [float(x["value"]) for x in trend] == [3.2, 5.0, 8.1]
+    pt = next(x for x in rel.ok("get", "/pdm/points") if x["id"] == p["id"])
+    assert (float(pt["last_value"]), pt["last_status"]) == (8.1, "critical")
+    assert rel.ok("get", "/pdm/alerts", params={"open_only": True})["total"] == 0  # history raises no alerts
+    assert (
+        world.api("tech").post("/pdm/readings/import", files={"file": ("x.csv", b"point_code,date,value\n", "text/csv")}).status_code == 403
+    )

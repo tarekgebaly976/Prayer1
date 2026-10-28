@@ -103,6 +103,37 @@ function PriorityExcel({ opened, onClose }: { opened: boolean; onClose: () => vo
   );
 }
 
+interface HistPreview { readings: number; already: number; points: number; from: string | null; to: string | null; by_status: Record<string, number>; invalid: number;
+  errors: { row: number; code: string | null; errors: string[] }[] }
+
+/** Past readings from Excel (point_code, date, time, value, note): trends get their history; no alerts are raised for old values. */
+function HistoryImport({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [file, setFile] = useState<File | null>(null);
+  const [res, setRes] = useState<HistPreview | null>(null);
+  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
+  const close = () => { setFile(null); setRes(null); onClose(); };
+  const preview = useMut(() => api<HistPreview>("POST", "/pdm/readings/import?apply=false", fd()), { success: false, onDone: setRes });
+  const commit = useMut(() => api("POST", "/pdm/readings/import?apply=true", fd()), { onDone: close });
+  return (
+    <Modal opened={opened} onClose={close} title={t("pdm.histTitle")} size="lg">
+      <Stack>
+        <Text size="sm" c="dimmed">{t("pdm.histHint")}</Text>
+        <Button variant="light" w="fit-content" onClick={() => void download("/pdm/readings/template.xlsx")}>{t("pdm.histTemplate")}</Button>
+        <FileInput label={t("common.file")} accept=".xlsx,.csv" clearable value={file} onChange={(v) => { setFile(v); setRes(null); }} />
+        <Group><Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
+          <Button color="teal" disabled={!res || res.invalid > 0 || res.readings === 0} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button></Group>
+        {res && <Alert color={res.invalid ? "orange" : "teal"} data-testid="hist-preview">
+          {t("pdm.histSummary", { n: res.readings, p: res.points, from: res.from ?? "—", to: res.to ?? "—" })}
+          {" · "}{t("status.critical")} {res.by_status.critical ?? 0} · {t("status.warning")} {res.by_status.warning ?? 0} · {t("status.normal")} {res.by_status.normal ?? 0}
+          {res.already > 0 && <> · {t("pdm.histAlready", { n: res.already })}</>} · {res.invalid} {t("asset.invalid")}
+          {res.errors.slice(0, 30).map((e, i) => <div key={i}>Row {e.row} {e.code ?? ""}: {e.errors.join("; ")}</div>)}
+        </Alert>}
+      </Stack>
+    </Modal>
+  );
+}
+
 function PdM() {
   const { t } = useTranslation();
   const sp = useSearchParams();
@@ -121,6 +152,7 @@ function PdM() {
   const [newAsset, setNewAsset] = useState(false);
   const [prioOnly, setPrioOnly] = useState(false);
   const [prioXl, setPrioXl] = useState(false);
+  const [hist, setHist] = useState(false);
   const all = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
   const points = { ...all, data: prioOnly ? all.data?.filter((p) => p.priority < 3 || p.last_status === "critical") : all.data };
   const chosen = useQ<Asset>(f.asset_id ? `/assets/${f.asset_id}` : null);
@@ -144,11 +176,13 @@ function PdM() {
       <PageHeader title={t("nav.pdm")} actions={<>
         {can("pdm.manage") && <Button onClick={() => setAdd(true)}>{t("pdm.newPoint")}</Button>}
         {can("pdm.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>}
+        {can("pdm.manage") && <Button variant="default" onClick={() => setHist(true)}>{t("pdm.histTitle")}</Button>}
         {can("pdm.prioritize") && <Button variant="default" onClick={() => setPrioXl(true)}>{t("pdm.prioExcel")}</Button>}
       </>}>
         <Text size="sm" c="dimmed">{t("pdm.ruleNote")}</Text>
       </PageHeader>
       <PriorityExcel opened={prioXl} onClose={() => setPrioXl(false)} />
+      <HistoryImport opened={hist} onClose={() => setHist(false)} />
       <PlanImport kind="pdm_plans" title={t("planImport.pdm")} opened={imp} onClose={() => setImp(false)} />
       <Tabs defaultValue={sp.get("tab") ?? "points"}>
         <Tabs.List><Tabs.Tab value="points">{t("pdm.points")}</Tabs.Tab><Tabs.Tab value="alerts">{t("pdm.alerts")}</Tabs.Tab></Tabs.List>

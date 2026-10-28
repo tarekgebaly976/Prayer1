@@ -74,3 +74,21 @@ test("priorities in bulk: download the list, upload changes, preview, apply", as
   await dlg.getByRole("button", { name: "Apply priorities" }).click();
   await expect(dlg).toBeHidden();
 });
+
+test("readings history import: preview and import past values into the trend", async ({ page }) => {
+  await login(page, "reliability");
+  await page.goto("/pdm");
+  await page.getByRole("button", { name: "Import readings history" }).click();
+  const dlg = page.getByRole("dialog");
+  const dl = page.waitForEvent("download");
+  await dlg.getByRole("button", { name: /Download template/ }).click();
+  expect((await dl).suggestedFilename()).toBe("condition_readings_import.xlsx");
+  const csv = "point_code,date,time,value,note\nTMP-DR1-DS,2026-01-10,,61.5,history\nTMP-DR1-DS,2026-01-17,09:30,62.0,history\n";
+  await dlg.locator('input[type="file"]').setInputFiles({ name: "hist.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await dlg.getByRole("button", { name: "Preview" }).click();
+  await expect(dlg.getByTestId("hist-preview")).toContainText(/(2 readings on 1 points|2 already imported)/); // re-runs find them already there
+  if (await dlg.getByRole("button", { name: "Import", exact: true }).isEnabled()) {
+    await dlg.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(dlg).toBeHidden();
+  }
+});
