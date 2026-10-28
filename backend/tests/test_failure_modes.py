@@ -101,3 +101,31 @@ def test_request_with_standard_symptom_carries_codes_to_the_work_order(world):
     assert (wo["symptom_code_id"], wo["problem_code_id"]) == (codes["S-NOISE"]["id"], codes["GEN-BRG"]["id"])
     sym = world.api("manager").ok("get", "/kpis/failure-modes", params={"start": "2000-01-01", "end": "2100-01-01", "by": "symptom"})
     assert [(x["code"], x["work_orders"]) for x in sym["rows"]] == [("S-NOISE", 1)]
+
+
+def test_equipment_type_from_name():
+    from app.services.failure_modes import guess_type
+
+    cases = {
+        "Cooling Pump Gearbox": "Gearboxes",
+        "Transformer 7000KVA (HT Motor)": "Transformers",
+        "Felt roll drive motor": "Electric Motors",
+        "Press Roll No. 2": "Rolls",
+        "Guide rollers": "Rolls",
+        "Felt guide roll": "Rolls",
+        "Dryer Cylinder 12": "Dryer Cylinders",
+        "Hydraulic cylinder for nip": "Hydraulic & Pneumatic Units",
+        "Pick-up felt": "Felts & Fabrics",
+        "Creping doctor": "Doctors & Showers",
+        "High pressure showers": "Doctors & Showers",
+        "Headbox": "Headboxes",
+        "Machine chest agitator": "Agitators & Mixers",
+        "Machine chest": "Tanks & Chests",
+        "Double disc refiner": "Refiners & Pulpers",
+        "Pulper W.Water Pump": "Pumps",
+        "Pressure screen": "Screens & Cleaners",
+        "Overhead crane 10t": "Cranes & Hoists",
+        "Wire Part (Forming Section)": None,  # a section, not a fabric
+        "Rolling bearing housing": None,
+    }
+    assert {n: guess_type(n) for n in cases} == cases

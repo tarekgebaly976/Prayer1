@@ -56,6 +56,19 @@ TYPE_WORDS: list[tuple[str, tuple[str, ...]]] = [
     ("Fans & Blowers", ("fan", "blower")),
     ("Conveyors", ("conveyor",)),
     ("Piping Systems", ("pipe", "piping", "pipeline")),
+    # Paper-machine equipment (second catalogue). After the general types, so "Felt roll drive motor" stays a motor.
+    ("Cranes & Hoists", ("crane", "autocrane", "hoist", "winch")),
+    ("Hydraulic & Pneumatic Units", ("hydraulic", "pneumatic", "power pack", "hpu", "air cylinder")),
+    ("Doctors & Showers", ("doctor", "shower", "showers")),
+    ("Headboxes", ("headbox", "headboxes", "head box")),
+    ("Agitators & Mixers", ("agitator", "mixer")),
+    ("Refiners & Pulpers", ("refiner", "pulper", "deflaker", "disperger", "disperser")),
+    ("Screens & Cleaners", ("screen", "cleaner", "centricleaner", "fractionator")),
+    ("Heat Exchangers", ("heat exchanger", "condenser", "steam trap")),
+    ("Rolls", ("roll", "roller", "rolls", "rollers")),
+    ("Dryer Cylinders", ("cylinder", "yankee", "dryer can", "drying cylinder")),
+    ("Felts & Fabrics", ("felt", "fabric", "forming fabric", "press felt")),
+    ("Tanks & Chests", ("tank", "chest", "silo", "vessel")),
 ]
 EQUIPMENT_TYPES = [t for t, _ in TYPE_WORDS]
 _PATTERNS = [(t, re.compile(r"\b(" + "|".join(re.escape(w) for w in words) + r")s?\b", re.I)) for t, words in TYPE_WORDS]
