@@ -44,6 +44,8 @@ class RequestIn(In):
     title: str = Field(min_length=3, max_length=200)
     description: str | None = None
     symptoms: str | None = None
+    symptom_code_id: uuid.UUID | None = None  # standard symptom (what is seen / heard)
+    problem_code_id: uuid.UUID | None = None  # suspected failure mode, if the requester knows it
     suggested_priority: Priority = Priority.P3_MEDIUM
     is_breakdown: bool = False
 
@@ -55,6 +57,8 @@ class RequestOut(ORM):
     title: str
     description: str | None
     symptoms: str | None
+    symptom_code_id: uuid.UUID | None
+    problem_code_id: uuid.UUID | None
     suggested_priority: Priority
     is_breakdown: bool
     status: RequestStatus
@@ -83,6 +87,7 @@ def create_request(
     body: RequestIn, ctx: Ctx = Depends(require("request.create")), db: Session = Depends(get_db, scope="function")
 ) -> WorkRequest:
     a = _asset(db, ctx, body.asset_id)
+    _check_refs(db, ctx, body.model_dump(include={"symptom_code_id", "problem_code_id"}))
     r = WorkRequest(plant_id=ctx.plant_id, number=next_number(db, ctx.plant, "WR"), created_by_id=ctx.user.id, **body.model_dump())
     db.add(r)
     db.flush()
@@ -154,6 +159,8 @@ def triage(
             description=r.description,
             symptoms=r.symptoms,
             work_request_id=r.id,
+            symptom_code_id=r.symptom_code_id,
+            problem_code_id=r.problem_code_id,
         )
         r.status, r.work_order_id = RequestStatus.ACCEPTED, wo.id
     else:
@@ -180,6 +187,8 @@ class WOCreate(In):
     priority: Priority = Priority.P3_MEDIUM
     description: str | None = None
     symptoms: str | None = None
+    symptom_code_id: uuid.UUID | None = None
+    problem_code_id: uuid.UUID | None = None
     due_date: date | None = None
     planned_start: datetime | None = None
     planned_end: datetime | None = None
@@ -209,6 +218,7 @@ class WOUpdate(In):
     permit_reference: str | None = None
     safety_requirements: str | None = None
     supervisor_id: uuid.UUID | None = None
+    symptom_code_id: uuid.UUID | None = None
     problem_code_id: uuid.UUID | None = None
     cause_code_id: uuid.UUID | None = None
     remedy_code_id: uuid.UUID | None = None
@@ -228,6 +238,7 @@ EXECUTION_FIELDS = {
     "recommendations",
     "root_cause",
     "corrective_action",
+    "symptom_code_id",
     "problem_code_id",
     "cause_code_id",
     "remedy_code_id",
@@ -256,6 +267,7 @@ class WOOut(ORM):
     title: str
     description: str | None
     symptoms: str | None
+    symptom_code_id: uuid.UUID | None
     problem_code_id: uuid.UUID | None
     cause_code_id: uuid.UUID | None
     remedy_code_id: uuid.UUID | None
@@ -426,6 +438,7 @@ def _check_refs(db: Session, ctx: Ctx, data: dict) -> None:
         if p is None or p.plant_id != ctx.plant_id:
             raise HTTPException(422, "Shutdown package not found")
     for key, kind in (
+        ("symptom_code_id", FailureCodeKind.SYMPTOM),
         ("problem_code_id", FailureCodeKind.PROBLEM),
         ("cause_code_id", FailureCodeKind.CAUSE),
         ("remedy_code_id", FailureCodeKind.REMEDY),

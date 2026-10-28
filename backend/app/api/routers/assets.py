@@ -13,13 +13,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import Ctx, require
 from app.api.pagination import PageQ, paginate
 from app.core.db import get_db
-from app.models.assets import Asset, AssetBOM, AssetStatusHistory, DowntimeEvent, Meter, MeterReading
+from app.models.assets import Asset, AssetBOM, AssetStatusHistory, DowntimeEvent, FailureCode, Meter, MeterReading
 from app.models.enums import AssetLevel, AssetStatus, Criticality
 from app.models.inventory import Part
 from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
 from app.schemas.common import ORM, In
 from app.services import assets as svc
+from app.services import failure_modes as fm
 from app.services import labels
 from app.services.common import audit, utcnow
 
@@ -39,6 +40,7 @@ class AssetIn(In):
     serial_number: str | None = None
     install_date: date | None = None
     criticality: Criticality = Criticality.C
+    equipment_type: str | None = Field(None, max_length=60)
     location: str | None = None
     specifications: dict = Field(default_factory=dict)
     operating_limits: dict = Field(default_factory=dict)
@@ -59,6 +61,7 @@ class AssetUpdate(In):
     operating_limits: dict | None = None
     status: AssetStatus | None = None
     status_note: str | None = None
+    equipment_type: str | None = Field(None, max_length=60)
 
 
 class AssetOut(ORM):
@@ -78,6 +81,7 @@ class AssetOut(ORM):
     criticality: Criticality
     status: AssetStatus
     location: str | None
+    equipment_type: str | None
     specifications: dict
     operating_limits: dict
     operating_hours: float
@@ -225,6 +229,32 @@ def tree_children(
 
 class CodesIn(In):
     ids: list[uuid.UUID] = Field(max_length=5000)
+
+
+@router.get("/equipment-types")
+def equipment_types(ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")) -> list[str]:
+    """The standard types plus any other type already used in this plant (assets or failure codes)."""
+    used = set(
+        db.execute(
+            select(Asset.equipment_type).where(Asset.plant_id == ctx.plant_id, Asset.equipment_type.is_not(None)).distinct()
+        ).scalars()
+    )
+    used |= set(
+        db.execute(
+            select(FailureCode.equipment_type)
+            .where(FailureCode.plant_id == ctx.plant_id, FailureCode.equipment_type.is_not(None))
+            .distinct()
+        ).scalars()
+    )
+    return fm.EQUIPMENT_TYPES + sorted(used - set(fm.EQUIPMENT_TYPES))
+
+
+@router.post("/equipment-types/classify")
+def classify_equipment(
+    apply: bool = False, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    """Suggest an equipment type from the asset name (motor, pump, gearbox ...) for assets without one."""
+    return fm.classify(db, ctx.plant, apply, ctx.user.id)
 
 
 @router.post("/codes")

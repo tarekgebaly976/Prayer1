@@ -87,7 +87,8 @@ class RequestStatus(StrEnum):
 
 
 class FailureCodeKind(StrEnum):
-    PROBLEM = "problem"
+    SYMPTOM = "symptom"  # what is observed (noise, leak, trip): chosen when a request is raised
+    PROBLEM = "problem"  # the failure mode (bearing failure, seal failure): confirmed by the technician
     CAUSE = "cause"
     REMEDY = "remedy"
 

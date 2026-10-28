@@ -50,6 +50,7 @@ class Asset(Base, PlantScoped, Timestamped, Attributed):
     criticality: Mapped[Criticality] = enum_col(Criticality, default=Criticality.C)
     status: Mapped[AssetStatus] = enum_col(AssetStatus, default=AssetStatus.IN_SERVICE)
     location: Mapped[str | None] = mapped_column(String(200))
+    equipment_type: Mapped[str | None] = mapped_column(String(60))  # e.g. Pumps: which failure modes apply
     specifications: Mapped[dict] = mapped_column(JSONB, default=dict)
     operating_limits: Mapped[dict] = mapped_column(JSONB, default=dict)
     operating_hours: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
@@ -112,6 +113,8 @@ class FailureCode(Base, PlantScoped):
     code: Mapped[str] = mapped_column(String(32))
     description: Mapped[str] = mapped_column(String(200))
     description_ar: Mapped[str | None] = mapped_column(String(200))
+    equipment_type: Mapped[str | None] = mapped_column(String(60))  # blank = applies to any equipment
+    category: Mapped[str | None] = mapped_column(String(30))  # Mechanical / Electrical / Instrument
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

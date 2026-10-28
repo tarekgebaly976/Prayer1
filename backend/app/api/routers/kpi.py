@@ -15,6 +15,7 @@ from app.core.kpi_definitions import KPI_DEFINITIONS
 from app.models.system import KPIScorecard, KPIScorecardValue, KPISnapshot, MaintenanceBudget, ProductionRecord
 from app.models.tenancy import Department
 from app.schemas.common import In
+from app.services import failure_modes as fm
 from app.services import kpi as svc
 from app.services import kpi_scorecard as sc
 from app.services.common import audit, plant_today, utcnow
@@ -190,6 +191,24 @@ def scorecard_delete(
     audit(db, "kpi.scorecard_delete", user_id=ctx.user.id, plant_id=ctx.plant_id, data={"name": c.name})
     db.delete(c)
     return Response(status_code=204)
+
+
+@router.get("/failure-modes")
+def failure_modes(
+    start: date,
+    end: date,
+    under: uuid.UUID | None = None,
+    by: str = Query("mode", pattern="^(mode|code|symptom)$"),
+    ctx: Ctx = Depends(require("kpi.view")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """Top failure modes (Pareto): work orders per problem code in the period, with downtime."""
+    from app.models.assets import Asset
+
+    root = db.get(Asset, under) if under else None
+    if under and (root is None or root.plant_id != ctx.plant_id):
+        raise HTTPException(422, "Asset not found")
+    return fm.pareto(db, ctx.plant, start, end, root, by)
 
 
 @router.get("/{code}")

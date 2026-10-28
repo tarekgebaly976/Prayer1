@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { ClassifyAssets } from "@/components/FailureModes";
 import { LabelPrint } from "@/components/LabelPrint";
 import { NewAsset } from "@/components/NewAsset";
 import { AssetTree, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
@@ -62,6 +63,7 @@ function Assets() {
   const [newOpen, setNewOpen] = useState(false);
   const [impOpen, setImpOpen] = useState(false);
   const [labels, setLabels] = useState(false);
+  const [classify, setClassify] = useState(false);
   const list = useQ<Page<Asset>>(view === "list" ? "/assets" : null, { q, criticality: crit, limit: 50, offset });
   return (
     <>
@@ -69,11 +71,13 @@ function Assets() {
         {can("asset.edit") && <Button onClick={() => setNewOpen(true)}>{t("asset.new")}</Button>}
         {can("asset.import") && <Button variant="light" onClick={() => setImpOpen(true)}>{t("common.import")}</Button>}
         <Button variant="default" onClick={() => setLabels(true)}>{t("labels.button")}</Button>
+        {can("asset.edit") && <Button variant="default" onClick={() => setClassify(true)}>{t("fm.classifyTitle")}</Button>}
         {can("report.export") && <Button variant="default" onClick={() => void download("/exports/assets.csv")}>{t("common.export")} CSV</Button>}
       </>}>
         <SegmentedControl value={view} onChange={setView} data={[{ value: "tree", label: t("asset.tree") }, { value: "list", label: t("asset.list") }]} w={240} />
       </PageHeader>
       <LabelPrint kind="assets" opened={labels} onClose={() => setLabels(false)} />
+      <ClassifyAssets opened={classify} onClose={() => setClassify(false)} />
       {view === "tree" ? (
         <Paper withBorder p="md"><AssetTree /></Paper>
       ) : (

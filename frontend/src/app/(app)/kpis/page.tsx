@@ -5,6 +5,7 @@ import { Alert, Button, Card, FileInput, Group, Modal, NumberInput, ScrollArea, 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { FailurePareto } from "@/components/FailureModes";
 import { DeptSelect, Loading, PageHeader } from "@/components/ui";
 import { api, download, put } from "@/lib/api";
 import { fmtNum, useMut, useQ } from "@/lib/hooks";
@@ -190,9 +191,10 @@ function KPIs() {
       </PageHeader>
       <Alert color="blue" mb="md">{t("kpi.notice")}</Alert>
       <Tabs defaultValue="dash">
-        <Tabs.List><Tabs.Tab value="dash">{t("nav.kpis")}</Tabs.Tab><Tabs.Tab value="manual">{t("kpi.manual")}</Tabs.Tab>
+        <Tabs.List><Tabs.Tab value="dash">{t("nav.kpis")}</Tabs.Tab><Tabs.Tab value="manual">{t("kpi.manual")}</Tabs.Tab><Tabs.Tab value="fm">{t("fm.tab")}</Tabs.Tab>
           {can("kpi.manage") && <Tabs.Tab value="data">{t("kpi.production")} / {t("kpi.budget")}</Tabs.Tab>}</Tabs.List>
         <Tabs.Panel value="manual" pt="md"><CompanyKPIs /></Tabs.Panel>
+        <Tabs.Panel value="fm" pt="md"><FailurePareto start={start} end={end} /></Tabs.Panel>
         <Tabs.Panel value="dash" pt="md">
           {!q.data ? <Loading /> : (
             <>

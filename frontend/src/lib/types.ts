@@ -11,14 +11,14 @@ export interface Department { id: UUID; code: string; name: string; name_ar: str
 export interface Asset {
   id: UUID; code: string; name: string; name_ar: string | null; department_id: UUID; parent_id: UUID | null; level: string; path: string;
   description: string | null; oem: string | null; model: string | null; serial_number: string | null; install_date: string | null;
-  criticality: "A" | "B" | "C"; status: string; location: string | null; specifications: Record<string, unknown>;
+  criticality: "A" | "B" | "C"; status: string; location: string | null; equipment_type: string | null; specifications: Record<string, unknown>;
   operating_limits: Record<string, unknown>; operating_hours: number; qr_token: string; is_active: boolean; created_at: string;
 }
 export interface AssetNode { id: UUID; code: string; name: string; level: string; parent_id: UUID | null; department_id: UUID; criticality: string; status: string; child_count: number }
 
 export interface WorkOrder {
   id: UUID; number: string; type: string; status: string; priority: string; asset_id: UUID; department_id: UUID; title: string;
-  description: string | null; symptoms: string | null; problem_code_id: UUID | null; cause_code_id: UUID | null; remedy_code_id: UUID | null;
+  description: string | null; symptoms: string | null; symptom_code_id: UUID | null; problem_code_id: UUID | null; cause_code_id: UUID | null; remedy_code_id: UUID | null;
   supervisor_id: UUID | null; due_date: string | null; planned_start: string | null; planned_end: string | null; actual_start: string | null;
   actual_end: string | null; completed_at: string | null; closed_at: string | null; estimated_hours: number | null; estimated_cost: number | null;
   actual_labor_hours: number; actual_labor_cost: number; actual_material_cost: number; actual_service_cost: number; actual_cost: number;
@@ -50,7 +50,7 @@ export interface WODetail {
   safety_signed_by: string | null; tested_by: string | null;
 }
 export interface Member { user: { id: UUID; email: string; full_name: string; trade: string | null; is_active: boolean; hourly_rate: number | null; employee_no: string | null; locale: string }; role_code: string; department_id: UUID | null; is_active: boolean }
-export interface FailureCode { id: UUID; kind: "problem" | "cause" | "remedy"; code: string; description: string }
+export interface FailureCode { id: UUID; kind: "symptom" | "problem" | "cause" | "remedy"; code: string; description: string; equipment_type: string | null; category: string | null; suggested: boolean }
 export interface KPI { code: string; value: number | null; unit: string; available: boolean; reason: string | null; numerator: number | null; denominator: number | null; details: Record<string, unknown>; records?: Record<string, unknown>[] }
 export interface Notification { id: UUID; kind: string; severity: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null }
 export interface Part { id: UUID; code: string; description: string; oem_part_number: string | null; manufacturer: string | null; uom: string; criticality: string;

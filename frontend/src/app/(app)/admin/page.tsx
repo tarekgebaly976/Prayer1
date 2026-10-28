@@ -4,6 +4,7 @@ import { Alert, Button, Code, FileInput, Group, Modal, NumberInput, Select, Simp
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { FailureCodeImport } from "@/components/FailureModes";
 import { PlanImport } from "@/components/PlanImport";
 import { DataTable, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { api, del, download, patch, post } from "@/lib/api";
@@ -93,6 +94,9 @@ function Basics() {
   const [c, setC] = useState({ kind: "problem", code: "", description: "" });
   const addD = useMut(() => post("/departments", { ...d, name_ar: d.name_ar || null }));
   const addC = useMut(() => post("/failure-codes", c), { onDone: () => setC({ ...c, code: "", description: "" }) });
+  const [fcImp, setFcImp] = useState(false);
+  const [fcq, setFcq] = useState("");
+  const shownCodes = (codes.data ?? []).filter((x) => !fcq || `${x.code} ${x.description} ${x.equipment_type ?? ""}`.toLowerCase().includes(fcq.toLowerCase()));
   return (
     <SimpleGrid cols={{ base: 1, md: 2 }}>
       <Stack>
@@ -104,12 +108,17 @@ function Basics() {
         <DataTable rows={depts.data} columns={[{ key: "c", label: t("common.code"), render: (x) => x.code }, { key: "n", label: t("common.name"), render: (x) => `${x.name}${x.name_ar ? ` / ${x.name_ar}` : ""}` }, { key: "t", label: t("common.type"), render: (x) => x.type }]} />
       </Stack>
       <Stack>
-        <Text fw={600}>{t("admin.failureCodes")}</Text>
+        <Group justify="space-between"><Text fw={600}>{t("admin.failureCodes")}</Text>
+          <Button size="xs" variant="light" onClick={() => setFcImp(true)}>{t("fm.importTitle")}</Button></Group>
+        <FailureCodeImport opened={fcImp} onClose={() => setFcImp(false)} />
         <Group align="end" wrap="wrap"><Select label={t("common.type")} w={120} data={["problem", "cause", "remedy"]} value={c.kind} onChange={(v) => setC({ ...c, kind: v ?? "problem" })} />
           <TextInput label={t("common.code")} w={90} value={c.code} onChange={(e) => setC({ ...c, code: e.currentTarget.value })} />
           <TextInput label={t("common.description")} value={c.description} onChange={(e) => setC({ ...c, description: e.currentTarget.value })} />
           <Button disabled={!c.code || !c.description} onClick={() => addC.mutate(undefined)}>{t("common.add")}</Button></Group>
-        <DataTable rows={codes.data} columns={[{ key: "k", label: t("common.type"), render: (x) => x.kind }, { key: "c", label: t("common.code"), render: (x) => x.code }, { key: "d", label: t("common.description"), render: (x) => x.description }]} />
+        <TextInput placeholder={t("common.search")} value={fcq} onChange={(e) => setFcq(e.currentTarget.value)} />
+        <DataTable rows={shownCodes} columns={[{ key: "k", label: t("common.type"), render: (x) => x.kind }, { key: "c", label: t("common.code"), render: (x) => x.code },
+          { key: "d", label: t("common.description"), render: (x) => x.description }, { key: "e", label: t("fm.equipmentType"), render: (x) => x.equipment_type },
+          { key: "g", label: t("common.category"), render: (x) => x.category }]} />
       </Stack>
     </SimpleGrid>
   );

@@ -119,7 +119,7 @@ export default function WODetailPage() {
   const { t } = useTranslation();
   const { can, me, plant } = useSession();
   const q = useQ<WODetail>(`/work-orders/${id}/detail`);
-  const codes = useQ<FailureCode[]>("/failure-codes");
+  const codes = useQ<FailureCode[]>(q.data ? "/failure-codes" : null, { asset_id: q.data?.work_order.asset_id });
   const [exec, setExec] = useState<Record<string, unknown>>({});
   const [plan, setPlan] = useState<Record<string, unknown>>({});
   const [assignee, setAssignee] = useState<string | null>(null);
@@ -138,7 +138,7 @@ export default function WODetailPage() {
     setSeededVersion(seedKey);
     const w = d.work_order;
     setExec({ findings: w.findings ?? "", recommendations: w.recommendations ?? "", root_cause: w.root_cause ?? "", corrective_action: w.corrective_action ?? "",
-      problem_code_id: w.problem_code_id, cause_code_id: w.cause_code_id, remedy_code_id: w.remedy_code_id, downtime_hours: w.downtime_hours ?? "",
+      symptom_code_id: w.symptom_code_id, problem_code_id: w.problem_code_id, cause_code_id: w.cause_code_id, remedy_code_id: w.remedy_code_id, downtime_hours: w.downtime_hours ?? "",
       production_loss_tons: w.production_loss_tons ?? "" });
     setPlan({ planned_start: toLocalInput(w.planned_start), planned_end: toLocalInput(w.planned_end), due_date: w.due_date ?? "", estimated_hours: w.estimated_hours ?? "",
       priority: w.priority, requires_loto: w.requires_loto, requires_permit: w.requires_permit, requires_testing: w.requires_testing, supervisor_id: w.supervisor_id });
@@ -165,7 +165,14 @@ export default function WODetailPage() {
   const isAssignee = d.assignees.some((a) => a.user_id === me?.id);
   const canExec = can("wo.execute") && (isAssignee || can("wo.assign")) && EXEC_STATES.includes(w.status);
   const finished = ["closed", "cancelled"].includes(w.status);
-  const codeOpts = (k: string) => (codes.data ?? []).filter((c) => c.kind === k).map((c) => ({ value: c.id, label: `${c.code} — ${c.description}` }));
+  // The failure modes of this equipment's type come first, so the technician picks from a short list.
+  const codeOpts = (k: string) => {
+    const all = (codes.data ?? []).filter((c) => c.kind === k);
+    const opt = (c: FailureCode) => ({ value: c.id, label: `${c.code} — ${c.description}${c.category ? ` (${c.category})` : ""}` });
+    const mine = all.filter((c) => c.suggested);
+    if (!mine.length) return all.map(opt);
+    return [{ group: t("fm.forType", { type: mine[0]?.equipment_type ?? "" }), items: mine.map(opt) }, { group: t("fm.other"), items: all.filter((c) => !c.suggested).map(opt) }];
+  };
 
   return (
     <>
@@ -225,6 +232,7 @@ export default function WODetailPage() {
             </Section>
             <Section title={t("wo.findings")} actions={<Button size="xs" disabled={finished || !(can("wo.edit") || (can("wo.execute") && isAssignee))} loading={saveExec.isPending} onClick={() => saveExec.mutate(undefined)}>{t("common.save")}</Button>}>
               <SimpleGrid cols={{ base: 1, sm: 3 }} mb="sm">
+                <Select label={t("wo.symptoms")} data={codeOpts("symptom")} value={(exec.symptom_code_id as string) ?? null} onChange={(v) => setExec({ ...exec, symptom_code_id: v })} clearable searchable />
                 <Select label={t("wo.problem")} data={codeOpts("problem")} value={(exec.problem_code_id as string) ?? null} onChange={(v) => setExec({ ...exec, problem_code_id: v })} clearable searchable />
                 <Select label={t("wo.cause")} data={codeOpts("cause")} value={(exec.cause_code_id as string) ?? null} onChange={(v) => setExec({ ...exec, cause_code_id: v })} clearable searchable />
                 <Select label={t("wo.remedy")} data={codeOpts("remedy")} value={(exec.remedy_code_id as string) ?? null} onChange={(v) => setExec({ ...exec, remedy_code_id: v })} clearable searchable />

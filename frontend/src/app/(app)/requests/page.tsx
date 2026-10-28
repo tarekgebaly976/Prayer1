@@ -9,25 +9,46 @@ import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/compon
 import { post } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
-import type { Page } from "@/lib/types";
+import type { FailureCode, Page } from "@/lib/types";
 
 export interface WReq { id: string; number: string; asset_id: string; title: string; description: string | null; symptoms: string | null;
   suggested_priority: string; is_breakdown: boolean; status: string; triage_note: string | null; work_order_id: string | null; created_at: string }
 
 export function NewRequest({ opened, onClose, assetId }: { opened: boolean; onClose: () => void; assetId?: string }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ asset_id: assetId ?? null as string | null, title: "", symptoms: "", description: "", suggested_priority: "P3", is_breakdown: false });
-  const m = useMut(() => post("/work-requests", f), { onDone: () => { onClose(); setF({ ...f, title: "", symptoms: "", description: "" }); } });
+  const [f, setF] = useState({ asset_id: assetId ?? null as string | null, title: "", description: "", suggested_priority: "P3", is_breakdown: false,
+    symptom_code_id: null as string | null, problem_code_id: null as string | null });
+  const [ownTitle, setOwnTitle] = useState(false);
+  // Standard lists: the symptom (what is seen or heard) and, if known, the failure mode of this equipment's type.
+  const codes = useQ<FailureCode[]>(opened ? "/failure-codes" : null, { asset_id: f.asset_id });
+  const symptoms = (codes.data ?? []).filter((c) => c.kind === "symptom");
+  const modes = (codes.data ?? []).filter((c) => c.kind === "problem");
+  const byId = new Map((codes.data ?? []).map((c) => [c.id, c]));
+  const autoTitle = [f.symptom_code_id && byId.get(f.symptom_code_id)?.description, f.problem_code_id && byId.get(f.problem_code_id)?.description].filter(Boolean).join(" – ");
+  const title = ownTitle ? f.title : autoTitle;
+  const needSymptom = symptoms.length > 0;
+  const modeOpts = (() => {
+    const opt = (c: FailureCode) => ({ value: c.id, label: `${c.description}${c.equipment_type ? ` · ${c.equipment_type}` : ""}` });
+    const mine = modes.filter((c) => c.suggested);
+    if (!mine.length) return modes.map(opt);
+    return [{ group: t("fm.forType", { type: mine[0]?.equipment_type ?? "" }), items: mine.map(opt) }, { group: t("fm.other"), items: modes.filter((c) => !c.suggested).map(opt) }];
+  })();
+  const m = useMut(() => post("/work-requests", { ...f, title, symptoms: f.symptom_code_id ? byId.get(f.symptom_code_id)?.description ?? null : null }), {
+    onDone: () => { onClose(); setOwnTitle(false); setF({ ...f, title: "", description: "", symptom_code_id: null, problem_code_id: null }); } });
   return (
     <Modal opened={opened} onClose={onClose} title={t("req.new")} size="lg">
       <Stack>
         <AssetPicker value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v })} required />
-        <TextInput label={t("wo.title")} required value={f.title} onChange={(e) => setF({ ...f, title: e.currentTarget.value })} name="req-title" />
-        <Textarea label={t("wo.symptoms")} value={f.symptoms} onChange={(e) => setF({ ...f, symptoms: e.currentTarget.value })} autosize />
+        {needSymptom && <Select label={t("wo.symptoms")} required searchable placeholder={t("fm.pickSymptom")} value={f.symptom_code_id}
+          onChange={(v) => setF({ ...f, symptom_code_id: v })} data={symptoms.map((c) => ({ value: c.id, label: c.description }))} />}
+        {modes.length > 0 && <Select label={t("fm.suspected")} description={t("fm.suspectedHint")} searchable clearable value={f.problem_code_id}
+          onChange={(v) => setF({ ...f, problem_code_id: v })} data={modeOpts} />}
+        <TextInput label={t("wo.title")} required value={title} name="req-title" description={!ownTitle && autoTitle ? t("fm.autoTitle") : undefined}
+          onChange={(e) => { setOwnTitle(true); setF({ ...f, title: e.currentTarget.value }); }} />
         <Textarea label={t("common.description")} value={f.description} onChange={(e) => setF({ ...f, description: e.currentTarget.value })} autosize />
         <Select label={t("req.suggested")} data={["P1", "P2", "P3", "P4"]} value={f.suggested_priority} onChange={(v) => setF({ ...f, suggested_priority: v ?? "P3" })} allowDeselect={false} />
         <Checkbox color="red" label={t("req.breakdown")} checked={f.is_breakdown} onChange={(e) => setF({ ...f, is_breakdown: e.currentTarget.checked })} />
-        <Button onClick={() => m.mutate(undefined)} loading={m.isPending} disabled={!f.asset_id || f.title.length < 3} className="tap-target">{t("common.submit")}</Button>
+        <Button onClick={() => m.mutate(undefined)} loading={m.isPending} disabled={!f.asset_id || title.length < 3 || (needSymptom && !f.symptom_code_id)} className="tap-target">{t("common.submit")}</Button>
       </Stack>
     </Modal>
   );

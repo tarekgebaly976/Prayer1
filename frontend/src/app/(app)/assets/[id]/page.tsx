@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Attachments } from "@/components/Attachments";
 import { DataTable, KV, Loading, PageHeader, Section, StatusBadge } from "@/components/ui";
+import { EquipmentTypeInput } from "@/components/FailureModes";
 import { LabelPrint } from "@/components/LabelPrint";
 import { blobUrl, patch, post } from "@/lib/api";
 import { fmtDate, fmtMoney, fmtNum, useMut, useQ } from "@/lib/hooks";
@@ -68,7 +69,7 @@ function Detail() {
       <PageHeader title={`${x.code} · ${name}`} actions={<>
         {can("request.create") && <Button color="red" onClick={() => setReq(true)}>{t("req.new")}</Button>}
         {can("wo.create") && <Button component={Link} href={`/work-orders/new?asset=${x.id}`}>{t("wo.new")}</Button>}
-        {can("asset.edit") && <Button variant="light" onClick={() => setEdit({ name: x.name, name_ar: x.name_ar, criticality: x.criticality, status: x.status, oem: x.oem, model: x.model, serial_number: x.serial_number, location: x.location, description: x.description })}>{t("common.edit")}</Button>}
+        {can("asset.edit") && <Button variant="light" onClick={() => setEdit({ name: x.name, name_ar: x.name_ar, criticality: x.criticality, status: x.status, oem: x.oem, model: x.model, serial_number: x.serial_number, location: x.location, description: x.description, equipment_type: x.equipment_type })}>{t("common.edit")}</Button>}
       </>}>
         <Group gap="xs"><StatusBadge value={x.status} /><StatusBadge value={x.criticality} /><Text size="sm" c="dimmed">{t(`level.${x.level}`)}</Text></Group>
       </PageHeader>
@@ -89,6 +90,7 @@ function Detail() {
                   <SimpleGrid cols={{ base: 1, sm: 2 }}>
                     {(["name", "name_ar", "oem", "model", "serial_number", "location"] as const).map((k) => (
                       <TextInput key={k} label={k} value={String(edit[k] ?? "")} onChange={(e) => setEdit({ ...edit, [k]: e.currentTarget.value || null })} />))}
+                    <EquipmentTypeInput value={(edit.equipment_type as string | null) ?? null} onChange={(v) => setEdit({ ...edit, equipment_type: v })} />
                     <Select label={t("common.criticality")} data={["A", "B", "C"]} value={String(edit.criticality)} onChange={(v) => setEdit({ ...edit, criticality: v })} />
                     <Select label={t("common.status")} value={String(edit.status)} onChange={(v) => setEdit({ ...edit, status: v })}
                       data={["in_service", "standby", "under_maintenance", "out_of_service", "decommissioned"].map((s) => ({ value: s, label: t(`status.${s}`) }))} />
@@ -100,6 +102,7 @@ function Detail() {
                   <KV label={t("asset.oem")}>{x.oem}</KV><KV label={t("asset.model")}>{x.model}</KV><KV label={t("asset.serial")}>{x.serial_number}</KV>
                   <KV label={t("asset.installDate")}>{fmtDate(x.install_date)}</KV><KV label={t("common.location")}>{x.location}</KV>
                   <KV label={t("asset.opHours")}>{fmtNum(x.operating_hours)}</KV>
+                  <KV label={t("fm.equipmentType")}>{x.equipment_type}</KV>
                   <KV label={t("common.description")}>{x.description}</KV>
                   <KV label={t("wo.actualCost")}>{fmtMoney(hist.data?.total_cost ?? 0, plant?.currency ?? "SAR")}</KV>
                 </SimpleGrid>

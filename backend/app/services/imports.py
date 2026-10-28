@@ -35,6 +35,7 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("location", "Location"),
         ("description", "Long description"),
         ("name_ar", "Arabic name (optional)"),
+        ("equipment_type", "Pumps | Electric Motors | Gearboxes ... (optional; picks the failure modes offered on work orders)"),
     ],
     "parts": [
         ("code", "Unique item code"),
@@ -305,6 +306,7 @@ def commit_assets(db: Session, plant: Plant, rows: list[dict], user_id: uuid.UUI
                 install_date=rec["install_date"],
                 location=_s(rec["raw"].get("location")),
                 description=_s(rec["raw"].get("description")),
+                equipment_type=(_s(rec["raw"].get("equipment_type")) or "")[:60] or None,
                 qr_token=new_qr_token(),
                 created_by_id=user_id,
             )

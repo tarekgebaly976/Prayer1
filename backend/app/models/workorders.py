@@ -32,6 +32,8 @@ class WorkRequest(Base, PlantScoped, Timestamped, Attributed):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     symptoms: Mapped[str | None] = mapped_column(Text)
+    symptom_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)
+    problem_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)  # suspected failure mode, if known
     suggested_priority: Mapped[Priority] = enum_col(Priority, default=Priority.P3_MEDIUM)
     is_breakdown: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[RequestStatus] = enum_col(RequestStatus, default=RequestStatus.SUBMITTED)
@@ -66,6 +68,7 @@ class WorkOrder(Base, PlantScoped, Timestamped, Attributed):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     symptoms: Mapped[str | None] = mapped_column(Text)
+    symptom_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)
     problem_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)
     cause_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)
     remedy_code_id: Mapped[uuid.UUID | None] = fk("failure_codes.id", nullable=True, index=False)

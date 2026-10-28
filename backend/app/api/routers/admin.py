@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +18,7 @@ from app.models.system import AuditLog
 from app.models.tenancy import Department, IntegrationToken, NumberSequence, Plant
 from app.models.workorders import WOStatusTransition
 from app.schemas.common import ORM, In
+from app.services import failure_modes as fm
 from app.services.common import audit, utcnow
 from app.services.workflow import ensure_default_transitions
 
@@ -317,6 +319,8 @@ class FailureCodeIn(In):
     code: str = Field(min_length=1, max_length=32)
     description: str
     description_ar: str | None = None
+    equipment_type: str | None = Field(None, max_length=60)
+    category: str | None = Field(None, max_length=30)
 
 
 class FailureCodeOut(ORM):
@@ -325,19 +329,64 @@ class FailureCodeOut(ORM):
     code: str
     description: str
     description_ar: str | None
+    equipment_type: str | None
+    category: str | None
+    suggested: bool = False  # matches the equipment type of the asset asked about
 
 
 @router.get("/failure-codes", response_model=list[FailureCodeOut])
-def list_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list:
-    from app.models.assets import FailureCode
+def list_failure_codes(
+    asset_id: uuid.UUID | None = None, ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")
+) -> list:
+    """With `asset_id`, the failure modes of that equipment's type come first, marked `suggested`."""
+    from app.models.assets import Asset, FailureCode
 
-    return list(
-        db.execute(
-            select(FailureCode)
-            .where(FailureCode.plant_id == ctx.plant_id, FailureCode.is_active.is_(True))
-            .order_by(FailureCode.kind, FailureCode.code)
-        ).scalars()
+    codes = db.execute(
+        select(FailureCode)
+        .where(FailureCode.plant_id == ctx.plant_id, FailureCode.is_active.is_(True))
+        .order_by(FailureCode.kind, FailureCode.equipment_type.nulls_first(), FailureCode.code)
+    ).scalars()
+    out = [FailureCodeOut.model_validate(c) for c in codes]
+    asset = db.get(Asset, asset_id) if asset_id else None
+    etype = fm.asset_type(db, asset) if asset is not None and asset.plant_id == ctx.plant_id else None
+    if etype:
+        for c in out:
+            c.suggested = (c.equipment_type or "").casefold() == etype.casefold()
+        out.sort(key=lambda c: not c.suggested)  # stable: keeps kind/type/code order within each group
+    return out
+
+
+@router.get("/failure-codes/export.xlsx")
+def export_failure_codes(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> Response:
+    """The catalogue in the import layout: add or change rows and upload it again."""
+    return Response(
+        fm.export_xlsx(db, ctx.plant),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="failure_codes.xlsx"'},
     )
+
+
+@router.post("/failure-codes/import")
+def import_failure_codes(
+    apply: bool = False,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("plant.admin")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """apply=false: preview. apply=true: add new codes and update existing ones, or nothing if any row has an error."""
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 5 MB)")
+    try:
+        checked = fm.check(db, ctx.plant, file.filename or "", content)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    if not apply:
+        return checked["preview"]
+    try:
+        return {**checked["preview"], **fm.commit(db, ctx.plant, checked, ctx.user.id)}
+    except ValueError as e:
+        raise HTTPException(422, {"message": str(e), **checked["preview"]}) from e
 
 
 @router.post("/failure-codes", response_model=FailureCodeOut, status_code=201)
