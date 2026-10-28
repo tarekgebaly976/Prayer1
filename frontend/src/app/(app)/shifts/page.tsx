@@ -64,6 +64,8 @@ function RosterImport({ opened, onClose, start, end }: { opened: boolean; onClos
   const { t } = useTranslation();
   const { can } = useSession();
   const [month, setMonth] = useState(start);
+  const [tFrom, setTFrom] = useState(start);
+  const [tTo, setTTo] = useState(end);
   const [file, setFile] = useState<File | null>(null);
   const [res, setRes] = useState<RosterPreview | null>(null);
   const [create, setCreate] = useState(false);
@@ -76,7 +78,12 @@ function RosterImport({ opened, onClose, start, end }: { opened: boolean; onClos
     <Modal opened={opened} onClose={close} title={t("shift.importRoster")} size="lg">
       <Stack>
         <Text size="sm" c="dimmed">{t("shift.importHint")}</Text>
-        <Button variant="subtle" onClick={() => void download("/shifts/roster/template.xlsx", { start, end })}>{t("shift.rosterTemplate")}</Button>
+        <Group align="end" wrap="wrap">
+          <TextInput type="date" label={t("common.from")} value={tFrom} onChange={(e) => setTFrom(e.currentTarget.value)} />
+          <TextInput type="date" label={t("common.to")} value={tTo} onChange={(e) => setTTo(e.currentTarget.value)} />
+          <Button variant="light" disabled={!tFrom || !tTo || tTo < tFrom} onClick={() => void download("/shifts/roster/template.xlsx", { start: tFrom, end: tTo })}>{t("shift.rosterTemplate")}</Button>
+        </Group>
+        <Text size="xs" c="dimmed">{t("shift.templateHint")}</Text>
         <TextInput type="date" label={t("shift.firstDay")} description={t("shift.firstDayHint")} value={month} onChange={(e) => { setMonth(e.currentTarget.value); setRes(null); }} />
         <FileInput label={t("common.file")} accept=".xlsx" clearable value={file} onChange={(v) => { setFile(v); setRes(null); }} />
         <Group><Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>

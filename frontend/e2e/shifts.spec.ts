@@ -18,6 +18,11 @@ test("manager adds a shift type and previews a roster grid with an unknown name"
 
   await page.getByRole("button", { name: "Import roster (Excel)" }).click();
   const imp = page.getByRole("dialog");
+  await imp.getByLabel("From").fill("2026-11-01");
+  await imp.getByLabel("To").fill("2026-11-30");
+  const dl = page.waitForEvent("download");
+  await imp.getByRole("button", { name: "Download roster template" }).click();
+  expect((await dl).suggestedFilename()).toContain(".xlsx");
   await imp.locator('input[type="file"]').setInputFiles(path.join(__dirname, "fixtures", "roster.xlsx"));
   await imp.getByRole("button", { name: "Preview" }).click();
   await expect(imp.getByText("Zz Unknown Technician")).toBeVisible();

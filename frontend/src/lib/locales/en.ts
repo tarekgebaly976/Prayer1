@@ -64,6 +64,7 @@ export const en = {
     mixWarning: "Do not mix or substitute lubricants without verified compatibility and technical approval.", actualQty: "Actual quantity",
     used: "Lubricant used", skip: "Skip" },
   shift: { roster: "Roster", manpower: "Manpower", handovers: "Handovers", teams: "Teams", newHandover: "New handover", summary: "Summary",
+    templateHint: "Choose up to 62 days (e.g. a whole month). The template lists everyone with an account and is pre-filled with the roster already saved.",
     types: "Shift types", newType: "New shift type", time: "Time", from: "From", to: "To", people: "People", entries: "roster entries",
     kinds: { day: "Day", night: "Night", general: "General (office hours)", evening: "Evening" },
     typesHint: "The shift codes used in the roster, e.g. D = 12 h day, N = 12 h night, G = 10 h general shift. Hours count as available manpower.",
