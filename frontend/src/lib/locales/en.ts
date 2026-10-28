@@ -82,7 +82,7 @@ export const en = {
     minMax: "Min / Max", avgCost: "Average cost", critical: "Critical spare", belowReorder: "Below reorder point", newPart: "New part",
     unitCost: "Unit cost", delta: "Quantity change (+/-)", newPO: "New requisition", externalRef: "External reference (ERP PO no.)",
     erpNote: "Purchase references are recorded locally. No ERP integration is configured." },
-  pdm: { searchHint: "Point, equipment code or name", addAsset: "+ Equipment not in the list? Add it", addAssetUnder: "+ Add equipment under the selected asset", auto: "Automatic", codeHint: "Leave empty: the code is made from the asset code", points: "Measurement points", alerts: "Alerts", newPoint: "New measurement point", technique: "Technique", limits: "Limits",
+  pdm: { prio1: "Critical", prio2: "High", prio3: "Normal", prioOnly: "Critical & high only", searchHint: "Point, equipment code or name", addAsset: "+ Equipment not in the list? Add it", addAssetUnder: "+ Add equipment under the selected asset", auto: "Automatic", codeHint: "Leave empty: the code is made from the asset code", points: "Measurement points", alerts: "Alerts", newPoint: "New measurement point", technique: "Technique", limits: "Limits",
     warnHigh: "Warning high", alarmHigh: "Alarm high", warnLow: "Warning low", alarmLow: "Alarm low", baseline: "Baseline", lastValue: "Last value",
     record: "Record reading", acknowledge: "Acknowledge", createWo: "Create work order", resolve: "Resolve", resolution: "Resolution",
     ruleNote: "Status is evaluated with transparent limit rules; no failure prediction is claimed.", defect: "Defect description" },

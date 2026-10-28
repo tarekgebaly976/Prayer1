@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart } from "@mantine/charts";
-import { Alert, Button, Checkbox, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -10,13 +10,13 @@ import { Guard } from "@/components/AppFrame";
 import { NewAsset } from "@/components/NewAsset";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
-import { post } from "@/lib/api";
+import { post, put } from "@/lib/api";
 import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Asset, Page } from "@/lib/types";
 
 export interface MPoint { id: string; code: string; name: string; asset_id: string; technique: string; unit: string; baseline: number | null; warning_low: number | null;
-  warning_high: number | null; alarm_low: number | null; alarm_high: number | null; last_status: string; last_value: number | null; last_reading_at: string | null; auto_create_wo: boolean }
+  warning_high: number | null; alarm_low: number | null; alarm_high: number | null; last_status: string; last_value: number | null; last_reading_at: string | null; auto_create_wo: boolean; priority: number }
 export interface CAlert { id: string; point_id: string; asset_id: string; severity: string; status: string; message: string; defect_description: string | null;
   recommended_action: string | null; resolution: string | null; work_order_id: string | null; created_at: string }
 
@@ -52,6 +52,28 @@ function Trend({ point }: { point: MPoint }) {
   );
 }
 
+const PRIO_COLOR: Record<number, string> = { 1: "red", 2: "orange" };
+
+/** Critical / High badge; nothing for normal so the list stays quiet. */
+function PrioBadge({ p }: { p: number }) {
+  const { t } = useTranslation();
+  const color = PRIO_COLOR[p];
+  return color ? <Badge color={color} variant="filled" size="sm">{t(`pdm.prio${p}`)}</Badge> : null;
+}
+
+/** Planners, engineers, reliability engineers, managers and admins set it; the list puts priority 1 first. */
+function PrioritySetter({ point }: { point: MPoint }) {
+  const { t } = useTranslation();
+  const m = useMut((v: number) => put<MPoint>(`/pdm/points/${point.id}/priority`, { priority: v }));
+  return (
+    <Group gap="xs" mb="sm" align="center">
+      <Text size="sm" fw={500}>{t("common.priority")}:</Text>
+      <SegmentedControl size="xs" value={String(point.priority)} onChange={(v) => m.mutate(Number(v))} disabled={m.isPending}
+        data={[1, 2, 3].map((n) => ({ value: String(n), label: t(`pdm.prio${n}`) }))} />
+    </Group>
+  );
+}
+
 function PdM() {
   const { t } = useTranslation();
   const sp = useSearchParams();
@@ -68,7 +90,9 @@ function PdM() {
   const [q] = useDebouncedValue(search.trim(), 300);
   const [under, setUnder] = useState<string | null>(null);
   const [newAsset, setNewAsset] = useState(false);
-  const points = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
+  const [prioOnly, setPrioOnly] = useState(false);
+  const all = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
+  const points = { ...all, data: prioOnly ? all.data?.filter((p) => p.priority < 3 || p.last_status === "critical") : all.data };
   const chosen = useQ<Asset>(f.asset_id ? `/assets/${f.asset_id}` : null);
   const alerts = useQ<Page<CAlert>>("/pdm/alerts", { open_only: openOnly, limit: 50, offset });
   const amap = useAssetCodes([...(points.data ?? []), ...(alerts.data?.items ?? [])].map((x) => x.asset_id));
@@ -80,7 +104,8 @@ function PdM() {
   // Side by side only on wide screens; on a phone (or a narrow window) the point opens in its own window.
   const wide = useMediaQuery("(min-width: 75em)", true);
   const detail = point ? <>
-    <Text fw={600} mb={4}>{point.code} — {point.name}</Text>
+    <Group gap="xs" mb={4} wrap="nowrap" align="start"><PrioBadge p={point.priority} /><Text fw={600}>{point.code} — {point.name}</Text></Group>
+    {can("pdm.prioritize") && <PrioritySetter point={point} />}
     <Text size="xs" c="dimmed" mb="sm">{t("pdm.limits")}: W {fmtNum(point.warning_low)}/{fmtNum(point.warning_high)} · A {fmtNum(point.alarm_low)}/{fmtNum(point.alarm_high)} {point.unit}</Text>
     <Trend point={point} />
   </> : null;
@@ -99,10 +124,11 @@ function PdM() {
           <Group mb="sm" align="end">
             <TextInput label={t("common.search")} placeholder={t("pdm.searchHint")} value={search} onChange={(e) => setSearch(e.currentTarget.value)} w={260} />
             <div style={{ width: 340 }}><AssetPicker label={t("labels.under")} value={under} onChange={setUnder} clearable /></div>
+            <Checkbox mb={8} label={t("pdm.prioOnly")} checked={prioOnly} onChange={(e) => setPrioOnly(e.currentTarget.checked)} />
           </Group>
           <SimpleGrid cols={wide && point ? 2 : 1}>
             <DataTable rows={points.data} onRow={(p) => setSel(p.id)} columns={[
-              { key: "c", label: t("common.code"), render: (p) => <b>{p.code}</b> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
+              { key: "c", label: t("common.code"), render: (p) => <Group gap={6} wrap="nowrap"><PrioBadge p={p.priority} /><b>{p.code}</b></Group> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
               { key: "t", label: t("pdm.technique"), render: (p) => p.technique }, { key: "v", label: t("pdm.lastValue"), render: (p) => `${fmtNum(p.last_value)} ${p.unit}` },
               { key: "s", label: t("common.status"), render: (p) => <StatusBadge value={p.last_status} /> }]} />
             {wide && detail ? <Paper withBorder p="md">{detail}</Paper> : null}

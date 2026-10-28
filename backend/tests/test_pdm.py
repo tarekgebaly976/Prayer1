@@ -106,3 +106,17 @@ def test_point_code_is_automatic_and_list_searches_the_asset_tree(world):
     assert codes(under=line["id"]) == ["PM1-CAL12-CM01", "PM1-CAL12-CM02", "VIB-DR1"]
     assert codes(under=unit["id"]) == ["PM1-CAL12-CM01", "PM1-CAL12-CM02"]
     assert codes(q="dr1") == ["VIB-DR1"] and codes(q="cal12") == ["PM1-CAL12-CM01", "PM1-CAL12-CM02"]
+
+
+def test_priority_puts_critical_points_first_and_only_planning_roles_set_it(world):
+    rel, line, p = _point(world)
+    other = rel.ok("post", "/pdm/points", {"asset_id": line["id"], "technique": "temperature", "unit": "°C"}, status=201)
+    assert other["priority"] == 3
+    assert world.api("tech").put(f"/pdm/points/{other['id']}/priority", json={"priority": 1}).status_code == 403
+    for who in ("planner", "engineer", "reliability", "manager", "admin"):
+        assert world.api(who).ok("put", f"/pdm/points/{other['id']}/priority", {"priority": 1})["priority"] == 1
+    assert rel.put(f"/pdm/points/{other['id']}/priority", json={"priority": 4}).status_code == 422
+    world.api("tech").ok("post", f"/pdm/points/{p['id']}/readings", {"value": 9.0}, status=201)  # critical reading
+    third = rel.ok("post", "/pdm/points", {"asset_id": line["id"], "technique": "ultrasound", "unit": "dB"}, status=201)
+    order = [x["code"] for x in world.api("tech").ok("get", "/pdm/points")]
+    assert order[:3] == [other["code"], p["code"], third["code"]]  # set priority, then critical status, then the rest

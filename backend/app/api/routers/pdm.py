@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import Field
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,7 @@ class PointIn(In):
     wo_priority_on_critical: Priority = Priority.P2_HIGH
     recommended_action: str | None = None
     external_tag: str | None = None
+    priority: int = Field(3, ge=1, le=3)
 
 
 class PointUpdate(In):
@@ -74,6 +75,7 @@ class PointOut(ORM):
     last_value: float | None
     last_reading_at: datetime | None
     is_active: bool
+    priority: int
 
 
 def _point(db: Session, ctx: Ctx, pid: uuid.UUID) -> MeasurementPoint:
@@ -108,7 +110,14 @@ def list_points(
         stmt = stmt.where(MeasurementPoint.asset_id.in_(select(Asset.id).where(Asset.path.startswith(root.path))))
     if status:
         stmt = stmt.where(MeasurementPoint.last_status == status)
-    return list(db.execute(stmt.order_by(MeasurementPoint.code).limit(2000)).scalars())
+    # Critical items first, so a technician does not have to search: set priority, then the worst reading status.
+    status_rank = case(
+        (MeasurementPoint.last_status == ConditionStatus.CRITICAL, 0),
+        (MeasurementPoint.last_status == ConditionStatus.WARNING, 1),
+        (MeasurementPoint.last_status == ConditionStatus.UNKNOWN, 2),
+        else_=3,
+    )
+    return list(db.execute(stmt.order_by(MeasurementPoint.priority, status_rank, MeasurementPoint.code).limit(2000)).scalars())
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
@@ -141,6 +150,28 @@ def update_point(
         setattr(p, k, v)
     svc.validate_limits(p)
     audit(db, "pdm.point_update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="measurement_point", entity_id=p.id, data=data)
+    return p
+
+
+class PriorityIn(In):
+    priority: int = Field(ge=1, le=3)  # 1 critical, 2 high, 3 normal
+
+
+@router.put("/points/{pid}/priority", response_model=PointOut)
+def set_priority(
+    pid: uuid.UUID, body: PriorityIn, ctx: Ctx = Depends(require("pdm.prioritize")), db: Session = Depends(get_db, scope="function")
+) -> MeasurementPoint:
+    p = _point(db, ctx, pid)
+    old, p.priority = p.priority, body.priority
+    audit(
+        db,
+        "pdm.point_priority",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="measurement_point",
+        entity_id=p.id,
+        data={"from": old, "to": body.priority},
+    )
     return p
 
 

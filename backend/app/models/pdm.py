@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Numeric, SmallInteger, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +14,7 @@ class MeasurementPoint(Base, PlantScoped, Timestamped):
     """Rule-based condition monitoring point with transparent limits (no ML claims)."""
 
     __tablename__ = "measurement_points"
-    __table_args__ = (UniqueConstraint("plant_id", "code"),)
+    __table_args__ = (UniqueConstraint("plant_id", "code"), CheckConstraint("priority BETWEEN 1 AND 3", name="priority_range"))
     id: Mapped[uuid.UUID] = uuid_pk()
     code: Mapped[str] = mapped_column(String(60))
     name: Mapped[str] = mapped_column(String(200))
@@ -35,6 +35,7 @@ class MeasurementPoint(Base, PlantScoped, Timestamped):
     last_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     last_reading_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    priority: Mapped[int] = mapped_column(SmallInteger, default=3, server_default="3")  # 1 critical, 2 high, 3 normal: list order
 
 
 class ConditionReading(Base, PlantScoped):
