@@ -10,7 +10,7 @@ import { SessionProvider } from "@/lib/session";
 
 const theme = createTheme({
   primaryColor: "indigo",
-  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Arabic', Tahoma, sans-serif",
+  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Noto Sans Bengali', 'Nirmala UI', Vrinda, Tahoma, sans-serif",
   defaultRadius: "md",
 });
 

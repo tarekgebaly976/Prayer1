@@ -117,3 +117,10 @@ def test_health_endpoints(world):
 
     head = ScriptDirectory.from_config(alembic_cfg()).get_current_head()
     assert r["checks"]["database"] == "ok" and r["checks"]["migration"] == head
+
+
+def test_interface_language_choices(world):
+    tech = world.api("tech")
+    assert tech.post("/auth/locale", json={"locale": "bn"}).status_code == 204
+    assert tech.get("/auth/me").json()["locale"] == "bn"  # remembered for the next sign-in, on any device
+    assert tech.post("/auth/locale", json={"locale": "xx"}).status_code == 422

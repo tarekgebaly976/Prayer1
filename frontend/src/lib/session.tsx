@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { get, post, setApiContext } from "./api";
 import type { Me, PlantAccess } from "./types";
-import i18n, { applyDirection } from "./i18n";
+import i18n, { applyDirection, toLang, type Lang } from "./i18n";
 
 interface SessionValue {
   me: Me | null;
@@ -15,7 +15,7 @@ interface SessionValue {
   can: (perm: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  setLocale: (l: "en" | "ar") => Promise<void>;
+  setLocale: (l: Lang) => Promise<void>;
 }
 
 const Ctx = createContext<SessionValue | null>(null);
@@ -35,7 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const pick = m.plants.find((p) => p.plant_id === saved) ?? m.plants[0] ?? null;
     setPlantId(pick?.plant_id ?? null);
     setApiContext({ plantId: pick?.plant_id ?? null });
-    const loc = (m.locale === "ar" ? "ar" : "en") as "en" | "ar";
+    const loc = toLang(m.locale);
     void i18n.changeLanguage(loc);
     applyDirection(loc);
   }, []);

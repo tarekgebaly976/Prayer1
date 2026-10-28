@@ -113,6 +113,20 @@ test("Arabic switches the interface to right-to-left", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 });
 
+test("Bengali shows the interface in Bengali, left-to-right, and is remembered", async ({ page }) => {
+  await login(page, "manager");
+  await page.getByRole("button", { name: "Language" }).click();
+  await page.getByRole("menuitem", { name: "বাংলা" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "bn");
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await expect(page.getByRole("link", { name: "ওয়ার্ক অর্ডার", exact: true })).toBeVisible();
+  await page.reload(); // preference persisted server-side
+  await expect(page.locator("html")).toHaveAttribute("lang", "bn");
+  await page.getByRole("button", { name: "ভাষা" }).click();
+  await page.getByRole("menuitem", { name: "English" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+});
+
 test("QR code lookup opens the asset", async ({ page }) => {
   await login(page, "tech1");
   const me = await (await page.request.get("/api/v1/auth/me")).json();

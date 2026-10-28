@@ -4,7 +4,7 @@ import { Alert, Button, Center, Group, Paper, PasswordInput, Stack, Text, TextIn
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { applyDirection } from "@/lib/i18n";
+import { applyDirection, LANGS, type Lang } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 
 export default function LoginPage() {
@@ -30,7 +30,7 @@ export default function LoginPage() {
       setBusy(false);
     }
   }
-  const switchLang = (l: "en" | "ar") => { void i18n.changeLanguage(l); applyDirection(l); };
+  const switchLang = (l: Lang) => { void i18n.changeLanguage(l); applyDirection(l); };
 
   return (
     <Center mih="100vh" p="md" bg="var(--mantine-color-gray-0)">
@@ -47,8 +47,7 @@ export default function LoginPage() {
             <Button type="submit" loading={busy} fullWidth className="tap-target">{t("auth.submit")}</Button>
             <Text size="xs" c="dimmed">{t("auth.sessionNote")}</Text>
             <Group justify="center" gap="xs">
-              <Button variant="subtle" size="xs" onClick={() => switchLang("en")}>English</Button>
-              <Button variant="subtle" size="xs" onClick={() => switchLang("ar")}>العربية</Button>
+              {LANGS.map((l) => <Button key={l.code} variant="subtle" size="xs" onClick={() => switchLang(l.code)}>{l.label}</Button>)}
             </Group>
           </Stack>
         </form>

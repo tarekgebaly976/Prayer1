@@ -214,12 +214,15 @@ def change_password(body: ChangePasswordIn, p: Principal = Depends(get_principal
     audit(db, "auth.password_changed", user_id=p.user.id, organization_id=p.user.organization_id)
 
 
+LOCALES = {"en", "ar", "bn"}  # English, Arabic, Bengali (frontend/src/lib/i18n.ts LANGS)
+
+
 class LocaleIn(In):
     locale: str
 
 
 @router.post("/locale", status_code=204)
 def set_locale(body: LocaleIn, p: Principal = Depends(get_principal)) -> None:
-    if body.locale not in {"en", "ar"}:
+    if body.locale not in LOCALES:
         raise HTTPException(422, "Unsupported locale")
     p.user.locale = body.locale

@@ -12,6 +12,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { post } from "@/lib/api";
 import { useMut, useQ } from "@/lib/hooks";
+import { LANGS } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { Loading } from "./ui";
 
@@ -71,8 +72,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
             <Menu>
               <Menu.Target><ActionIcon variant="subtle" aria-label={t("app.language")}><IconLanguage size={20} /></ActionIcon></Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item onClick={() => void setLocale("en")} fw={i18n.language === "en" ? 700 : 400}>English</Menu.Item>
-                <Menu.Item onClick={() => void setLocale("ar")} fw={i18n.language === "ar" ? 700 : 400}>العربية</Menu.Item>
+                {LANGS.map((l) => <Menu.Item key={l.code} onClick={() => void setLocale(l.code)} fw={i18n.language === l.code ? 700 : 400}>{l.label}</Menu.Item>)}
               </Menu.Dropdown>
             </Menu>
             <Menu>
