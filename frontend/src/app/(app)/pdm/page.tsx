@@ -192,6 +192,7 @@ function PdM() {
             <div style={{ width: 340 }}><AssetPicker label={t("labels.under")} value={under} onChange={setUnder} clearable /></div>
             <Checkbox mb={8} label={t("pdm.prioOnly")} checked={prioOnly} onChange={(e) => setPrioOnly(e.currentTarget.checked)} />
           </Group>
+          {(all.data?.length ?? 0) >= 2000 && <Alert color="blue" mb="sm">{t("pdm.capped")}</Alert>}
           <SimpleGrid cols={wide && point ? 2 : 1}>
             <DataTable rows={points.data} onRow={(p) => setSel(p.id)} columns={[
               { key: "c", label: t("common.code"), render: (p) => <Group gap={6} wrap="nowrap"><PrioBadge p={p.priority} /><b>{p.code}</b></Group> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },

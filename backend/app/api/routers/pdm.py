@@ -22,6 +22,7 @@ from app.services import pdm_history, pdm_priority
 from app.services.common import audit, utcnow
 
 router = APIRouter(prefix="/pdm", tags=["condition monitoring"])
+MAX_EXPORT = 50000
 
 
 class PointIn(In):
@@ -96,6 +97,7 @@ def list_points(
     status: ConditionStatus | None = None,
     q: str | None = None,
     under: uuid.UUID | None = None,
+    limit: int = 2000,  # the screen list; Excel downloads pass a higher cap so every point is included
 ) -> list[MeasurementPoint]:
     """`q` searches point code/name and the asset's code/name; `under` keeps the points on an asset and everything below it."""
     stmt = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id, ctx.in_department(MeasurementPoint.asset_id))
@@ -120,7 +122,11 @@ def list_points(
         (MeasurementPoint.last_status == ConditionStatus.UNKNOWN, 2),
         else_=3,
     )
-    return list(db.execute(stmt.order_by(MeasurementPoint.priority, status_rank, MeasurementPoint.code).limit(2000)).scalars())
+    return list(
+        db.execute(
+            stmt.order_by(MeasurementPoint.priority, status_rank, MeasurementPoint.code).limit(min(max(limit, 1), MAX_EXPORT))
+        ).scalars()
+    )
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
@@ -160,7 +166,7 @@ def update_point(
 @router.get("/points/priority.xlsx")
 def priority_export(ctx: Ctx = Depends(require("pdm.prioritize")), db: Session = Depends(get_db, scope="function")) -> Response:
     """Every point with its priority; set the priority column and upload the file back."""
-    pts = list_points(ctx, db)
+    pts = list_points(ctx, db, limit=MAX_EXPORT)
     return Response(
         pdm_priority.export_xlsx(db, ctx.plant, pts),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -195,7 +201,7 @@ def priority_import(
 def history_template(ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> Response:
     """Layout for importing past readings, with every point code listed in a second sheet."""
     return Response(
-        pdm_history.template_xlsx(db, ctx.plant, list_points(ctx, db)),
+        pdm_history.template_xlsx(db, ctx.plant, list_points(ctx, db, limit=MAX_EXPORT)),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="condition_readings_import.xlsx"'},
     )
