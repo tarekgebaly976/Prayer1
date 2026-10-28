@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart } from "@mantine/charts";
-import { Alert, Badge, Button, Checkbox, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, CloseButton, Group, Modal, NumberInput, Paper, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -131,7 +131,12 @@ function PdM() {
               { key: "c", label: t("common.code"), render: (p) => <Group gap={6} wrap="nowrap"><PrioBadge p={p.priority} /><b>{p.code}</b></Group> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
               { key: "t", label: t("pdm.technique"), render: (p) => p.technique }, { key: "v", label: t("pdm.lastValue"), render: (p) => `${fmtNum(p.last_value)} ${p.unit}` },
               { key: "s", label: t("common.status"), render: (p) => <StatusBadge value={p.last_status} /> }]} />
-            {wide && detail ? <Paper withBorder p="md">{detail}</Paper> : null}
+            {wide && detail ? (
+              <Paper withBorder p="md" pos="relative">
+                <CloseButton pos="absolute" top={8} right={8} aria-label={t("common.close")} title={t("common.close")} onClick={() => setSel(null)} />
+                {detail}
+              </Paper>
+            ) : null}
           </SimpleGrid>
         </Tabs.Panel>
         <Tabs.Panel value="alerts" pt="md">

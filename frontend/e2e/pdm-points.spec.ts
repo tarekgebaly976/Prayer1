@@ -47,4 +47,6 @@ test("reliability engineer marks a point Critical and it moves to the top of the
 
   await prio.getByText("Normal", { exact: true }).click(); // leave the demo data as it was
   await expect(prio.locator("input[value='3']")).toBeChecked();
+  await page.getByRole("button", { name: "Close" }).click(); // back to the full-width list
+  await expect(prio).toBeHidden();
 });
