@@ -2,10 +2,12 @@
 
 import { LineChart } from "@mantine/charts";
 import { Alert, Button, Checkbox, Group, Modal, NumberInput, Paper, Select, SimpleGrid, Stack, Tabs, Text, TextInput } from "@mantine/core";
+import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { NewAsset } from "@/components/NewAsset";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
@@ -62,7 +64,12 @@ function PdM() {
   const [imp, setImp] = useState(false);
   const [f, setF] = useState({ code: "", name: "", asset_id: null as string | null, technique: "vibration", unit: "mm/s", warning_high: "" as number | string, alarm_high: "" as number | string,
     warning_low: "" as number | string, alarm_low: "" as number | string, auto_create_wo: false, external_tag: "", recommended_action: "" });
-  const points = useQ<MPoint[]>("/pdm/points");
+  const [search, setSearch] = useState("");
+  const [q] = useDebouncedValue(search.trim(), 300);
+  const [under, setUnder] = useState<string | null>(null);
+  const [newAsset, setNewAsset] = useState(false);
+  const points = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
+  const chosen = useQ<Asset>(f.asset_id ? `/assets/${f.asset_id}` : null);
   const alerts = useQ<Page<CAlert>>("/pdm/alerts", { open_only: openOnly, limit: 50, offset });
   const amap = useAssetCodes([...(points.data ?? []), ...(alerts.data?.items ?? [])].map((x) => x.asset_id));
   const pmap = new Map((points.data ?? []).map((p) => [p.id, p]));
@@ -70,6 +77,13 @@ function PdM() {
   const create = useMut(() => post("/pdm/points", { ...f, warning_high: n(f.warning_high), alarm_high: n(f.alarm_high), warning_low: n(f.warning_low), alarm_low: n(f.alarm_low),
     external_tag: f.external_tag || null, recommended_action: f.recommended_action || null }), { onDone: () => setAdd(false) });
   const point = sel ? pmap.get(sel) : undefined;
+  // Side by side only on wide screens; on a phone (or a narrow window) the point opens in its own window.
+  const wide = useMediaQuery("(min-width: 75em)", true);
+  const detail = point ? <>
+    <Text fw={600} mb={4}>{point.code} — {point.name}</Text>
+    <Text size="xs" c="dimmed" mb="sm">{t("pdm.limits")}: W {fmtNum(point.warning_low)}/{fmtNum(point.warning_high)} · A {fmtNum(point.alarm_low)}/{fmtNum(point.alarm_high)} {point.unit}</Text>
+    <Trend point={point} />
+  </> : null;
   return (
     <>
       <PageHeader title={t("nav.pdm")} actions={can("pdm.manage") ? <>
@@ -82,18 +96,16 @@ function PdM() {
       <Tabs defaultValue={sp.get("tab") ?? "points"}>
         <Tabs.List><Tabs.Tab value="points">{t("pdm.points")}</Tabs.Tab><Tabs.Tab value="alerts">{t("pdm.alerts")}</Tabs.Tab></Tabs.List>
         <Tabs.Panel value="points" pt="md">
-          <SimpleGrid cols={{ base: 1, lg: 2 }}>
+          <Group mb="sm" align="end">
+            <TextInput label={t("common.search")} placeholder={t("pdm.searchHint")} value={search} onChange={(e) => setSearch(e.currentTarget.value)} w={260} />
+            <div style={{ width: 340 }}><AssetPicker label={t("labels.under")} value={under} onChange={setUnder} clearable /></div>
+          </Group>
+          <SimpleGrid cols={wide && point ? 2 : 1}>
             <DataTable rows={points.data} onRow={(p) => setSel(p.id)} columns={[
               { key: "c", label: t("common.code"), render: (p) => <b>{p.code}</b> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
               { key: "t", label: t("pdm.technique"), render: (p) => p.technique }, { key: "v", label: t("pdm.lastValue"), render: (p) => `${fmtNum(p.last_value)} ${p.unit}` },
               { key: "s", label: t("common.status"), render: (p) => <StatusBadge value={p.last_status} /> }]} />
-            {point ? (
-              <Paper withBorder p="md">
-                <Text fw={600} mb={4}>{point.code} — {point.name}</Text>
-                <Text size="xs" c="dimmed" mb="sm">{t("pdm.limits")}: W {fmtNum(point.warning_low)}/{fmtNum(point.warning_high)} · A {fmtNum(point.alarm_low)}/{fmtNum(point.alarm_high)} {point.unit}</Text>
-                <Trend point={point} />
-              </Paper>
-            ) : null}
+            {wide && detail ? <Paper withBorder p="md">{detail}</Paper> : null}
           </SimpleGrid>
         </Tabs.Panel>
         <Tabs.Panel value="alerts" pt="md">
@@ -106,12 +118,19 @@ function PdM() {
           <Pager page={alerts.data} setPage={(p) => setOffset((p - 1) * 50)} />
         </Tabs.Panel>
       </Tabs>
+      <Modal opened={!wide && !!point} onClose={() => setSel(null)} title={t("pdm.points")} fullScreen>{detail}</Modal>
       <Modal opened={add} onClose={() => setAdd(false)} title={t("pdm.newPoint")} size="lg">
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <TextInput label={t("common.code")} value={f.code} onChange={(e) => setF({ ...f, code: e.currentTarget.value })} />
-          <TextInput label={t("common.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
-          <AssetPicker value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v })} />
+          <Stack gap={4}>
+            <AssetPicker value={f.asset_id} onChange={(v) => setF({ ...f, asset_id: v })} required />
+            {can("asset.edit") && <Button variant="subtle" size="compact-xs" w="fit-content" onClick={() => setNewAsset(true)}>
+              {f.asset_id ? t("pdm.addAssetUnder") : t("pdm.addAsset")}</Button>}
+          </Stack>
           <Select label={t("pdm.technique")} data={TECH} value={f.technique} onChange={(v) => setF({ ...f, technique: v ?? "other" })} />
+          <TextInput label={t("common.code")} value={f.code} onChange={(e) => setF({ ...f, code: e.currentTarget.value })}
+            placeholder={chosen.data ? `${t("pdm.auto")}: ${chosen.data.code}-CM..` : t("pdm.auto")} description={t("pdm.codeHint")} />
+          <TextInput label={t("common.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })}
+            placeholder={chosen.data ? `${chosen.data.name} – ${f.technique.replace("_", " ")}` : t("pdm.auto")} />
           <TextInput label={t("common.unit")} value={f.unit} onChange={(e) => setF({ ...f, unit: e.currentTarget.value })} />
           <TextInput label="OPC UA / MQTT tag" value={f.external_tag} onChange={(e) => setF({ ...f, external_tag: e.currentTarget.value })} />
           <NumberInput label={t("pdm.warnHigh")} value={f.warning_high} onChange={(v) => setF({ ...f, warning_high: v })} />
@@ -121,8 +140,9 @@ function PdM() {
         </SimpleGrid>
         <TextInput mt="sm" label="Recommended action" value={f.recommended_action} onChange={(e) => setF({ ...f, recommended_action: e.currentTarget.value })} />
         <Checkbox mt="sm" label="Auto-create WO on critical" checked={f.auto_create_wo} onChange={(e) => setF({ ...f, auto_create_wo: e.currentTarget.checked })} />
-        <Button mt="md" onClick={() => create.mutate(undefined)} disabled={!f.code || !f.asset_id}>{t("common.create")}</Button>
+        <Button mt="md" onClick={() => create.mutate(undefined)} disabled={!f.asset_id}>{t("common.create")}</Button>
       </Modal>
+      {newAsset && <NewAsset opened onClose={() => setNewAsset(false)} parent={chosen.data ?? null} onCreated={(a) => setF({ ...f, asset_id: a.id })} />}
     </>
   );
 }

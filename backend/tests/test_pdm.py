@@ -94,3 +94,15 @@ def test_gateway_ingestion_token_and_dedup(world):
     assert api.get("/assets", headers=h).status_code == 401
     admin.ok("delete", f"/integration-tokens/{tok['id']}")
     assert gw.post("/api/v1/integrations/readings", json=body, headers=h).status_code == 401
+
+
+def test_point_code_is_automatic_and_list_searches_the_asset_tree(world):
+    rel, line, p = _point(world)
+    unit = mk_asset(rel, world, "PM1-CAL12", level="unit", parent=line["id"])
+    a = rel.ok("post", "/pdm/points", {"asset_id": unit["id"], "technique": "temperature", "unit": "°C"}, status=201)
+    b = rel.ok("post", "/pdm/points", {"asset_id": unit["id"], "technique": "vibration", "unit": "mm/s"}, status=201)
+    assert (a["code"], b["code"], a["name"]) == ("PM1-CAL12-CM01", "PM1-CAL12-CM02", "PM1-CAL12 – temperature")
+    codes = lambda **q: [x["code"] for x in rel.ok("get", "/pdm/points", params=q)]  # noqa: E731
+    assert codes(under=line["id"]) == ["PM1-CAL12-CM01", "PM1-CAL12-CM02", "VIB-DR1"]
+    assert codes(under=unit["id"]) == ["PM1-CAL12-CM01", "PM1-CAL12-CM02"]
+    assert codes(q="dr1") == ["VIB-DR1"] and codes(q="cal12") == ["PM1-CAL12-CM01", "PM1-CAL12-CM02"]

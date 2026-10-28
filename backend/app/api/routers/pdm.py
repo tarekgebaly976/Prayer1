@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,8 +23,8 @@ router = APIRouter(prefix="/pdm", tags=["condition monitoring"])
 
 
 class PointIn(In):
-    code: str
-    name: str
+    code: str = ""  # blank: <asset code>-CM01, -CM02 ...
+    name: str = ""  # blank: <asset name> – <technique>
     asset_id: uuid.UUID
     technique: Technique
     unit: str
@@ -89,13 +89,26 @@ def list_points(
     db: Session = Depends(get_db, scope="function"),
     asset_id: uuid.UUID | None = None,
     status: ConditionStatus | None = None,
+    q: str | None = None,
+    under: uuid.UUID | None = None,
 ) -> list[MeasurementPoint]:
-    q = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id)
+    """`q` searches point code/name and the asset's code/name; `under` keeps the points on an asset and everything below it."""
+    stmt = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id)
     if asset_id:
-        q = q.where(MeasurementPoint.asset_id == asset_id)
+        stmt = stmt.where(MeasurementPoint.asset_id == asset_id)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.join(Asset, Asset.id == MeasurementPoint.asset_id).where(
+            or_(MeasurementPoint.code.ilike(like), MeasurementPoint.name.ilike(like), Asset.code.ilike(like), Asset.name.ilike(like))
+        )
+    if under:
+        root = db.get(Asset, under)
+        if root is None or root.plant_id != ctx.plant_id:
+            raise HTTPException(422, "Asset not found")
+        stmt = stmt.where(MeasurementPoint.asset_id.in_(select(Asset.id).where(Asset.path.startswith(root.path))))
     if status:
-        q = q.where(MeasurementPoint.last_status == status)
-    return list(db.execute(q.order_by(MeasurementPoint.code).limit(2000)).scalars())
+        stmt = stmt.where(MeasurementPoint.last_status == status)
+    return list(db.execute(stmt.order_by(MeasurementPoint.code).limit(2000)).scalars())
 
 
 @router.post("/points", response_model=PointOut, status_code=201)
@@ -105,7 +118,10 @@ def create_point(
     a = db.get(Asset, body.asset_id)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset not found")
-    p = MeasurementPoint(plant_id=ctx.plant_id, **body.model_dump())
+    data = body.model_dump()
+    data["code"] = data["code"].strip() or svc.next_point_code(db, ctx.plant_id, a.code)
+    data["name"] = data["name"].strip() or f"{a.name} – {body.technique.value.replace('_', ' ')}"[:200]
+    p = MeasurementPoint(plant_id=ctx.plant_id, **data)
     svc.validate_limits(p)
     db.add(p)
     try:

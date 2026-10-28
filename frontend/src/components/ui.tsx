@@ -1,11 +1,13 @@
 "use client";
 
-import { Badge, Button, Center, Group, Loader, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, type BadgeProps } from "@mantine/core";
+import { ActionIcon, Badge, Button, Center, CloseButton, Group, Loader, Modal, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
+import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQ } from "@/lib/hooks";
-import type { Asset, Member, Page } from "@/lib/types";
+import type { AssetNode, Department, Member, Page } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
   triage: "gray", awaiting_approval: "yellow", approved: "blue", planned: "cyan", scheduled: "indigo", in_progress: "orange",
@@ -98,24 +100,37 @@ const LEVEL_INDENT: Record<string, number> = { production_line: 0, unit: 1, asse
  * Asset picker that searches the server, so it works with thousands of assets. With nothing typed it lists the top
  * of the hierarchy (production lines and units of every department); typing searches code and name across all levels.
  */
+type PickedAsset = Pick<AssetNode, "id" | "code" | "name" | "level" | "department_id">;
+
 export function AssetPicker({ value, onChange, label, required, clearable }: {
   value: string | null; onChange: (v: string | null) => void; label?: string; required?: boolean; clearable?: boolean;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [q] = useDebouncedValue(search.trim(), 300);
-  const [picked, setPicked] = useState<Asset | null>(null);
-  const res = useQ<Page<Asset>>("/assets", q ? { q, limit: 50 } : { levels: "production_line,unit", limit: 200 });
+  const [picked, setPicked] = useState<PickedAsset | null>(null);
+  const [browse, setBrowse] = useState(false);
+  const res = useQ<Page<PickedAsset>>("/assets", q ? { q, limit: 50 } : { levels: "production_line,unit", limit: 200 });
   const items = res.data?.items ?? [];
   // Keep the chosen asset displayable even when it is not in the current result list (e.g. an existing value).
   const known = picked?.id === value ? picked : items.find((a) => a.id === value) ?? null;
-  const current = useQ<Asset>(value && !known ? `/assets/${value}` : null);
+  const current = useQ<PickedAsset>(value && !known ? `/assets/${value}` : null);
   const selected = known ?? current.data ?? null;
   const list = selected && !items.some((a) => a.id === selected.id) ? [selected, ...items] : items;
   const byId = new Map(list.map((a) => [a.id, a]));
-  const labelOf = (a: Asset) => `${a.code} — ${a.name}`;
+  const labelOf = (a: PickedAsset) => `${a.code} — ${a.name}`;
   return (
+    <>
+    <Modal opened={browse} onClose={() => setBrowse(false)} title={label ?? t("common.asset")} size="lg">
+      <Text size="xs" c="dimmed" mb="xs">{t("asset.pickFromTree")}</Text>
+      <AssetTree onPick={(a) => { setPicked(a); onChange(a.id); setBrowse(false); }} />
+    </Modal>
     <Select label={label ?? t("common.asset")} searchable clearable={clearable} required={required} value={value}
+      rightSectionPointerEvents="all" rightSectionWidth={clearable && value ? 56 : 32}
+      rightSection={<Group gap={0} wrap="nowrap">
+        {clearable && value && <CloseButton size="sm" aria-label="clear" onClick={() => { setPicked(null); onChange(null); }} />}
+        <Tooltip label={t("asset.tree")}><ActionIcon variant="subtle" size="sm" aria-label={t("asset.tree")} onClick={() => setBrowse(true)}><IconSitemap size={16} /></ActionIcon></Tooltip>
+      </Group>}
       placeholder={t("common.search")} nothingFoundMessage={res.isFetching ? "…" : t("common.noData")}
       searchValue={search} onSearchChange={setSearch} filter={({ options }) => options}
       onChange={(v) => { setPicked(v ? byId.get(v) ?? null : null); onChange(v); }}
@@ -124,6 +139,7 @@ export function AssetPicker({ value, onChange, label, required, clearable }: {
         const a = byId.get(option.value);
         return <Text size="sm" pl={(LEVEL_INDENT[a?.level ?? "component"] ?? 0) * 12} fw={a && LEVEL_INDENT[a.level] === 0 ? 700 : 400}>{option.label}</Text>;
       }} maxDropdownHeight={360} />
+    </>
   );
 }
 
@@ -152,4 +168,60 @@ export function KV({ label, children }: { label: string; children: ReactNode }) 
 
 export function ConfirmButton({ children, onConfirm, color, loading, disabled }: { children: ReactNode; onConfirm: () => void; color?: string; loading?: boolean; disabled?: boolean }) {
   return <Button color={color} loading={loading} disabled={disabled} onClick={() => { if (window.confirm(String(children))) onConfirm(); }}>{children}</Button>;
+}
+
+/** The plant hierarchy, opened level by level. With `onPick` a click selects the asset instead of opening its page. */
+type OnPick = ((a: AssetNode) => void) | undefined;
+
+function Children({ query, depth, onPick }: { query: Record<string, string>; depth: number; onPick: OnPick }) {
+  const { t } = useTranslation();
+  const [limit, setLimit] = useState(200);
+  const q = useQ<Page<AssetNode>>("/assets/tree", { ...query, limit });
+  return (
+    <>
+      {(q.data?.items ?? []).map((k) => <TreeNode key={k.id} node={k} depth={depth} onPick={onPick} />)}
+      {q.data && q.data.total > q.data.items.length && (
+        <Button variant="subtle" size="compact-xs" ms={depth * 18} onClick={() => setLimit(Math.min(limit + 200, 1000))} disabled={limit >= 1000}>
+          {t("common.next")} ({q.data.items.length} / {q.data.total}){limit >= 1000 ? " — use search" : ""}
+        </Button>
+      )}
+    </>
+  );
+}
+
+function TreeNode({ node, depth, onPick }: { node: AssetNode; depth: number; onPick: OnPick }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Group gap={4} ps={depth * 18} py={2} wrap="nowrap">
+        {node.child_count > 0 ? (
+          <UnstyledButton onClick={() => setOpen(!open)} aria-label="toggle">{open ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}</UnstyledButton>
+        ) : <span style={{ width: 16 }} />}
+        {onPick ? <UnstyledButton onClick={() => onPick(node)}><Text size="sm" className="mono" c="blue">{node.code}</Text></UnstyledButton>
+          : <Text component={Link} href={`/assets/${node.id}`} size="sm" className="mono">{node.code}</Text>}
+        <Text size="sm" truncate>{node.name}</Text>
+        <StatusBadge value={node.criticality} size="xs" />
+        {node.status !== "in_service" && <StatusBadge value={node.status} size="xs" />}
+      </Group>
+      {open && <Children query={{ parent_id: node.id }} depth={depth + 1} onPick={onPick} />}
+    </>
+  );
+}
+
+export function DeptTree({ dept, onPick }: { dept: Department; onPick?: OnPick }) {
+  const { i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <UnstyledButton onClick={() => setOpen(!open)} py={4}>
+        <Group gap={4}>{open ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}<Text fw={600}>{dept.code} — {i18n.language === "ar" && dept.name_ar ? dept.name_ar : dept.name}</Text></Group>
+      </UnstyledButton>
+      {open && <Children query={{ department_id: dept.id }} depth={1} onPick={onPick} />}
+    </div>
+  );
+}
+
+export function AssetTree({ onPick }: { onPick?: (a: AssetNode) => void }) {
+  const depts = useQ<Department[]>("/departments");
+  return <>{(depts.data ?? []).map((d) => <DeptTree key={d.id} dept={d} onPick={onPick} />)}</>;
 }

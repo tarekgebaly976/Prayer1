@@ -17,3 +17,14 @@ test("mobile shell, offline indicator and PWA assets", async ({ page, context })
   await page.goto("/my-work");
   await expect(page.getByRole("heading", { name: "My work" })).toBeVisible();
 });
+
+test("condition monitoring point opens full screen on a phone to record a reading", async ({ page }) => {
+  await login(page, "reliability");
+  await page.goto("/pdm");
+  await page.getByRole("cell", { name: "TMP-DR1-DS" }).click();
+  const dlg = page.getByRole("dialog");
+  await expect(dlg.getByTestId("reading-input")).toBeInViewport();
+  await dlg.getByTestId("reading-input").fill("60");
+  await dlg.getByRole("button", { name: "Save" }).click();
+  await expect(dlg.getByTestId("reading-result")).toBeVisible();
+});

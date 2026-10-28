@@ -192,3 +192,15 @@ def mark_stale(db: Session, plant: Plant) -> int:
             p.last_status = ConditionStatus.UNKNOWN
             n += 1
     return n
+
+
+def next_point_code(db: Session, plant_id: uuid.UUID, asset_code: str) -> str:
+    """The next free <asset code>-CMnn for a plant (CM01, CM02 ...)."""
+    prefix = f"{asset_code[:55]}-CM"  # the code column holds 60 characters
+    used = db.execute(
+        select(MeasurementPoint.code).where(
+            MeasurementPoint.plant_id == plant_id, MeasurementPoint.code.startswith(prefix, autoescape=True)
+        )
+    ).scalars()
+    nums = [int(c[len(prefix) :]) for c in used if c[len(prefix) :].isdigit()]
+    return f"{prefix}{max(nums, default=0) + 1:02d}"
