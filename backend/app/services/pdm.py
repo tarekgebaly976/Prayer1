@@ -130,12 +130,18 @@ def record_reading(
     }
 
 
+def _asset_dept(db: Session, asset_id: uuid.UUID) -> uuid.UUID | None:
+    a = db.get(Asset, asset_id)
+    return a.department_id if a else None
+
+
 def _notify_alert(db: Session, plant: Plant, alert: ConditionAlert, label: str) -> None:
     critical = alert.severity == ConditionStatus.CRITICAL
     notify_permission(
         db,
         plant.id,
         "pdm.alert_manage",
+        department_id=_asset_dept(db, alert.asset_id),
         kind="condition_alert",
         severity="critical" if critical else "warning",
         title=f"{alert.severity.value.upper()}: {label}",

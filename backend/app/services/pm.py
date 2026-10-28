@@ -212,6 +212,7 @@ def flag_overdue(db: Session, plant: Plant, today: date) -> int:
                 db,
                 plant.id,
                 "wo.plan",
+                department_id=wo.department_id,
                 kind="pm_overdue",
                 severity="warning",
                 title=f"PM overdue: {wo.number}",
@@ -287,6 +288,12 @@ def on_occurrence_completed(db: Session, plant: Plant, wo: WorkOrder) -> None:
     _refresh_next_due(db, plan)
 
 
+def _plan_dept(db: Session, plan_id: uuid.UUID) -> uuid.UUID | None:
+    plan = db.get(PMPlan, plan_id)
+    a = db.get(Asset, plan.asset_id) if plan else None
+    return a.department_id if a else None
+
+
 def request_change(
     db: Session, plant: Plant, occ: PMOccurrence, user_id: uuid.UUID, kind: str, reason: str, new_date: date | None
 ) -> PMOccurrence:
@@ -303,6 +310,7 @@ def request_change(
         db,
         plant.id,
         "pm.approve_deferral",
+        department_id=_plan_dept(db, occ.pm_plan_id),
         kind="approval",
         title=f"PM {kind} requested",
         body=reason,

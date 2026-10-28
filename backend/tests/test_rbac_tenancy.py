@@ -137,5 +137,9 @@ def test_department_user_sees_only_own_department_in_pm_lube_pdm_requests(world)
     assert [r["id"] for r in sp.get("/work-requests").json()["items"]] == [reqs["SP"]["id"]]
     assert sp.get(f"/work-requests/{reqs['PM']['id']}").status_code == 404
     assert sp.post("/work-requests", {"asset_id": lines["PM"]["id"], "title": "Not mine"}).status_code == 403
+    notes = [n["link"] for n in sp.get("/notifications").json()["items"] if n["kind"] in ("condition_alert", "work_request")]
+    sp_alert = sp.get("/pdm/alerts").json()["items"][0]["id"]
+    assert f"/pdm/alerts/{sp_alert}" in notes and f"/requests/{reqs['SP']['id']}" in notes
+    assert all(reqs["PM"]["id"] not in n for n in notes) and len(notes) == 2  # nothing about PM equipment
     # whole-plant users (no department) still see both
     assert len(rel.ok("get", "/pdm/points")) == 2 and len(planner.ok("get", "/pm/plans")["items"]) == 2

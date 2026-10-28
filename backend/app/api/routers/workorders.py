@@ -96,6 +96,7 @@ def create_request(
         db,
         ctx.plant_id,
         "request.triage",
+        department_id=a.department_id,
         kind="work_request",
         severity="critical" if body.is_breakdown else "info",
         title=f"{'BREAKDOWN ' if body.is_breakdown else ''}Work request {r.number}",

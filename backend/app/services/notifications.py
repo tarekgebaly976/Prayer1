@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from datetime import timedelta
 from email.message import EmailMessage
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,8 @@ log = logging.getLogger("cmms.notify")
 MAX_ATTEMPTS = 5
 
 
-def users_with_permission(db: Session, plant_id: uuid.UUID, permission: str) -> list[uuid.UUID]:
+def users_with_permission(db: Session, plant_id: uuid.UUID, permission: str, department_id: uuid.UUID | None = None) -> list[uuid.UUID]:
+    """Members holding the permission. With `department_id`, users restricted to another department are left out."""
     q = (
         select(Membership.user_id)
         .join(RolePermission, RolePermission.role_id == Membership.role_id)
@@ -32,6 +33,8 @@ def users_with_permission(db: Session, plant_id: uuid.UUID, permission: str) -> 
             RolePermission.permission_code == permission,
         )
     )
+    if department_id:
+        q = q.where(or_(Membership.department_id.is_(None), Membership.department_id == department_id))
     return list(db.execute(q).scalars().unique())
 
 
@@ -89,8 +92,9 @@ def notify(
     return created
 
 
-def notify_permission(db: Session, plant_id: uuid.UUID, permission: str, **kw) -> int:
-    return notify(db, plant_id, users_with_permission(db, plant_id, permission), **kw)
+def notify_permission(db: Session, plant_id: uuid.UUID, permission: str, department_id: uuid.UUID | None = None, **kw) -> int:
+    """`department_id`: the equipment's department, so area-restricted users only hear about their own area."""
+    return notify(db, plant_id, users_with_permission(db, plant_id, permission, department_id), **kw)
 
 
 def deliver_outbox(db: Session, limit: int = 50) -> dict[str, int]:

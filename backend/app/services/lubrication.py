@@ -219,6 +219,7 @@ def flag_missed(db: Session, plant: Plant, today: date | None = None) -> int:
             db,
             plant.id,
             "lube.manage",
+            department_id=db.get(Asset, point.asset_id).department_id,  # type: ignore[union-attr]
             kind="lube_missed",
             severity="warning",
             title=f"Missed lubrication {point.code}",
