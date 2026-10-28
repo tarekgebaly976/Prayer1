@@ -13,15 +13,23 @@ from tests.conftest import mk_asset
 def _stock(world, qty=10, price=100.0):
     store = world.api("store")
     wh = store.ok("post", "/inventory/warehouses", {"code": "MAIN", "name": "Main"}, status=201)
-    part = store.ok("post", "/inventory/parts", {"code": "BRG-1", "description": "Bearing 23148", "uom": "EA", "reorder_point": 3,
-                                                 "is_critical_spare": True, "criticality": "A"}, status=201)
-    store.ok("post", "/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": qty, "unit_cost": price}, status=201)
+    part = store.ok(
+        "post",
+        "/inventory/parts",
+        {"code": "BRG-1", "description": "Bearing 23148", "uom": "EA", "reorder_point": 3, "is_critical_spare": True, "criticality": "A"},
+        status=201,
+    )
+    store.ok(
+        "post", "/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": qty, "unit_cost": price}, status=201
+    )
     return store, wh, part
 
 
 def test_moving_average_valuation(world):
     store, wh, part = _stock(world, 10, 100)
-    r = store.ok("post", "/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 10, "unit_cost": 130}, status=201)
+    r = store.ok(
+        "post", "/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 10, "unit_cost": 130}, status=201
+    )
     assert r["average_cost"] == 115.0 and r["balance_after"] == 20
     v = store.get("/inventory/valuation").json()
     assert v["total_value"] == 2300.0
@@ -33,35 +41,64 @@ def test_reserve_issue_against_wo_and_cost(world):
     planner = world.api("planner")
     line = mk_asset(planner, world, "PM1")
     wo = planner.ok("post", "/work-orders", {"asset_id": line["id"], "type": "corrective", "title": "Replace bearing"}, status=201)
-    res = planner.ok("post", f"/work-orders/{wo['id']}/reservations", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 2}, status=201)
+    res = planner.ok(
+        "post", f"/work-orders/{wo['id']}/reservations", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 2}, status=201
+    )
     p = store.get(f"/inventory/parts/{part['id']}").json()
     assert p["stock"][0]["reserved"] == 2 and p["stock"][0]["available"] == 3
     # cannot reserve more than free stock; stockout recorded even though the request fails
     r = planner.post(f"/work-orders/{wo['id']}/reservations", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 4})
     assert r.status_code == 409
-    out = store.ok("post", f"/work-orders/{wo['id']}/issues", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 2,
-                                                               "reservation_id": res["id"]}, status=201)
+    out = store.ok(
+        "post",
+        f"/work-orders/{wo['id']}/issues",
+        {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 2, "reservation_id": res["id"]},
+        status=201,
+    )
     assert out["total_cost"] == 19600.0 and out["balance_after"] == 3 and out["wo_material_cost"] == 19600.0
     txns = store.get("/inventory/transactions", params={"work_order_id": wo["id"]}).json()["items"]
     assert len(txns) == 1 and txns[0]["type"] == "issue" and txns[0]["quantity"] == -2 and txns[0]["total_cost"] == -19600.0
     p = store.get(f"/inventory/parts/{part['id']}").json()
     assert p["stock"][0]["reserved"] == 0 and p["stock"][0]["on_hand"] == 3
-    ret = store.ok("post", f"/work-orders/{wo['id']}/returns", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1, "reason": "unused"}, status=201)
+    ret = store.ok(
+        "post",
+        f"/work-orders/{wo['id']}/returns",
+        {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1, "reason": "unused"},
+        status=201,
+    )
     assert ret["wo_material_cost"] == 9800.0
-    assert store.post(f"/work-orders/{wo['id']}/returns", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 5}).status_code == 409
+    assert (
+        store.post(f"/work-orders/{wo['id']}/returns", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 5}).status_code == 409
+    )
     k = world.api("manager").get("/kpis/stockout_rate").json()
     assert k["details"]["stockouts"] == 1 and k["details"]["issues"] == 1 and k["value"] == 50.0
     # technician cannot issue stock
-    assert world.api("tech").post(f"/work-orders/{wo['id']}/issues", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1}).status_code == 403
+    assert (
+        world.api("tech")
+        .post(f"/work-orders/{wo['id']}/issues", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1})
+        .status_code
+        == 403
+    )
 
 
 def test_negative_stock_prevented_and_adjustment_rules(world):
     store, wh, part = _stock(world, 2, 50)
     r = store.post("/inventory/issues", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 3, "reference": "CC-100"})
     assert r.status_code == 409
-    assert store.post("/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -3, "reason": "count"}).status_code == 409
-    assert store.post("/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "x"}).status_code == 422
-    store.ok("post", "/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "Cycle count 2026-10"}, status=201)
+    assert (
+        store.post("/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -3, "reason": "count"}).status_code
+        == 409
+    )
+    assert (
+        store.post("/inventory/adjustments", {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "x"}).status_code
+        == 422
+    )
+    store.ok(
+        "post",
+        "/inventory/adjustments",
+        {"part_id": part["id"], "warehouse_id": wh["id"], "delta": -1, "reason": "Cycle count 2026-10"},
+        status=201,
+    )
     notes = store.get("/notifications").json()["items"]
     assert any("Reorder point reached: BRG-1" == n["title"] for n in notes)  # 1 on hand ≤ reorder point 3
 
@@ -108,16 +145,29 @@ def test_ledger_is_append_only(world):
 
 def test_po_receipt_and_on_order(world):
     store, wh, part = _stock(world, 1, 100)
-    po = store.ok("post", "/inventory/purchase-orders", {"lines": [{"part_id": part["id"], "quantity": 4, "unit_price": 120}],
-                                                         "external_reference": "ERP-4500012345"}, status=201)
+    po = store.ok(
+        "post",
+        "/inventory/purchase-orders",
+        {"lines": [{"part_id": part["id"], "quantity": 4, "unit_price": 120}], "external_reference": "ERP-4500012345"},
+        status=201,
+    )
     lines = store.get("/inventory/purchase-orders").json()[0]["lines"]
     assert store.get("/inventory/parts", params={"q": "BRG"}).json()["items"][0]["qty_on_order"] == 4
     store.ok("post", f"/inventory/purchase-orders/{po['id']}/status", {"status": "ordered"})
-    store.ok("post", "/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 4, "unit_cost": 120,
-                                             "po_line_id": lines[0]["id"]}, status=201)
+    store.ok(
+        "post",
+        "/inventory/receipts",
+        {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 4, "unit_cost": 120, "po_line_id": lines[0]["id"]},
+        status=201,
+    )
     assert store.get("/inventory/purchase-orders").json()[0]["status"] == "received"
-    assert store.post("/inventory/receipts", {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1, "unit_cost": 1,
-                                              "po_line_id": lines[0]["id"]}).status_code == 409
+    assert (
+        store.post(
+            "/inventory/receipts",
+            {"part_id": part["id"], "warehouse_id": wh["id"], "quantity": 1, "unit_cost": 1, "po_line_id": lines[0]["id"]},
+        ).status_code
+        == 409
+    )
 
 
 def test_parts_import_duplicate_detection(world):

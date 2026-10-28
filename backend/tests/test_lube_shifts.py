@@ -7,15 +7,44 @@ from tests.conftest import mk_asset
 def _lube_setup(world):
     mgr, rel = world.api("manager"), world.api("reliability")
     line = mk_asset(mgr, world, "PM1")
-    ep2 = rel.ok("post", "/lubrication/lubricants", {"code": "EP2", "manufacturer": "SKF", "product": "LGEP 2", "kind": "grease",
-                                                      "specification": "NLGI 2"}, status=201)
-    alt = rel.ok("post", "/lubrication/lubricants", {"code": "EP2B", "manufacturer": "Shell", "product": "Gadus S2", "kind": "grease"}, status=201)
-    other = rel.ok("post", "/lubrication/lubricants", {"code": "PU", "manufacturer": "X", "product": "Polyurea", "kind": "grease"}, status=201)
-    route = rel.ok("post", "/lubrication/routes", {"code": "R1", "name": "Wire", "department_id": str(world.depts["PM"].id), "lead_days": 1}, status=201)
+    ep2 = rel.ok(
+        "post",
+        "/lubrication/lubricants",
+        {"code": "EP2", "manufacturer": "SKF", "product": "LGEP 2", "kind": "grease", "specification": "NLGI 2"},
+        status=201,
+    )
+    alt = rel.ok(
+        "post", "/lubrication/lubricants", {"code": "EP2B", "manufacturer": "Shell", "product": "Gadus S2", "kind": "grease"}, status=201
+    )
+    other = rel.ok(
+        "post", "/lubrication/lubricants", {"code": "PU", "manufacturer": "X", "product": "Polyurea", "kind": "grease"}, status=201
+    )
+    route = rel.ok(
+        "post",
+        "/lubrication/routes",
+        {"code": "R1", "name": "Wire", "department_id": str(world.depts["PM"].id), "lead_days": 1},
+        status=201,
+    )
     today = plant_today(world.plant)
-    pts = [rel.ok("post", "/lubrication/points", {"code": f"LP{i}", "asset_id": line["id"], "lubricant_id": ep2["id"], "quantity": 40,
-                                                  "unit": "g", "frequency_days": 14, "route_id": route["id"], "route_seq": i,
-                                                  "next_due_date": today.isoformat()}, status=201) for i in (1, 2)]
+    pts = [
+        rel.ok(
+            "post",
+            "/lubrication/points",
+            {
+                "code": f"LP{i}",
+                "asset_id": line["id"],
+                "lubricant_id": ep2["id"],
+                "quantity": 40,
+                "unit": "g",
+                "frequency_days": 14,
+                "route_id": route["id"],
+                "route_seq": i,
+                "next_due_date": today.isoformat(),
+            },
+            status=201,
+        )
+        for i in (1, 2)
+    ]
     return line, ep2, alt, other, route, pts, today
 
 
@@ -37,9 +66,18 @@ def test_lubrication_route_record_and_next_due(world):
     # unapproved substitute is rejected
     r = tech.post(f"/lubrication/tasks/{tasks[0]['id']}/record", {"quantity": 40, "lubricant_used_id": other["id"]})
     assert r.status_code == 409 and "approved alternative" in r.text
-    assert tech.post(f"/lubrication/lubricants/{ep2['id']}/alternatives", {"alternative_id": alt["id"], "compatibility_note": "x" * 12}).status_code == 403
-    rel.ok("post", f"/lubrication/lubricants/{ep2['id']}/alternatives", {"alternative_id": alt["id"],
-                                                                         "compatibility_note": "Lithium/lithium compatible per OEM letter 2026-04"}, status=201)
+    assert (
+        tech.post(
+            f"/lubrication/lubricants/{ep2['id']}/alternatives", {"alternative_id": alt["id"], "compatibility_note": "x" * 12}
+        ).status_code
+        == 403
+    )
+    rel.ok(
+        "post",
+        f"/lubrication/lubricants/{ep2['id']}/alternatives",
+        {"alternative_id": alt["id"], "compatibility_note": "Lithium/lithium compatible per OEM letter 2026-04"},
+        status=201,
+    )
     res = tech.ok("post", f"/lubrication/tasks/{tasks[0]['id']}/record", {"quantity": 40, "lubricant_used_id": alt["id"]})
     assert res["next_due_date"] == (today + timedelta(days=14)).isoformat()
     res = tech.ok("post", f"/lubrication/tasks/{tasks[1]['id']}/record", {"quantity": 60})
@@ -57,6 +95,7 @@ def test_missed_lubrication_flagged(world):
     from app.core.db import SessionLocal
     from app.models.tenancy import Plant
     from app.services.lubrication import flag_missed
+
     line, ep2, alt, other, route, pts, today = _lube_setup(world)
     world.api("reliability").ok("post", f"/lubrication/routes/{route['id']}/generate", {})
     with SessionLocal() as db, db.begin():
@@ -73,30 +112,63 @@ def test_roster_pattern_and_handover(world):
     today = plant_today(world.plant)
     pat = mgr.ok("post", "/shifts/patterns", {"code": "DDNNOO", "name": "6-day", "cycle": ["D", "D", "N", "N", "OFF", "OFF"]}, status=201)
     assert mgr.post("/shifts/patterns", {"code": "BAD", "name": "x", "cycle": ["Q"]}).status_code == 422
-    team = mgr.ok("post", "/shifts/teams", {"code": "A", "name": "Crew A", "pattern_id": pat["id"], "pattern_anchor_date": today.isoformat(),
-                                            "member_ids": [str(world.users["tech"].id), str(world.users["tech2"].id)],
-                                            "supervisor_id": str(world.users["mech_sup"].id)}, status=201)
+    team = mgr.ok(
+        "post",
+        "/shifts/teams",
+        {
+            "code": "A",
+            "name": "Crew A",
+            "pattern_id": pat["id"],
+            "pattern_anchor_date": today.isoformat(),
+            "member_ids": [str(world.users["tech"].id), str(world.users["tech2"].id)],
+            "supervisor_id": str(world.users["mech_sup"].id),
+        },
+        status=201,
+    )
     # tech2 has leave on day 1: pattern generation must not overwrite it
     d1 = (today + timedelta(days=1)).isoformat()
     mgr.ok("put", "/shifts/roster", {"user_id": str(world.users["tech2"].id), "work_date": d1, "kind": "leave", "hours": 0})
-    n = mgr.ok("post", f"/shifts/teams/{team['id']}/generate-roster", {"start": today.isoformat(), "end": (today + timedelta(days=5)).isoformat()})
+    n = mgr.ok(
+        "post", f"/shifts/teams/{team['id']}/generate-roster", {"start": today.isoformat(), "end": (today + timedelta(days=5)).isoformat()}
+    )
     assert n["created"] == 7  # 4 working days × 2 people − 1 leave day
     roster = mgr.get("/shifts/roster", params={"start": today.isoformat(), "end": (today + timedelta(days=5)).isoformat()}).json()
     assert any(r["kind"] == "leave" and r["work_date"] == d1 for r in roster)
     # conflicting manual entry requires explicit replace
-    r = mgr.put("/shifts/roster", {"user_id": str(world.users["tech"].id), "work_date": today.isoformat(), "shift_id": str(world.shifts["N"].id)})
+    r = mgr.put(
+        "/shifts/roster", {"user_id": str(world.users["tech"].id), "work_date": today.isoformat(), "shift_id": str(world.shifts["N"].id)}
+    )
     assert r.status_code == 409
-    mgr.ok("put", "/shifts/roster", {"user_id": str(world.users["tech"].id), "work_date": today.isoformat(), "shift_id": str(world.shifts["D"].id),
-                                     "overtime_hours": 2, "replace": True})
+    mgr.ok(
+        "put",
+        "/shifts/roster",
+        {
+            "user_id": str(world.users["tech"].id),
+            "work_date": today.isoformat(),
+            "shift_id": str(world.shifts["D"].id),
+            "overtime_hours": 2,
+            "replace": True,
+        },
+    )
     mp = mgr.get("/shifts/manpower", params={"start": today.isoformat(), "end": today.isoformat()}).json()
     assert mp[0]["people"] == 2 and mp[0]["total_supply"] == 18
     # emergency open breakdown should appear in handover
     line = mk_asset(mgr, world, "PM1")
     mgr.ok("post", "/work-orders", {"asset_id": line["id"], "type": "emergency", "title": "Felt run trip"}, status=201)
-    h = tech.ok("post", "/shifts/handovers", {"department_id": str(world.depts["PM"].id), "shift_date": today.isoformat(),
-                                              "shift_id": str(world.shifts["D"].id), "incoming_user_id": str(world.users["tech2"].id),
-                                              "summary": "Felt run trip still open", "safety_concerns": "Steam leak near dryer 12",
-                                              "pending_permits": "Hot work permit HW-118"}, status=201)
+    h = tech.ok(
+        "post",
+        "/shifts/handovers",
+        {
+            "department_id": str(world.depts["PM"].id),
+            "shift_date": today.isoformat(),
+            "shift_id": str(world.shifts["D"].id),
+            "incoming_user_id": str(world.users["tech2"].id),
+            "summary": "Felt run trip still open",
+            "safety_concerns": "Steam leak near dryer 12",
+            "pending_permits": "Hot work permit HW-118",
+        },
+        status=201,
+    )
     assert tech.post(f"/shifts/handovers/{h['id']}/confirm", {}).status_code == 403  # technician lacks confirm permission
     tech.ok("post", f"/shifts/handovers/{h['id']}/submit")
     detail = sup.get(f"/shifts/handovers/{h['id']}").json()
@@ -110,8 +182,17 @@ def test_roster_pattern_and_handover(world):
 def test_supervisor_cannot_confirm_own_handover(world):
     sup = world.api("mech_sup")
     today = plant_today(world.plant)
-    h = sup.ok("post", "/shifts/handovers", {"department_id": str(world.depts["PM"].id), "shift_date": today.isoformat(),
-                                             "shift_id": str(world.shifts["N"].id), "summary": "quiet night"}, status=201)
+    h = sup.ok(
+        "post",
+        "/shifts/handovers",
+        {
+            "department_id": str(world.depts["PM"].id),
+            "shift_date": today.isoformat(),
+            "shift_id": str(world.shifts["N"].id),
+            "summary": "quiet night",
+        },
+        status=201,
+    )
     sup.ok("post", f"/shifts/handovers/{h['id']}/submit")
     assert sup.post(f"/shifts/handovers/{h['id']}/confirm", {}).status_code == 403
 
@@ -137,8 +218,18 @@ def test_roster_import_from_plant_grid_with_shift_codes(world):
 
     admin, manager = world.api("admin"), world.api("manager")
     d = next(s for s in admin.ok("get", "/shifts/definitions") if s["code"] == "D")
-    assert manager.ok("patch", f"/shifts/definitions/{d['id']}", {"name": "Day 12h", "start_time": "06:00", "end_time": "18:00", "paid_hours": 12})["paid_hours"] == 12
-    manager.ok("post", "/shifts/definitions", {"code": "G", "name": "General", "kind": "general", "start_time": "07:00", "end_time": "17:00", "paid_hours": 10}, status=201)
+    assert (
+        manager.ok(
+            "patch", f"/shifts/definitions/{d['id']}", {"name": "Day 12h", "start_time": "06:00", "end_time": "18:00", "paid_hours": 12}
+        )["paid_hours"]
+        == 12
+    )
+    manager.ok(
+        "post",
+        "/shifts/definitions",
+        {"code": "G", "name": "General", "kind": "general", "start_time": "07:00", "end_time": "17:00", "paid_hours": 10},
+        status=201,
+    )
     grid = [
         ["", "FRI", "SAT", "SUN", "MON"],
         ["Name", 30, 31, 1, 2],  # day numbers roll over into November
@@ -153,6 +244,10 @@ def test_roster_import_from_plant_grid_with_shift_codes(world):
     assert (p["from"], p["to"]) == ("2026-10-30", "2026-11-02")
     bad = manager.ok("post", "/shifts/roster/import/preview", params=q, files=_roster_xlsx(grid[:3] + [["Planner", "Z", "", "", ""]]))
     assert bad["invalid"] == 1 and "unknown code 'Z'" in bad["errors"][0]["errors"][0]
+    dragged = [["Name", 30, 31, 32, 33], ["Tech", "D", "D", "N", "N"], ["Name", 30, 31], ["Planner", "G", "G", "G"]]
+    p = manager.ok("post", "/shifts/roster/import/preview", params=q, files=_roster_xlsx(dragged))
+    assert (p["from"], p["to"]) == ("2026-10-30", "2026-11-02")  # Excel's fill handle: 32 = 1 Nov
+    assert p["invalid"] == 1 and "no date" in p["errors"][0]["errors"][0]  # second block's header is shorter than its row
 
     assert manager.post("/shifts/roster/import/commit", params=q, files=_roster_xlsx(grid)).status_code == 422  # missing person
     assert manager.post("/shifts/roster/import/commit", params={**q, "create_missing": True}, files=_roster_xlsx(grid)).status_code == 403
@@ -166,19 +261,29 @@ def test_roster_import_from_plant_grid_with_shift_codes(world):
     mp = {m["date"]: m for m in admin.ok("get", "/shifts/manpower", params={"start": "2026-10-30", "end": "2026-10-30"})}
     assert mp["2026-10-30"]["people"] == 3 and mp["2026-10-30"]["total_supply"] == 30  # D 12 + G 10 + N 8
 
-    tpl = load_workbook(io.BytesIO(admin.get("/shifts/roster/template.xlsx", params={"start": "2026-10-30", "end": "2026-11-02"}).content)).active
+    tpl = load_workbook(
+        io.BytesIO(admin.get("/shifts/roster/template.xlsx", params={"start": "2026-10-30", "end": "2026-11-02"}).content)
+    ).active
     rows = {r[0]: r[1:] for r in tpl.iter_rows(min_row=3, values_only=True)}
     assert rows["Tech"] == ("D", "G", "N", "L") and rows["Fawaz  Hazazi"][3] == "A"  # template comes back pre-filled
 
     off = [["Name", 30], ["Tech", "OFF"]]
-    assert admin.ok("post", "/shifts/roster/import/commit", params=q, files=_roster_xlsx(off)) == {"saved": 0, "removed": 1, "people_created": 0}
+    assert admin.ok("post", "/shifts/roster/import/commit", params=q, files=_roster_xlsx(off)) == {
+        "saved": 0,
+        "removed": 1,
+        "people_created": 0,
+    }
 
 
 def test_manpower_counts_unscheduled_work_on_its_due_date(world):
     planner = world.api("planner")
     line = mk_asset(planner, world, "MP-LINE")
     day = plant_today(world.plant) + timedelta(days=3)
-    planner.ok("post", "/work-orders", {"asset_id": line["id"], "title": "Gearbox inspection", "type": "corrective",
-                                        "due_date": day.isoformat(), "estimated_hours": 6}, status=201)
+    planner.ok(
+        "post",
+        "/work-orders",
+        {"asset_id": line["id"], "title": "Gearbox inspection", "type": "corrective", "due_date": day.isoformat(), "estimated_hours": 6},
+        status=201,
+    )
     mp = planner.ok("get", "/shifts/manpower", params={"start": day.isoformat(), "end": day.isoformat()})[0]
     assert mp["total_demand"] == 6 and mp["total_supply"] == 0 and mp["flags"]  # no one rostered for 6 h of work

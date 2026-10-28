@@ -48,8 +48,9 @@ def alembic_cfg() -> Config:
 def _schema():
     eng = create_engine(OWNER_URL)
     with eng.begin() as c:
-        c.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION cmms_owner;"
-                       "GRANT USAGE ON SCHEMA public TO cmms_app;"))
+        c.execute(
+            text("DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION cmms_owner;GRANT USAGE ON SCHEMA public TO cmms_app;")
+        )
     command.upgrade(alembic_cfg(), "head")
     with SessionLocal() as db, db.begin():
         sync_rbac(db)
@@ -109,6 +110,7 @@ class Api:
 
 def make_client() -> TestClient:
     from app.main import app
+
     return TestClient(app, base_url="https://testserver")
 
 
@@ -135,9 +137,18 @@ class World:
 
 
 ROLE_USERS = {
-    "admin": "system_admin", "manager": "maintenance_manager", "planner": "planner", "mech_sup": "mech_supervisor",
-    "elec_sup": "elec_supervisor", "reliability": "reliability_engineer", "engineer": "engineer", "tech": "technician",
-    "tech2": "technician", "store": "storekeeper", "production": "production_user", "viewer": "management_viewer",
+    "admin": "system_admin",
+    "manager": "maintenance_manager",
+    "planner": "planner",
+    "mech_sup": "mech_supervisor",
+    "elec_sup": "elec_supervisor",
+    "reliability": "reliability_engineer",
+    "engineer": "engineer",
+    "tech": "technician",
+    "tech2": "technician",
+    "store": "storekeeper",
+    "production": "production_user",
+    "viewer": "management_viewer",
 }
 
 
@@ -147,8 +158,14 @@ def world() -> World:
         org = Organization(code="T", name="Test Org")
         db.add(org)
         db.flush()
-        plant = Plant(organization_id=org.id, code="P1", name="Plant One", timezone="Asia/Riyadh", currency="SAR",
-                      settings={"default_labor_rate": 100, "overtime_multiplier": 1.5})
+        plant = Plant(
+            organization_id=org.id,
+            code="P1",
+            name="Plant One",
+            timezone="Asia/Riyadh",
+            currency="SAR",
+            settings={"default_labor_rate": 100, "overtime_multiplier": 1.5},
+        )
         plant_b = Plant(organization_id=org.id, code="P2", name="Plant Two", timezone="Asia/Riyadh", currency="SAR", settings={})
         db.add_all([plant, plant_b])
         db.flush()
@@ -163,9 +180,15 @@ def world() -> World:
         roles = {r.code: r for r in db.query(Role).all()}
         users = {}
         for key, role in ROLE_USERS.items():
-            u = User(organization_id=org.id, email=f"{key}@example.com", full_name=key.title(), password_hash=_HASH,
-                     is_system_admin=role == "system_admin", hourly_rate=80 if role == "technician" else None,
-                     trade="mechanical" if role == "technician" else None)
+            u = User(
+                organization_id=org.id,
+                email=f"{key}@example.com",
+                full_name=key.title(),
+                password_hash=_HASH,
+                is_system_admin=role == "system_admin",
+                hourly_rate=80 if role == "technician" else None,
+                trade="mechanical" if role == "technician" else None,
+            )
             db.add(u)
             db.flush()
             db.add(Membership(user_id=u.id, plant_id=plant.id, role_id=roles[role].id))
@@ -189,7 +212,12 @@ def world() -> World:
     return World(org, plant, plant_b, depts, depts_b, users, shifts)
 
 
-def mk_asset(api: Api, world: World, code: str, level: str = "production_line", parent: str | None = None,
-             dept: str = "PM", crit: str = "A") -> dict:
-    return api.ok("post", "/assets", {"code": code, "name": code, "department_id": str(world.depts[dept].id),
-                                      "parent_id": parent, "level": level, "criticality": crit}, status=201)
+def mk_asset(
+    api: Api, world: World, code: str, level: str = "production_line", parent: str | None = None, dept: str = "PM", crit: str = "A"
+) -> dict:
+    return api.ok(
+        "post",
+        "/assets",
+        {"code": code, "name": code, "department_id": str(world.depts[dept].id), "parent_id": parent, "level": level, "criticality": crit},
+        status=201,
+    )

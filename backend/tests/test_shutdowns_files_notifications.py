@@ -7,20 +7,55 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 def test_shutdown_cpm_and_readiness(world):
     mgr = world.api("manager")
-    sd = mgr.ok("post", "/shutdowns", {"code": "SD-2026-11", "name": "PM1 annual", "planned_start": "2026-11-10T06:00:00+03:00",
-                                       "planned_end": "2026-11-11T06:00:00+03:00"}, status=201)
+    sd = mgr.ok(
+        "post",
+        "/shutdowns",
+        {
+            "code": "SD-2026-11",
+            "name": "PM1 annual",
+            "planned_start": "2026-11-10T06:00:00+03:00",
+            "planned_end": "2026-11-11T06:00:00+03:00",
+        },
+        status=201,
+    )
     sid = sd["id"]
-    a = mgr.ok("post", f"/shutdowns/{sid}/packages", {"code": "A", "name": "LOTO & drain", "duration_hours": 10, "material_status": "not_required",
-                                                      "permit_status": "ready", "loto_status": "ready"}, status=201)
-    b = mgr.ok("post", f"/shutdowns/{sid}/packages", {"code": "B", "name": "Felt change", "duration_hours": 5, "predecessor_ids": [a["id"]]}, status=201)
-    c = mgr.ok("post", f"/shutdowns/{sid}/packages", {"code": "C", "name": "Roll change", "duration_hours": 8, "predecessor_ids": [a["id"]]}, status=201)
-    d = mgr.ok("post", f"/shutdowns/{sid}/packages", {"code": "D", "name": "Restart checks", "duration_hours": 2,
-                                                      "predecessor_ids": [b["id"], c["id"]]}, status=201)
+    a = mgr.ok(
+        "post",
+        f"/shutdowns/{sid}/packages",
+        {
+            "code": "A",
+            "name": "LOTO & drain",
+            "duration_hours": 10,
+            "material_status": "not_required",
+            "permit_status": "ready",
+            "loto_status": "ready",
+        },
+        status=201,
+    )
+    b = mgr.ok(
+        "post",
+        f"/shutdowns/{sid}/packages",
+        {"code": "B", "name": "Felt change", "duration_hours": 5, "predecessor_ids": [a["id"]]},
+        status=201,
+    )
+    c = mgr.ok(
+        "post",
+        f"/shutdowns/{sid}/packages",
+        {"code": "C", "name": "Roll change", "duration_hours": 8, "predecessor_ids": [a["id"]]},
+        status=201,
+    )
+    d = mgr.ok(
+        "post",
+        f"/shutdowns/{sid}/packages",
+        {"code": "D", "name": "Restart checks", "duration_hours": 2, "predecessor_ids": [b["id"], c["id"]]},
+        status=201,
+    )
     det = mgr.get(f"/shutdowns/{sid}").json()
     assert det["cpm"]["duration_hours"] == 20 and det["cpm"]["critical_path"] == ["A", "C", "D"] and det["cpm"]["fits_window"]
     pk = {p["code"]: p for p in det["packages"]}
     assert pk["B"]["total_float_hours"] == 3 and not pk["B"]["is_critical"]
     from datetime import datetime
+
     assert datetime.fromisoformat(pk["D"]["planned_start"]) == datetime.fromisoformat("2026-11-11T00:00:00+03:00")  # start + 18 h
     r = mgr.post(f"/shutdowns/{sid}/packages/{a['id']}/dependencies", {"predecessor_id": d["id"]})
     assert r.status_code == 422 and "cycle" in r.text
@@ -40,8 +75,11 @@ def test_shutdown_cpm_and_readiness(world):
 
 
 def _upload(api, entity_type, entity_id, name, data, category="document"):
-    return api.post("/attachments", files={"file": (name, data, "application/octet-stream")},
-                    data={"entity_type": entity_type, "entity_id": entity_id, "category": category})
+    return api.post(
+        "/attachments",
+        files={"file": (name, data, "application/octet-stream")},
+        data={"entity_type": entity_type, "entity_id": entity_id, "category": category},
+    )
 
 
 def test_file_upload_validation_and_authorization(world):
@@ -67,8 +105,12 @@ def test_file_upload_validation_and_authorization(world):
     assert dl.headers["x-content-type-options"] == "nosniff"
     other = login("planner_b@example.com", world.plant_b.id)
     assert other.get(f"/attachments/{att['id']}/download").status_code == 404
-    assert world.api("store").post("/attachments", files={"file": ("m.pdf", PDF)},
-                                   data={"entity_type": "asset", "entity_id": line["id"]}).status_code == 403
+    assert (
+        world.api("store")
+        .post("/attachments", files={"file": ("m.pdf", PDF)}, data={"entity_type": "asset", "entity_id": line["id"]})
+        .status_code
+        == 403
+    )
     assert _upload(other, "asset", line["id"], "m.pdf", PDF).status_code == 404  # cannot attach to another plant's asset
     lst = planner.get("/attachments", params={"entity_type": "asset", "entity_id": line["id"]}).json()
     assert len(lst) == 2
@@ -84,6 +126,7 @@ def test_notifications_dedupe_read_and_outbox(world):
     from app.models.enums import DeliveryStatus
     from app.models.system import EmailOutbox
     from app.services.notifications import notify
+
     with SessionLocal() as db, db.begin():
         n1 = notify(db, world.plant.id, [world.users["tech"].id], kind="t", title="Hello", dedupe_key="k1", email=True)
         n2 = notify(db, world.plant.id, [world.users["tech"].id], kind="t", title="Hello", dedupe_key="k1", email=True)

@@ -6,8 +6,17 @@ from tests.conftest import Api, make_client, mk_asset
 def _point(world, **kw):
     rel = world.api("reliability")
     line = mk_asset(rel, world, "PM1")
-    body = {"code": "VIB-DR1", "name": "DR1 DS velocity", "asset_id": line["id"], "technique": "vibration", "unit": "mm/s",
-            "warning_high": 4.5, "alarm_high": 7.1, "external_tag": "ns=2;s=PM1.DR1.VIB", **kw}
+    body = {
+        "code": "VIB-DR1",
+        "name": "DR1 DS velocity",
+        "asset_id": line["id"],
+        "technique": "vibration",
+        "unit": "mm/s",
+        "warning_high": 4.5,
+        "alarm_high": 7.1,
+        "external_tag": "ns=2;s=PM1.DR1.VIB",
+        **kw,
+    }
     return rel, line, rel.ok("post", "/pdm/points", body, status=201)
 
 
@@ -40,8 +49,21 @@ def test_auto_wo_on_critical_and_limit_validation(world):
     rel, line, p = _point(world, auto_create_wo=True)
     r = world.api("tech").ok("post", f"/pdm/points/{p['id']}/readings", {"value": 9.0}, status=201)
     assert r["work_order_id"]
-    assert rel.post("/pdm/points", {"code": "BAD", "name": "b", "asset_id": line["id"], "technique": "temperature", "unit": "C",
-                                    "warning_high": 80, "alarm_high": 70}).status_code == 422
+    assert (
+        rel.post(
+            "/pdm/points",
+            {
+                "code": "BAD",
+                "name": "b",
+                "asset_id": line["id"],
+                "technique": "temperature",
+                "unit": "C",
+                "warning_high": 80,
+                "alarm_high": 70,
+            },
+        ).status_code
+        == 422
+    )
     future = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     assert world.api("tech").post(f"/pdm/points/{p['id']}/readings", {"value": 1, "measured_at": future}).status_code == 422
 
@@ -57,7 +79,9 @@ def test_gateway_ingestion_token_and_dedup(world):
     tok = admin.ok("post", "/integration-tokens", {"name": "OPC UA gateway"}, status=201)
     gw = make_client()
     t = datetime.now(UTC).replace(microsecond=0).isoformat()
-    body = {"readings": [{"tag": "ns=2;s=PM1.DR1.VIB", "value": 3.3, "measured_at": t}, {"tag": "unknown/tag", "value": 1, "measured_at": t}]}
+    body = {
+        "readings": [{"tag": "ns=2;s=PM1.DR1.VIB", "value": 3.3, "measured_at": t}, {"tag": "unknown/tag", "value": 1, "measured_at": t}]
+    }
     assert gw.post("/api/v1/integrations/readings", json=body).status_code == 401
     assert gw.post("/api/v1/integrations/readings", json=body, headers={"Authorization": "Bearer nope"}).status_code == 401
     h = {"Authorization": f"Bearer {tok['token']}"}

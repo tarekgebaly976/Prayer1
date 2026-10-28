@@ -114,5 +114,6 @@ def test_health_endpoints(world):
     from alembic.script import ScriptDirectory
 
     from tests.conftest import alembic_cfg
+
     head = ScriptDirectory.from_config(alembic_cfg()).get_current_head()
     assert r["checks"]["database"] == "ok" and r["checks"]["migration"] == head

@@ -23,8 +23,10 @@ def test_backend_enforces_permissions(world):
     tech = world.api("tech")
     planner = world.api("planner")
     asset = mk_asset(planner, world, "LINE1")
-    assert tech.post("/assets", {"code": "X", "name": "X", "department_id": str(world.depts["PM"].id),
-                                 "level": "production_line"}).status_code == 403
+    assert (
+        tech.post("/assets", {"code": "X", "name": "X", "department_id": str(world.depts["PM"].id), "level": "production_line"}).status_code
+        == 403
+    )
     assert tech.post("/pm/job-plans", {"code": "J", "name": "J"}).status_code == 403
     prod = world.api("production")
     assert prod.post("/work-requests", {"asset_id": asset["id"], "title": "Felt hole"}).status_code == 201
@@ -55,7 +57,9 @@ def test_two_plants_independent_numbering(world):
     a = world.api("planner")
     b = login("planner_b@example.com", world.plant_b.id)
     la = mk_asset(a, world, "L")
-    lb = b.ok("post", "/assets", {"code": "L", "name": "L", "department_id": str(world.depts_b["PM"].id), "level": "production_line"}, status=201)
+    lb = b.ok(
+        "post", "/assets", {"code": "L", "name": "L", "department_id": str(world.depts_b["PM"].id), "level": "production_line"}, status=201
+    )
     wa = a.ok("post", "/work-orders", {"asset_id": la["id"], "type": "corrective", "title": "aaa"}, status=201)
     wb = b.ok("post", "/work-orders", {"asset_id": lb["id"], "type": "corrective", "title": "bbb"}, status=201)
     assert wa["number"] == "WO-P1-000001" and wb["number"] == "WO-P2-000001"

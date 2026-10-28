@@ -22,12 +22,32 @@ def test_month_arithmetic_no_drift():
 
 def _plan(world, planner, **kw):
     line = mk_asset(planner, world, "PM1")
-    jp = planner.ok("post", "/pm/job-plans", {"code": "JP1", "name": "Weekly insp", "estimated_hours": 2, "requires_loto": False,
-                                              "tasks": [{"seq": 10, "description": "Check noise"},
-                                                        {"seq": 20, "description": "Bearing temp", "kind": "reading", "unit": "°C", "max_value": 75}]},
-                    status=201)
-    body = {"code": "PM-W", "name": "Weekly", "asset_id": line["id"], "job_plan_id": jp["id"], "frequency_unit": "week",
-            "frequency_interval": 1, "start_date": kw.pop("start", None), "horizon_days": 28, "lead_days": 3}
+    jp = planner.ok(
+        "post",
+        "/pm/job-plans",
+        {
+            "code": "JP1",
+            "name": "Weekly insp",
+            "estimated_hours": 2,
+            "requires_loto": False,
+            "tasks": [
+                {"seq": 10, "description": "Check noise"},
+                {"seq": 20, "description": "Bearing temp", "kind": "reading", "unit": "°C", "max_value": 75},
+            ],
+        },
+        status=201,
+    )
+    body = {
+        "code": "PM-W",
+        "name": "Weekly",
+        "asset_id": line["id"],
+        "job_plan_id": jp["id"],
+        "frequency_unit": "week",
+        "frequency_interval": 1,
+        "start_date": kw.pop("start", None),
+        "horizon_days": 28,
+        "lead_days": 3,
+    }
     body.update(kw)
     return line, jp, planner.ok("post", "/pm/plans", body, status=201)
 
@@ -77,8 +97,12 @@ def test_pm_scheduler_concurrent_runs_no_duplicates(world):
     with SessionLocal() as db:
         n_wo = db.execute(select(func.count()).select_from(WorkOrder).where(WorkOrder.pm_occurrence_id.is_not(None))).scalar_one()
         n_occ = db.execute(select(func.count()).select_from(PMOccurrence)).scalar_one()
-        dup = db.execute(select(WorkOrder.pm_occurrence_id, func.count()).group_by(WorkOrder.pm_occurrence_id)
-                         .having(func.count() > 1).where(WorkOrder.pm_occurrence_id.is_not(None))).all()
+        dup = db.execute(
+            select(WorkOrder.pm_occurrence_id, func.count())
+            .group_by(WorkOrder.pm_occurrence_id)
+            .having(func.count() > 1)
+            .where(WorkOrder.pm_occurrence_id.is_not(None))
+        ).all()
     assert n_occ == 5 and n_wo == 5 and dup == []
 
 
@@ -128,7 +152,9 @@ def test_deferral_needs_supervisor_and_four_eyes(world):
     occ = planner.get("/pm/occurrences", params={"plan_id": plan["id"], "status": ["generated"]}).json()["items"][0]
     new = (today + timedelta(days=3)).isoformat()
     assert planner.post(f"/pm/occurrences/{occ['id']}/request", {"kind": "defer", "reason": "x"}).status_code == 422
-    planner.ok("post", f"/pm/occurrences/{occ['id']}/request", {"kind": "defer", "reason": "Machine running, waiting for wash-up", "new_date": new})
+    planner.ok(
+        "post", f"/pm/occurrences/{occ['id']}/request", {"kind": "defer", "reason": "Machine running, waiting for wash-up", "new_date": new}
+    )
     assert planner.post(f"/pm/occurrences/{occ['id']}/decide", {"approve": True}).status_code == 403
     r = sup.ok("post", f"/pm/occurrences/{occ['id']}/decide", {"approve": True})
     assert r["status"] == "deferred" and r["due_date"] == new
@@ -143,8 +169,21 @@ def test_meter_based_pm_triggers_on_reading(world):
     line = mk_asset(planner, world, "PM1")
     m = planner.ok("post", f"/assets/{line['id']}/meters", {"name": "Running hours", "current_value": 7000}, status=201)
     jp = planner.ok("post", "/pm/job-plans", {"code": "OIL", "name": "Oil change", "estimated_hours": 4}, status=201)
-    planner.ok("post", "/pm/plans", {"code": "PM-OIL", "name": "Oil 8000h", "asset_id": line["id"], "job_plan_id": jp["id"],
-                                     "trigger": "meter", "meter_id": m["id"], "meter_interval": 8000, "last_meter_value": 0}, status=201)
+    planner.ok(
+        "post",
+        "/pm/plans",
+        {
+            "code": "PM-OIL",
+            "name": "Oil 8000h",
+            "asset_id": line["id"],
+            "job_plan_id": jp["id"],
+            "trigger": "meter",
+            "meter_id": m["id"],
+            "meter_interval": 8000,
+            "last_meter_value": 0,
+        },
+        status=201,
+    )
     eng.ok("post", f"/assets/meters/{m['id']}/readings", {"value": 7900})
     assert planner.get("/work-orders").json()["total"] == 0
     assert eng.post(f"/assets/meters/{m['id']}/readings", {"value": 7800}).status_code == 422  # meter cannot go backwards

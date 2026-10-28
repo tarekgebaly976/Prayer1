@@ -6,7 +6,8 @@
 
 Several blocks may follow each other, each starting with its own "Name" header row. Codes are the plant's shift
 codes (e.g. D, N, G) plus L = leave, A = absence, OFF = day off (removes an entry); a blank cell changes nothing.
-Day numbers in the header are read from the chosen first month, moving to the next month when they start again."""
+Day numbers in the header are read from the chosen first month, moving to the next month when they start again
+or run past the month's last day (32 = the 1st of a 31-day month's next month)."""
 
 import io
 import re
@@ -132,15 +133,13 @@ def _header_dates(row: tuple, base: date) -> dict[int, date]:
             day = int(float(txt))
         except ValueError:
             continue
-        if not 1 <= day <= 31:
+        if not 1 <= day <= MAX_DAYS:
             continue
         if last is not None and day < last:
             year, month = (year + 1, 1) if month == 12 else (year, month + 1)
         last = day
-        try:
-            out[i] = date(year, month, day)
-        except ValueError:
-            continue
+        # Past the month's last day (Excel's fill handle gives 30, 31, 32, 33 ...) runs on into the next month.
+        out[i] = date(year, month, 1) + timedelta(days=day - 1)
     return out
 
 
@@ -168,6 +167,10 @@ def parse(db: Session, plant: Plant, content: bytes, base: date) -> dict[str, An
         key = _norm(first)
         names.setdefault(key, first)
         errs = []
+        for i in range(1, len(row)):
+            if i not in cols and row[i] is not None and str(row[i]).strip():
+                errs.append(f"'{str(row[i]).strip()}' is in a column with no date in its 'Name' row; extend that header row")
+                break
         for i, day in cols.items():
             v = row[i] if i < len(row) else None
             code = "" if v is None else str(v).strip().upper()
