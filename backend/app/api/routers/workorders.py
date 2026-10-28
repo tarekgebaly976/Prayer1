@@ -88,6 +88,7 @@ def create_request(
 ) -> WorkRequest:
     a = _asset(db, ctx, body.asset_id)
     _check_refs(db, ctx, body.model_dump(include={"symptom_code_id", "problem_code_id"}))
+    ctx.check_asset(db, a.id, code=403)
     r = WorkRequest(plant_id=ctx.plant_id, number=next_number(db, ctx.plant, "WR"), created_by_id=ctx.user.id, **body.model_dump())
     db.add(r)
     db.flush()
@@ -115,7 +116,7 @@ def list_requests(
     status: RequestStatus | None = None,
     mine: bool = False,
 ) -> dict:
-    q = select(WorkRequest).where(WorkRequest.plant_id == ctx.plant_id)
+    q = select(WorkRequest).where(WorkRequest.plant_id == ctx.plant_id, ctx.in_department(WorkRequest.asset_id))
     if status:
         q = q.where(WorkRequest.status == status)
     if mine:
@@ -130,6 +131,7 @@ def get_request(
     r = db.get(WorkRequest, rid)
     if r is None or r.plant_id != ctx.plant_id or (not ctx.has("wo.view") and r.created_by_id != ctx.user.id):
         raise HTTPException(404, "Request not found")
+    ctx.check_asset(db, r.asset_id, "Request not found")
     return r
 
 
@@ -142,6 +144,7 @@ def triage(
     ).scalar_one_or_none()
     if r is None:
         raise HTTPException(404, "Request not found")
+    ctx.check_asset(db, r.asset_id, "Request not found")
     if r.status != RequestStatus.SUBMITTED:
         raise DomainError("Request already triaged", "invalid_state", 409)
     r.triaged_by_id, r.triaged_at, r.triage_note = ctx.user.id, utcnow(), body.note

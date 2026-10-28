@@ -84,6 +84,7 @@ def _point(db: Session, ctx: Ctx, pid: uuid.UUID) -> MeasurementPoint:
     p = db.get(MeasurementPoint, pid)
     if p is None or p.plant_id != ctx.plant_id:
         raise HTTPException(404, "Measurement point not found")
+    ctx.check_asset(db, p.asset_id, "Measurement point not found")
     return p
 
 
@@ -97,7 +98,7 @@ def list_points(
     under: uuid.UUID | None = None,
 ) -> list[MeasurementPoint]:
     """`q` searches point code/name and the asset's code/name; `under` keeps the points on an asset and everything below it."""
-    stmt = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id)
+    stmt = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id, ctx.in_department(MeasurementPoint.asset_id))
     if asset_id:
         stmt = stmt.where(MeasurementPoint.asset_id == asset_id)
     if q and q.strip():
@@ -129,6 +130,7 @@ def create_point(
     a = db.get(Asset, body.asset_id)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset not found")
+    ctx.check_asset(db, a.id, code=403)
     data = body.model_dump()
     data["code"] = data["code"].strip() or svc.next_point_code(db, ctx.plant_id, a.code)
     data["name"] = data["name"].strip() or f"{a.name} – {body.technique.value.replace('_', ' ')}"[:200]
@@ -178,7 +180,7 @@ def priority_import(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(413, "File too large (max 5 MB)")
     try:
-        checked = pdm_priority.check(db, ctx.plant, file.filename or "", content)
+        checked = pdm_priority.check(db, ctx.plant, file.filename or "", content, ctx.in_department(MeasurementPoint.asset_id))
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     if not apply:
@@ -274,7 +276,7 @@ def alerts(
     severity: ConditionStatus | None = None,
     open_only: bool = False,
 ) -> dict:
-    q = select(ConditionAlert).where(ConditionAlert.plant_id == ctx.plant_id)
+    q = select(ConditionAlert).where(ConditionAlert.plant_id == ctx.plant_id, ctx.in_department(ConditionAlert.asset_id))
     if status:
         q = q.where(ConditionAlert.status == status)
     if severity:
@@ -290,6 +292,7 @@ def _alert(db: Session, ctx: Ctx, aid: uuid.UUID) -> ConditionAlert:
     ).scalar_one_or_none()
     if a is None:
         raise HTTPException(404, "Alert not found")
+    ctx.check_asset(db, a.asset_id, "Alert not found")
     return a
 
 
@@ -298,6 +301,7 @@ def get_alert(aid: uuid.UUID, ctx: Ctx = Depends(require("pdm.view")), db: Sessi
     a = db.get(ConditionAlert, aid)
     if a is None or a.plant_id != ctx.plant_id:
         raise HTTPException(404, "Alert not found")
+    ctx.check_asset(db, a.asset_id, "Alert not found")
     return a
 
 

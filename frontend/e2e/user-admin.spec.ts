@@ -20,3 +20,19 @@ test("administrator edits a user from the Users list", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("cell", { name: original, exact: true })).toBeVisible();
 });
+
+test("administrator assigns and clears a user's department from the users list", async ({ page }) => {
+  await login(page, "admin");
+  await page.goto("/admin");
+  const row = page.getByRole("row", { name: /store@demo\.example\.com/ });
+  const field = row.getByPlaceholder("All departments");
+  const clear = row.locator(".mantine-InputClearButton-root, .mantine-CloseButton-root").first();
+  if (await clear.isVisible()) { await field.hover(); await clear.click(); } // left over from an interrupted run
+  await expect(field).toHaveValue("");
+  await field.click();
+  await page.getByRole("option", { name: /^SP — / }).click();
+  await expect(field).toHaveValue(/^SP — /);
+  await field.hover();
+  await clear.click(); // back to the whole plant
+  await expect(field).toHaveValue("");
+});

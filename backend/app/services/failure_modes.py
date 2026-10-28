@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from sqlalchemy import func, select
+from sqlalchemy import func, select, true
 from sqlalchemy.orm import Session
 
 from app.models.assets import Asset, FailureCode
@@ -226,7 +226,9 @@ def commit(db: Session, plant: Plant, checked: dict[str, Any], user_id: uuid.UUI
     return {"new": p["new"], "updated": p["updated"]}
 
 
-def pareto(db: Session, plant: Plant, start: date, end: date, under: Asset | None, by: str) -> dict[str, Any]:
+def pareto(
+    db: Session, plant: Plant, start: date, end: date, under: Asset | None, by: str, department_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     """Work orders per failure mode (problem code) in the period, most frequent first. by='mode' adds up the same
     failure mode across equipment types (e.g. all bearing failures); by='code' keeps them apart; by='symptom'
     counts the reported symptoms instead."""
@@ -248,6 +250,8 @@ def pareto(db: Session, plant: Plant, start: date, end: date, under: Asset | Non
         .where(WorkOrder.plant_id == plant.id, WorkOrder.status != WOStatus.CANCELLED, when >= t0, when < t1)
         .group_by(FailureCode.code, FailureCode.description, FailureCode.equipment_type)
     )
+    if department_id:
+        q = q.where(WorkOrder.department_id == department_id)
     if under is not None:
         q = q.join(Asset, Asset.id == WorkOrder.asset_id).where(Asset.path.startswith(under.path))
     rows: dict[str, dict[str, Any]] = {}
@@ -283,6 +287,7 @@ def pareto(db: Session, plant: Plant, start: date, end: date, under: Asset | Non
             WorkOrder.plant_id == plant.id,
             WorkOrder.problem_code_id.is_(None),
             WorkOrder.status == WOStatus.CLOSED,
+            WorkOrder.department_id == department_id if department_id else true(),
             when >= t0,
             when < t1,
             WorkOrder.type.in_((WOType.CORRECTIVE, WOType.EMERGENCY)),

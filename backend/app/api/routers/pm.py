@@ -204,7 +204,7 @@ def list_plans(
     active: bool | None = None,
     q: str | None = None,
 ) -> dict:
-    stmt = select(PMPlan).where(PMPlan.plant_id == ctx.plant_id)
+    stmt = select(PMPlan).where(PMPlan.plant_id == ctx.plant_id, ctx.in_department(PMPlan.asset_id))
     if q:
         stmt = stmt.where(or_(PMPlan.code.ilike(f"%{q}%"), PMPlan.name.ilike(f"%{q}%")))
     if asset_id:
@@ -219,6 +219,7 @@ def create_plan(body: PlanIn, ctx: Ctx = Depends(require("pm.manage")), db: Sess
     a, jp = db.get(Asset, body.asset_id), db.get(JobPlan, body.job_plan_id)
     if a is None or a.plant_id != ctx.plant_id or jp is None or jp.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset or job plan not found")
+    ctx.check_asset(db, a.id, code=403)
     if body.meter_id:
         m = db.get(Meter, body.meter_id)
         if m is None or m.plant_id != ctx.plant_id:
@@ -241,6 +242,7 @@ def update_plan(
     p = db.get(PMPlan, plan_id)
     if p is None or p.plant_id != ctx.plant_id:
         raise HTTPException(404, "PM plan not found")
+    ctx.check_asset(db, p.asset_id, "PM plan not found")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(p, k, v)
     audit(
@@ -283,6 +285,8 @@ def list_occurrences(
     due_to: date | None = None,
 ) -> dict:
     q = select(PMOccurrence).where(PMOccurrence.plant_id == ctx.plant_id)
+    if ctx.department_id:
+        q = q.where(PMOccurrence.pm_plan_id.in_(select(PMPlan.id).where(ctx.in_department(PMPlan.asset_id))))
     if plan_id:
         q = q.where(PMOccurrence.pm_plan_id == plan_id)
     if status:
@@ -312,6 +316,9 @@ def _occ(db: Session, ctx: Ctx, occ_id: uuid.UUID) -> PMOccurrence:
     ).scalar_one_or_none()
     if o is None:
         raise HTTPException(404, "Occurrence not found")
+    plan = db.get(PMPlan, o.pm_plan_id)
+    if plan is not None:
+        ctx.check_asset(db, plan.asset_id, "Occurrence not found")
     return o
 
 

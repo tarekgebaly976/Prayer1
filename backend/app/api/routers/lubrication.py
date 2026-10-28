@@ -145,7 +145,10 @@ class RouteOut(ORM):
 
 @router.get("/routes", response_model=list[RouteOut])
 def list_routes(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> list[LubeRoute]:
-    return list(db.execute(select(LubeRoute).where(LubeRoute.plant_id == ctx.plant_id).order_by(LubeRoute.code)).scalars())
+    q = select(LubeRoute).where(LubeRoute.plant_id == ctx.plant_id)
+    if ctx.department_id:
+        q = q.where(LubeRoute.department_id == ctx.department_id)
+    return list(db.execute(q.order_by(LubeRoute.code)).scalars())
 
 
 @router.post("/routes", response_model=RouteOut, status_code=201)
@@ -153,6 +156,8 @@ def create_route(body: RouteIn, ctx: Ctx = Depends(require("lube.manage")), db: 
     d = db.get(Department, body.department_id)
     if d is None or d.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department not found")
+    if ctx.department_id and d.id != ctx.department_id:
+        raise HTTPException(403, "Your access is limited to your department")
     r = LubeRoute(plant_id=ctx.plant_id, **body.model_dump())
     db.add(r)
     try:
@@ -171,7 +176,7 @@ def generate(
     route_id: uuid.UUID, body: GenerateIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     r = db.get(LubeRoute, route_id)
-    if r is None or r.plant_id != ctx.plant_id:
+    if r is None or r.plant_id != ctx.plant_id or (ctx.department_id and r.department_id != ctx.department_id):
         raise HTTPException(404, "Route not found")
     wo = svc.generate_route(db, ctx.plant, r, body.as_of, ctx.user.id)
     return {
@@ -231,7 +236,7 @@ def list_points(
     asset_id: uuid.UUID | None = None,
     due_before: date | None = None,
 ) -> list[LubricationPoint]:
-    q = select(LubricationPoint).where(LubricationPoint.plant_id == ctx.plant_id)
+    q = select(LubricationPoint).where(LubricationPoint.plant_id == ctx.plant_id, ctx.in_department(LubricationPoint.asset_id))
     if route_id:
         q = q.where(LubricationPoint.route_id == route_id)
     if asset_id:
@@ -250,6 +255,7 @@ def create_point(
     a, lub = db.get(Asset, body.asset_id), db.get(Lubricant, body.lubricant_id)
     if a is None or a.plant_id != ctx.plant_id or lub is None or lub.plant_id != ctx.plant_id:
         raise HTTPException(422, "Asset or lubricant not found")
+    ctx.check_asset(db, a.id, code=403)
     if body.route_id:
         r = db.get(LubeRoute, body.route_id)
         if r is None or r.plant_id != ctx.plant_id:
@@ -277,7 +283,9 @@ def point_labels(
     stmt = (
         select(LubricationPoint, Lubricant)
         .join(Lubricant, Lubricant.id == LubricationPoint.lubricant_id)
-        .where(LubricationPoint.plant_id == ctx.plant_id, LubricationPoint.is_active.is_(True))
+        .where(
+            LubricationPoint.plant_id == ctx.plant_id, LubricationPoint.is_active.is_(True), ctx.in_department(LubricationPoint.asset_id)
+        )
     )
     if route_id:
         stmt = stmt.where(LubricationPoint.route_id == route_id)
@@ -315,6 +323,7 @@ def point_qr(point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.view")), db: 
     p = db.get(LubricationPoint, point_id)
     if p is None or p.plant_id != ctx.plant_id:
         raise HTTPException(404, "Point not found")
+    ctx.check_asset(db, p.asset_id, "Point not found")
     buf = io.BytesIO()
     qrcode.make(f"cmms:lube:{p.qr_token}").save(buf, "PNG")
     buf.seek(0)
@@ -328,6 +337,7 @@ def point_by_qr(token: str, ctx: Ctx = Depends(require("lube.view")), db: Sessio
     ).scalar_one_or_none()
     if p is None:
         raise HTTPException(404, "Point not found")
+    ctx.check_asset(db, p.asset_id, "Point not found")
     return p
 
 
@@ -349,7 +359,7 @@ def list_tasks(
     q = (
         select(LubeTask, LubricationPoint)
         .join(LubricationPoint, LubricationPoint.id == LubeTask.point_id)
-        .where(LubeTask.plant_id == ctx.plant_id)
+        .where(LubeTask.plant_id == ctx.plant_id, ctx.in_department(LubricationPoint.asset_id))
     )
     if status:
         q = q.where(LubeTask.status == status)

@@ -208,7 +208,7 @@ def failure_modes(
     root = db.get(Asset, under) if under else None
     if under and (root is None or root.plant_id != ctx.plant_id):
         raise HTTPException(422, "Asset not found")
-    return fm.pareto(db, ctx.plant, start, end, root, by)
+    return fm.pareto(db, ctx.plant, start, end, root, by, ctx.department_id)
 
 
 @router.get("/{code}")

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select, true
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -45,6 +45,24 @@ class Ctx:
     def department_id(self) -> uuid.UUID | None:
         """Department restriction from the membership (None = whole plant)."""
         return self.membership.department_id if self.membership else None
+
+    def in_department(self, asset_col: ColumnElement) -> ColumnElement[bool]:
+        """SQL condition: the row's asset is in the user's department (always true for whole-plant users)."""
+        if not self.department_id:
+            return true()
+        from app.models.assets import Asset
+
+        return asset_col.in_(select(Asset.id).where(Asset.department_id == self.department_id))
+
+    def check_asset(self, db: Session, asset_id: uuid.UUID, missing: str = "Not found", code: int = 404) -> None:
+        """Refuse a record whose asset is outside the user's department (404 hides it; 403 for a create)."""
+        if not self.department_id:
+            return
+        from app.models.assets import Asset
+
+        a = db.get(Asset, asset_id)
+        if a is None or a.department_id != self.department_id:
+            raise HTTPException(code, missing if code == 404 else "Your access is limited to your department")
 
     def has(self, perm: str) -> bool:
         return perm in self.permissions

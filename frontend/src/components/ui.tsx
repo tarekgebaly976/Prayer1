@@ -150,10 +150,12 @@ export function UserPicker({ value, onChange, label, roles, multiple }: { value:
   return <Select label={label} searchable clearable value={value} onChange={onChange} data={data} />;
 }
 
-export function DeptSelect({ value, onChange, label, clearable }: { value: string | null; onChange: (v: string | null) => void; label?: string; clearable?: boolean }) {
+export function DeptSelect({ value, onChange, label, clearable, placeholder }: {
+  value: string | null; onChange: (v: string | null) => void; label?: string; clearable?: boolean; placeholder?: string;
+}) {
   const { t, i18n } = useTranslation();
   const q = useQ<{ id: string; code: string; name: string; name_ar: string | null }[]>("/departments");
-  return <Select label={label ?? t("common.department")} clearable={clearable} value={value} onChange={onChange}
+  return <Select label={label ?? t("common.department")} clearable={clearable} value={value} onChange={onChange} placeholder={placeholder} size={label === "" ? "xs" : undefined}
     data={(q.data ?? []).map((d) => ({ value: d.id, label: `${d.code} — ${i18n.language === "ar" && d.name_ar ? d.name_ar : d.name}` }))} />;
 }
 

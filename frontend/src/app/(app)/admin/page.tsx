@@ -59,13 +59,16 @@ function Users() {
   const create = useMut(() => post("/users", { ...f, trade: f.trade || null, employee_no: f.employee_no || null, hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) }), { onDone: () => setOpen(false) });
   const toggle = useMut((m: Member) => patch(`/users/${m.user.id}`, { is_active: !m.is_active }));
   const setRole = useMut((a: { id: string; role: string }) => patch(`/users/${a.id}`, { role: a.role }));
+  const setDept = useMut((a: { id: string; dept: string | null }) => patch(`/users/${a.id}`, { department_id: a.dept }));
   const roleOpts = (roles.data ?? []).map((r) => ({ value: r.code, label: r.name }));
   return (
     <>
-      <Group mb="sm"><Button onClick={() => setOpen(true)}>{t("admin.newUser")}</Button></Group>
+      <Group mb="sm" align="start" wrap="nowrap"><Button onClick={() => setOpen(true)}>{t("admin.newUser")}</Button><Text size="xs" c="dimmed" maw={760}>{t("admin.deptHint")}</Text></Group>
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
         { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
         { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
+        { key: "d", label: t("common.department"), render: (m) => <div style={{ width: 170 }}><DeptSelect label="" clearable value={m.department_id}
+          onChange={(v) => setDept.mutate({ id: m.user.id, dept: v })} placeholder={t("admin.allDepts")} /></div> },
         { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
         { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
       {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}

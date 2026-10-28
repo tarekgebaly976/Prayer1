@@ -54,9 +54,10 @@ def export_xlsx(db: Session, plant: Plant, points: list[MeasurementPoint]) -> by
     return buf.getvalue()
 
 
-def check(db: Session, plant: Plant, filename: str, content: bytes) -> dict[str, Any]:
+def check(db: Session, plant: Plant, filename: str, content: bytes, scope: Any = True) -> dict[str, Any]:
+    """`scope`: SQL condition limiting which points may be changed (the user's department)."""
     rows = read_rows(filename, content)
-    points = {p.code.upper(): p for p in db.execute(select(MeasurementPoint).where(MeasurementPoint.plant_id == plant.id)).scalars()}
+    points = {p.code.upper(): p for p in db.execute(select(MeasurementPoint).where(MeasurementPoint.plant_id == plant.id, scope)).scalars()}
     changes: dict[uuid.UUID, int] = {}
     errors: list[dict[str, Any]] = []
     unchanged = 0
