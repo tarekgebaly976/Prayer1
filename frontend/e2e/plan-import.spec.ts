@@ -18,5 +18,6 @@ test("planner imports a PM plan from a file and the tasks become one plan", asyn
   await expect(dialog.getByText(/2 · 2 valid · 0 with errors · 1 plans/)).toBeVisible();
   await dialog.getByRole("button", { name: "Import", exact: true }).click();
   await expect(dialog).toBeHidden();
+  await page.getByPlaceholder("Search").fill(`D${days}-MECH`); // the plans list is paged; find the new plan by code
   await expect(page.getByText(`PM1-WIRE-UTW-DR1-D${days}-MECH`).first()).toBeVisible();
 });

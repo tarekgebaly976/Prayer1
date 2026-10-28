@@ -1,16 +1,16 @@
 "use client";
 
-import { Badge, Button, Checkbox, Group, Modal, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, FileInput, Group, Modal, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea } from "@mantine/core";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { DataTable, DeptSelect, PageHeader, StatusBadge, UserPicker } from "@/components/ui";
-import { post, put } from "@/lib/api";
+import { api, download, patch, post, put } from "@/lib/api";
 import { useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 
-interface ShiftDef { id: string; code: string; name: string; kind: string; start_time: string; end_time: string }
+interface ShiftDef { id: string; code: string; name: string; kind: string; start_time: string; end_time: string; paid_hours: number }
 interface Entry { id: string; user_id: string; name: string; trade: string | null; work_date: string; shift: string | null; kind: string; hours: number; overtime_hours: number; callout_hours: number }
 interface Team { id: string; code: string; name: string; pattern_id: string | null; members: { id: string; name: string }[] }
 interface Handover { id: string; department_id: string; shift_date: string; shift_id: string; status: string; summary: string; outgoing_user_id: string }
@@ -18,6 +18,80 @@ interface Manpower { date: string; people: number; total_supply: number; total_d
 
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T00:00:00`); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
 const KIND_COLOR: Record<string, string> = { work: "blue", overtime: "orange", callout: "red", leave: "gray", absence: "dark" };
+
+type ShiftForm = { id?: string; code: string; name: string; kind: string; start_time: string; end_time: string; paid_hours: number | string };
+
+/** Shift types (e.g. D 12 h day, N 12 h night, G 10 h general): the codes used in the roster. */
+function ShiftTypes({ shifts }: { shifts: ShiftDef[] }) {
+  const { t } = useTranslation();
+  const { can } = useSession();
+  const [f, setF] = useState<ShiftForm | null>(null);
+  const save = useMut(() => {
+    const body = { name: f?.name, kind: f?.kind, start_time: f?.start_time, end_time: f?.end_time, paid_hours: Number(f?.paid_hours) };
+    return f?.id ? patch(`/shifts/definitions/${f.id}`, body) : post("/shifts/definitions", { ...body, code: f?.code.trim().toUpperCase() });
+  }, { onDone: () => setF(null) });
+  return (
+    <Stack>
+      <Text size="sm" c="dimmed">{t("shift.typesHint")}</Text>
+      {can("shift.manage") && <Group><Button onClick={() => setF({ code: "", name: "", kind: "day", start_time: "06:00", end_time: "18:00", paid_hours: 12 })}>{t("shift.newType")}</Button></Group>}
+      <DataTable rows={shifts} columns={[
+        { key: "c", label: t("common.code"), render: (x) => <b>{x.code}</b> }, { key: "n", label: t("common.name"), render: (x) => x.name },
+        { key: "t", label: t("shift.time"), render: (x) => `${x.start_time.slice(0, 5)} – ${x.end_time.slice(0, 5)}` },
+        { key: "h", label: t("common.hours"), render: (x) => x.paid_hours },
+        { key: "e", label: "", render: (x) => can("shift.manage") && <Button size="compact-xs" variant="subtle" onClick={() => setF({ ...x, start_time: x.start_time.slice(0, 5), end_time: x.end_time.slice(0, 5) })}>{t("common.edit")}</Button> }]} />
+      <Modal opened={!!f} onClose={() => setF(null)} title={f?.id ? `${t("common.edit")} ${f.code}` : t("shift.newType")}>
+        {f && <Stack>
+          <SimpleGrid cols={2}>
+            <TextInput label={t("common.code")} description="D, N, G…" value={f.code} disabled={!!f.id} maxLength={8} onChange={(e) => setF({ ...f, code: e.currentTarget.value })} />
+            <TextInput label={t("common.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
+            <TextInput type="time" label={t("shift.from")} value={f.start_time} onChange={(e) => setF({ ...f, start_time: e.currentTarget.value })} />
+            <TextInput type="time" label={t("shift.to")} value={f.end_time} onChange={(e) => setF({ ...f, end_time: e.currentTarget.value })} />
+            <NumberInput label={t("common.hours")} min={1} max={16} value={f.paid_hours} onChange={(v) => setF({ ...f, paid_hours: v })} />
+            <Select label={t("shift.kind")} value={f.kind} onChange={(v) => setF({ ...f, kind: v ?? "day" })}
+              data={[{ value: "day", label: t("shift.kinds.day") }, { value: "night", label: t("shift.kinds.night") }, { value: "general", label: t("shift.kinds.general") }, { value: "evening", label: t("shift.kinds.evening") }]} />
+          </SimpleGrid>
+          <Button disabled={!f.code.trim() || !f.name.trim()} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button>
+        </Stack>}
+      </Modal>
+    </Stack>
+  );
+}
+
+type RosterPreview = { people: number; matched: number; missing: string[]; entries: number; from: string | null; to: string | null; invalid: number; errors: { row: number; code: string | null; errors: string[] }[] };
+
+/** Upload the plant's roster grid (names × days, shift codes in the cells). */
+function RosterImport({ opened, onClose, start, end }: { opened: boolean; onClose: () => void; start: string; end: string }) {
+  const { t } = useTranslation();
+  const { can } = useSession();
+  const [month, setMonth] = useState(start);
+  const [file, setFile] = useState<File | null>(null);
+  const [res, setRes] = useState<RosterPreview | null>(null);
+  const [create, setCreate] = useState(false);
+  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
+  const close = () => { setFile(null); setRes(null); setCreate(false); onClose(); };
+  const preview = useMut(() => api<RosterPreview>("POST", `/shifts/roster/import/preview?start=${month}`, fd()), { success: false, onDone: setRes });
+  const commit = useMut(() => api("POST", `/shifts/roster/import/commit?start=${month}&create_missing=${create}`, fd()), { onDone: close });
+  const blocked = !res || res.invalid > 0 || (res.missing.length > 0 && !create);
+  return (
+    <Modal opened={opened} onClose={close} title={t("shift.importRoster")} size="lg">
+      <Stack>
+        <Text size="sm" c="dimmed">{t("shift.importHint")}</Text>
+        <Button variant="subtle" onClick={() => void download("/shifts/roster/template.xlsx", { start, end })}>{t("shift.rosterTemplate")}</Button>
+        <TextInput type="date" label={t("shift.firstDay")} description={t("shift.firstDayHint")} value={month} onChange={(e) => { setMonth(e.currentTarget.value); setRes(null); }} />
+        <FileInput label={t("common.file")} accept=".xlsx" clearable value={file} onChange={(v) => { setFile(v); setRes(null); }} />
+        <Group><Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
+          <Button color="teal" disabled={blocked} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button></Group>
+        {res && <Alert color={res.invalid || (res.missing.length && !create) ? "orange" : "teal"}>
+          {res.people} {t("shift.people")} · {res.entries} {t("shift.entries")} · {res.from} → {res.to} · {res.invalid} {t("asset.invalid")}
+          {res.errors.slice(0, 30).map((e, i) => <div key={i}>Row {e.row} {e.code ?? ""}: {e.errors.join("; ")}</div>)}
+          {res.missing.length > 0 && <><Text size="sm" mt="xs" fw={600}>{t("shift.missing", { n: res.missing.length })}</Text><Text size="sm">{res.missing.join(", ")}</Text>
+            {can("user.manage") ? <Checkbox mt="xs" label={t("shift.createMissing")} checked={create} onChange={(e) => setCreate(e.currentTarget.checked)} />
+              : <Text size="sm" mt="xs">{t("shift.askAdmin")}</Text>}</>}
+        </Alert>}
+      </Stack>
+    </Modal>
+  );
+}
 
 function Shifts() {
   const { t } = useTranslation();
@@ -41,6 +115,7 @@ function Shifts() {
   }, [roster.data]);
   const [entry, setEntry] = useState<{ user_id: string | null; work_date: string; shift_id: string | null; kind: string; hours: number | string; overtime_hours: number | string; callout_hours: number | string; replace: boolean } | null>(null);
   const [gen, setGen] = useState<string | null>(null);
+  const [imp, setImp] = useState(false);
   const [ho, setHo] = useState<Record<string, string | null> | null>(null);
   const saveEntry = useMut(() => put("/shifts/roster", { ...entry, hours: Number(entry?.hours), overtime_hours: Number(entry?.overtime_hours), callout_hours: Number(entry?.callout_hours),
     shift_id: entry?.kind === "leave" || entry?.kind === "absence" ? null : entry?.shift_id }), { onDone: () => setEntry(null) });
@@ -51,13 +126,15 @@ function Shifts() {
       <PageHeader title={t("nav.shifts")} actions={<>
         {can("handover.create") && <Button onClick={() => setHo({ department_id: null, shift_date: new Date().toISOString().slice(0, 10), shift_id: null, summary: "", incoming_user_id: null,
           outstanding_breakdowns: "", pending_work: "", safety_concerns: "", equipment_abnormalities: "", pending_permits: "", critical_risks: "" })}>{t("shift.newHandover")}</Button>}
+        {can("shift.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("shift.importRoster")}</Button>}
         {can("shift.manage") && <Button variant="light" onClick={() => setEntry({ user_id: null, work_date: start, shift_id: null, kind: "work", hours: 8, overtime_hours: 0, callout_hours: 0, replace: false })}>{t("shift.setEntry")}</Button>}
       </>}>
         <Group><TextInput type="date" value={start} onChange={(e) => setStart(e.currentTarget.value)} aria-label={t("common.start")} /><Text size="sm" c="dimmed">→ {end}</Text></Group>
       </PageHeader>
       <Tabs defaultValue="roster">
         <Tabs.List><Tabs.Tab value="roster">{t("shift.roster")}</Tabs.Tab><Tabs.Tab value="manpower">{t("shift.manpower")}</Tabs.Tab>
-          <Tabs.Tab value="handovers">{t("shift.handovers")}</Tabs.Tab><Tabs.Tab value="teams">{t("shift.teams")}</Tabs.Tab></Tabs.List>
+          <Tabs.Tab value="handovers">{t("shift.handovers")}</Tabs.Tab><Tabs.Tab value="teams">{t("shift.teams")}</Tabs.Tab>
+          <Tabs.Tab value="types">{t("shift.types")}</Tabs.Tab></Tabs.List>
         <Tabs.Panel value="roster" pt="md">
           <ScrollArea type="auto">
             <Table withTableBorder withColumnBorders miw={900} fz="xs">
@@ -76,7 +153,7 @@ function Shifts() {
         </Tabs.Panel>
         <Tabs.Panel value="manpower" pt="md">
           <DataTable rows={mp.data} rowKey={(r) => r.date} columns={[
-            { key: "d", label: t("common.date"), render: (r) => r.date }, { key: "p", label: t("common.user"), render: (r) => r.people },
+            { key: "d", label: t("common.date"), render: (r) => r.date }, { key: "p", label: t("shift.people"), render: (r) => r.people },
             { key: "s", label: t("shift.supply"), render: (r) => r.total_supply }, { key: "dm", label: t("shift.demand"), render: (r) => r.total_demand },
             { key: "f", label: t("shift.flags"), render: (r) => r.flags.map((f) => <Text key={f} size="xs" c="red">⚠ {f}</Text>) }]} />
         </Tabs.Panel>
@@ -86,6 +163,7 @@ function Shifts() {
             { key: "s", label: t("common.status"), render: (h) => <StatusBadge value={h.status} /> }, { key: "m", label: t("shift.summary"), render: (h) => h.summary.slice(0, 80) },
             { key: "o", label: t("shift.outgoing"), render: (h) => (h.outgoing_user_id === me?.id ? "✓ me" : "") }]} />
         </Tabs.Panel>
+        <Tabs.Panel value="types" pt="md"><ShiftTypes shifts={shifts.data ?? []} /></Tabs.Panel>
         <Tabs.Panel value="teams" pt="md">
           <DataTable rows={teams.data} columns={[
             { key: "c", label: t("common.code"), render: (x) => x.code }, { key: "n", label: t("common.name"), render: (x) => x.name },
@@ -108,6 +186,7 @@ function Shifts() {
           <Button disabled={!entry.user_id} onClick={() => saveEntry.mutate(undefined)}>{t("common.save")}</Button>
         </Stack>}
       </Modal>
+      <RosterImport opened={imp} onClose={() => setImp(false)} start={start} end={end} />
       <Modal opened={!!gen} onClose={() => setGen(null)} title={t("shift.generateRoster")}>
         <Text size="sm">{start} → {end}</Text>
         <Button mt="md" onClick={() => genRoster.mutate(undefined)}>{t("common.generate")}</Button>

@@ -114,3 +114,71 @@ def test_supervisor_cannot_confirm_own_handover(world):
                                              "shift_id": str(world.shifts["N"].id), "summary": "quiet night"}, status=201)
     sup.ok("post", f"/shifts/handovers/{h['id']}/submit")
     assert sup.post(f"/shifts/handovers/{h['id']}/confirm", {}).status_code == 403
+
+
+def _roster_xlsx(rows):
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    for r in rows:
+        ws.append(r)
+    b = io.BytesIO()
+    wb.save(b)
+    return {"file": ("roster.xlsx", b.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+
+
+def test_roster_import_from_plant_grid_with_shift_codes(world):
+    import io
+
+    from openpyxl import load_workbook
+
+    admin, manager = world.api("admin"), world.api("manager")
+    d = next(s for s in admin.ok("get", "/shifts/definitions") if s["code"] == "D")
+    assert manager.ok("patch", f"/shifts/definitions/{d['id']}", {"name": "Day 12h", "start_time": "06:00", "end_time": "18:00", "paid_hours": 12})["paid_hours"] == 12
+    manager.ok("post", "/shifts/definitions", {"code": "G", "name": "General", "kind": "general", "start_time": "07:00", "end_time": "17:00", "paid_hours": 10}, status=201)
+    grid = [
+        ["", "FRI", "SAT", "SUN", "MON"],
+        ["Name", 30, 31, 1, 2],  # day numbers roll over into November
+        ["Tech", "D", "g", "N", "L"],
+        ["Planner", "G", "G", "OFF", None],
+        ["Name", 30, 31, 1, 2],
+        ["Fawaz  Hazazi", "N", "N", "D", "A"],
+    ]
+    q = {"start": "2026-10-26"}
+    p = manager.ok("post", "/shifts/roster/import/preview", params=q, files=_roster_xlsx(grid))
+    assert (p["people"], p["matched"], p["missing"], p["entries"], p["invalid"]) == (3, 2, ["Fawaz  Hazazi"], 11, 0)
+    assert (p["from"], p["to"]) == ("2026-10-30", "2026-11-02")
+    bad = manager.ok("post", "/shifts/roster/import/preview", params=q, files=_roster_xlsx(grid[:3] + [["Planner", "Z", "", "", ""]]))
+    assert bad["invalid"] == 1 and "unknown code 'Z'" in bad["errors"][0]["errors"][0]
+
+    assert manager.post("/shifts/roster/import/commit", params=q, files=_roster_xlsx(grid)).status_code == 422  # missing person
+    assert manager.post("/shifts/roster/import/commit", params={**q, "create_missing": True}, files=_roster_xlsx(grid)).status_code == 403
+    r = admin.ok("post", "/shifts/roster/import/commit", params={**q, "create_missing": True}, files=_roster_xlsx(grid))
+    assert r == {"saved": 10, "removed": 0, "people_created": 1}
+
+    roster = admin.ok("get", "/shifts/roster", params={"start": "2026-10-30", "end": "2026-11-02"})
+    tech = {e["work_date"]: e for e in roster if e["user_id"] == str(world.users["tech"].id)}
+    assert (tech["2026-10-30"]["shift"], float(tech["2026-10-30"]["hours"])) == ("D", 12.0)
+    assert tech["2026-10-31"]["shift"] == "G" and tech["2026-11-02"]["kind"] == "leave"
+    mp = {m["date"]: m for m in admin.ok("get", "/shifts/manpower", params={"start": "2026-10-30", "end": "2026-10-30"})}
+    assert mp["2026-10-30"]["people"] == 3 and mp["2026-10-30"]["total_supply"] == 30  # D 12 + G 10 + N 8
+
+    tpl = load_workbook(io.BytesIO(admin.get("/shifts/roster/template.xlsx", params={"start": "2026-10-30", "end": "2026-11-02"}).content)).active
+    rows = {r[0]: r[1:] for r in tpl.iter_rows(min_row=3, values_only=True)}
+    assert rows["Tech"] == ("D", "G", "N", "L") and rows["Fawaz  Hazazi"][3] == "A"  # template comes back pre-filled
+
+    off = [["Name", 30], ["Tech", "OFF"]]
+    assert admin.ok("post", "/shifts/roster/import/commit", params=q, files=_roster_xlsx(off)) == {"saved": 0, "removed": 1, "people_created": 0}
+
+
+def test_manpower_counts_unscheduled_work_on_its_due_date(world):
+    planner = world.api("planner")
+    line = mk_asset(planner, world, "MP-LINE")
+    day = plant_today(world.plant) + timedelta(days=3)
+    planner.ok("post", "/work-orders", {"asset_id": line["id"], "title": "Gearbox inspection", "type": "corrective",
+                                        "due_date": day.isoformat(), "estimated_hours": 6}, status=201)
+    mp = planner.ok("get", "/shifts/manpower", params={"start": day.isoformat(), "end": day.isoformat()})[0]
+    assert mp["total_demand"] == 6 and mp["total_supply"] == 0 and mp["flags"]  # no one rostered for 6 h of work

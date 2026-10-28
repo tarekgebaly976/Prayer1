@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +17,7 @@ from app.models.shifts import RosterEntry, ShiftDefinition, ShiftHandover, Shift
 from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
 from app.schemas.common import ORM, In
+from app.services import roster_import
 from app.services import shifts as svc
 from app.services.common import audit
 
@@ -59,6 +61,89 @@ def create_shift(
     except IntegrityError as e:
         raise HTTPException(409, "Shift code exists") from e
     return s
+
+
+class ShiftUpdate(In):
+    name: str | None = Field(None, min_length=1, max_length=60)
+    kind: ShiftKind | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    paid_hours: float | None = Field(None, gt=0, le=16)
+
+
+@router.patch("/definitions/{shift_id}", response_model=ShiftOut)
+def update_shift(
+    shift_id: uuid.UUID, body: ShiftUpdate, ctx: Ctx = Depends(require("shift.manage")), db: Session = Depends(get_db, scope="function")
+) -> ShiftDefinition:
+    s = db.get(ShiftDefinition, shift_id)
+    if s is None or s.plant_id != ctx.plant_id:
+        raise HTTPException(404, "Shift not found")
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(s, k, v)
+    audit(
+        db,
+        "shift.update",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="shift",
+        entity_id=s.id,
+        data=body.model_dump(exclude_unset=True, mode="json"),
+    )
+    return s
+
+
+# ---------------- roster import (the plant's Excel grid) ----------------
+@router.get("/roster/template.xlsx")
+def roster_template(
+    start: date, end: date, ctx: Ctx = Depends(require("shift.view")), db: Session = Depends(get_db, scope="function")
+) -> Response:
+    if end < start or (end - start).days >= roster_import.MAX_DAYS:
+        raise HTTPException(422, f"Choose up to {roster_import.MAX_DAYS} days")
+    return Response(
+        roster_import.template_xlsx(db, ctx.plant, start, end),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="roster_{start}_{end}.xlsx"'},
+    )
+
+
+def _roster_file(file: UploadFile, ctx: Ctx, db: Session, start: date) -> dict:
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 5 MB)")
+    try:
+        return roster_import.parse(db, ctx.plant, content, start)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@router.post("/roster/import/preview")
+def roster_import_preview(
+    start: date,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("shift.manage")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """`start` gives the month of bare day numbers in the header (e.g. 26, 27 … 1, 2)."""
+    return roster_import.preview(_roster_file(file, ctx, db, start))
+
+
+@router.post("/roster/import/commit")
+def roster_import_commit(
+    start: date,
+    create_missing: bool = False,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("shift.manage")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    p = _roster_file(file, ctx, db, start)
+    if p["errors"]:
+        raise HTTPException(422, {"message": "The file has errors; nothing was saved", **roster_import.preview(p)})
+    if p["missing"] and create_missing:
+        ctx.require("user.manage")
+    try:
+        return roster_import.commit(db, ctx.plant, p, create_missing, ctx.user.id)
+    except ValueError as e:
+        raise HTTPException(422, {"message": str(e), **roster_import.preview(p)}) from e
 
 
 class PatternIn(In):

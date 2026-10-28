@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -86,14 +86,16 @@ def manpower(db: Session, plant: Plant, start: date, end: date, department_id: u
     q = select(WorkOrder).where(
         WorkOrder.plant_id == plant.id,
         WorkOrder.status.in_(OPEN_WO_STATUSES),
-        WorkOrder.planned_start >= s_utc,
-        WorkOrder.planned_start < e_utc,
+        or_(  # planned start when scheduled; otherwise the due date (e.g. PM work orders the scheduler created)
+            and_(WorkOrder.planned_start >= s_utc, WorkOrder.planned_start < e_utc),
+            and_(WorkOrder.planned_start.is_(None), WorkOrder.due_date >= start, WorkOrder.due_date <= end),
+        ),
     )
     if department_id:
         q = q.where(WorkOrder.department_id == department_id)
     for wo in db.execute(q).scalars():
-        assert wo.planned_start is not None
-        day = wo.planned_start.astimezone(tz).date()
+        day = wo.planned_start.astimezone(tz).date() if wo.planned_start else wo.due_date
+        assert day is not None
         trade = "general"
         if wo.pm_occurrence_id:
             jp = db.execute(
