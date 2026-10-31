@@ -3,7 +3,7 @@ import type { Dict } from "./en";
 // Bengali (বাংলা). Typed against the English dictionary: the build fails if any key is missing.
 // Shop-floor terms that people use in English (WO, PM, LOTO, KPI, QR, OEM, BOM, roster codes D/N/G/OFF) stay in English.
 export const bn: Dict = {
-  app: { name: "পেপার মিল CMMS", tagline: "কাগজ উৎপাদনের রক্ষণাবেক্ষণ ব্যবস্থাপনা", online: "অনলাইন", offline: "অফলাইন — পরিবর্তন সেভ করা যাবে না",
+  app: { name: "PlantPulse", tagline: "শিল্প কারখানার রক্ষণাবেক্ষণ ব্যবস্থাপনা", online: "অনলাইন", offline: "অফলাইন — পরিবর্তন সেভ করা যাবে না",
     plant: "প্ল্যান্ট", language: "ভাষা", logout: "সাইন আউট", loading: "লোড হচ্ছে…", noAccess: "এই পেজে আপনার অ্যাক্সেস নেই।",
     noPlants: "আপনার অ্যাকাউন্টে কোনো সক্রিয় প্ল্যান্ট নেই। অ্যাডমিনিস্ট্রেটরের সাথে যোগাযোগ করুন।" },
   nav: { dashboard: "ড্যাশবোর্ড", myWork: "আমার কাজ", scan: "QR স্ক্যান", requests: "কাজের অনুরোধ", workOrders: "ওয়ার্ক অর্ডার", assets: "যন্ত্রপাতি",

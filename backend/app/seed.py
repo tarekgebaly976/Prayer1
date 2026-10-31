@@ -6,7 +6,7 @@ from datetime import date, time, timedelta
 
 from sqlalchemy import select
 
-from app.cli import DEFAULT_DEPTS
+from app.cli import PAPER_DEPTS
 from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models.assets import Asset, AssetBOM, FailureCode, Meter
@@ -121,7 +121,7 @@ def seed_demo(password: str) -> None:
         db.flush()
         ensure_default_transitions(db, plant.id)
         depts = {}
-        for code, name, ar, t in DEFAULT_DEPTS:
+        for code, name, ar, t in PAPER_DEPTS:
             d = Department(plant_id=plant.id, code=code, name=name, name_ar=ar, type=t)
             db.add(d)
             depts[code] = d

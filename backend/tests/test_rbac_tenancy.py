@@ -143,3 +143,10 @@ def test_department_user_sees_only_own_department_in_pm_lube_pdm_requests(world)
     assert all(reqs["PM"]["id"] not in n for n in notes) and len(notes) == 2  # nothing about PM equipment
     # whole-plant users (no department) still see both
     assert len(rel.ok("get", "/pdm/points")) == 2 and len(planner.ok("get", "/pm/plans")["items"]) == 2
+
+
+def test_general_department_types_for_any_industry(world):
+    admin = world.api("admin")
+    d = admin.ok("post", "/departments", {"code": "PACK", "name": "Packaging line", "type": "PRODUCTION"}, status=201)
+    assert d["type"] == "PRODUCTION"
+    assert admin.post("/departments", {"code": "X1", "name": "Bad", "type": "NOPE"}).status_code == 422

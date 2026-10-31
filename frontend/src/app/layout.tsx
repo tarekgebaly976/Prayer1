@@ -7,14 +7,14 @@ import type { ReactNode } from "react";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Paper Mill CMMS",
-  description: "Computerized maintenance management for paper manufacturing plants",
+  title: "PlantPulse",
+  description: "PlantPulse: computerized maintenance management for industrial plants",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon.svg", apple: "/icons/icon-192.png" },
-  appleWebApp: { capable: true, title: "Mill CMMS", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "PlantPulse", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#1f3b57" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#17324D" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

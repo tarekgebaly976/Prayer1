@@ -82,7 +82,7 @@ def notify(
                         EmailOutbox(
                             notification_id=nid,
                             to_address=user.email,
-                            subject=f"[CMMS] {title}",
+                            subject=f"[PlantPulse] {title}",
                             body=(body or "") + (f"\n\n{link}" if link else ""),
                             status=DeliveryStatus.PENDING if settings.email_enabled else DeliveryStatus.DISABLED,
                             next_attempt_at=utcnow(),

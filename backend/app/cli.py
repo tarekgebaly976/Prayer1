@@ -25,7 +25,14 @@ from app.models.tenancy import Department, Organization, Plant
 from app.services.common import sync_rbac, utcnow
 from app.services.workflow import ensure_default_transitions
 
-DEFAULT_DEPTS = [
+# Departments a new plant starts with: general by default, or a paper mill's areas with --departments paper.
+GENERAL_DEPTS = [
+    ("PROD", "Production", "الإنتاج", DepartmentType.PRODUCTION),
+    ("MAINT", "Maintenance", "الصيانة", DepartmentType.MAINTENANCE),
+    ("UTIL", "Utilities", "المرافق", DepartmentType.UTILITIES),
+    ("FAC", "Buildings & Facilities", "المباني والمرافق العامة", DepartmentType.FACILITIES),
+]
+PAPER_DEPTS = [
     ("PM", "Paper Machine", "آلة الورق", DepartmentType.PM),
     ("SP", "Stock Preparation", "تحضير العجينة", DepartmentType.SP),
     ("FH", "Finishing House", "قسم التشطيب", DepartmentType.FH),
@@ -82,7 +89,7 @@ def bootstrap(a: argparse.Namespace) -> None:
             )
             db.add(plant)
             db.flush()
-            for code, name, ar, t in DEFAULT_DEPTS:
+            for code, name, ar, t in PAPER_DEPTS if a.departments == "paper" else GENERAL_DEPTS:
                 db.add(Department(plant_id=plant.id, code=code, name=name, name_ar=ar, type=t))
             ensure_default_transitions(db, plant.id)
         user = db.execute(select(User).where(User.email == a.admin_email.lower())).scalar_one_or_none()
@@ -154,6 +161,7 @@ def main() -> None:
     b.add_argument("--admin-email", required=True)
     b.add_argument("--timezone", default="Asia/Riyadh")
     b.add_argument("--currency", default="SAR")
+    b.add_argument("--departments", choices=["general", "paper"], default="general", help="starting departments")
     rp = sub.add_parser("reset-password")
     rp.add_argument("--email", required=True)
     sub.add_parser("seed-demo")

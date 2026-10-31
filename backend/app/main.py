@@ -64,7 +64,7 @@ def create_app() -> FastAPI:
     s = get_settings()
     docs = s.environment != "production"
     app = FastAPI(
-        title="Paper Mill CMMS Cloud API",
+        title="PlantPulse API",
         version="0.1.0",
         docs_url=f"{API}/docs" if docs else None,
         redoc_url=None,

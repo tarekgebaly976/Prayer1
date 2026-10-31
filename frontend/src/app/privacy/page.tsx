@@ -7,9 +7,9 @@ export default function PrivacyPage() {
   return (
     <Container size="sm" py="xl">
       <Stack gap="sm">
-        <Title order={2}>Privacy policy – Paper Mill CMMS</Title>
+        <Title order={2}>Privacy policy – PlantPulse</Title>
         <Text size="sm" c="dimmed">Last updated: 31 October 2026</Text>
-        <Text>Paper Mill CMMS is a maintenance management system used by the maintenance teams of a paper mill. It is for the plant’s own staff: accounts are created by the plant’s administrator; there is no public sign-up.</Text>
+        <Text>PlantPulse is a maintenance management system used by the maintenance teams of an industrial plant. It is for the plant’s own staff: accounts are created by the plant’s administrator; there is no public sign-up.</Text>
         <Title order={4}>What the app stores</Title>
         <List spacing={4}>
           <List.Item>Your account: name, work e-mail, role, department, trade, and optionally employee number and hourly rate (for labour cost).</List.Item>
@@ -28,8 +28,8 @@ export default function PrivacyPage() {
         <Divider my="md" />
         <div dir="rtl" lang="ar">
           <Stack gap="sm">
-            <Title order={3}>سياسة الخصوصية – نظام صيانة مصنع الورق</Title>
-            <Text>هذا النظام لإدارة الصيانة يستخدمه موظفو المصنع فقط، والحسابات ينشئها مسؤول النظام؛ لا يوجد تسجيل عام.</Text>
+            <Title order={3}>سياسة الخصوصية – PlantPulse</Title>
+            <Text>PlantPulse نظام لإدارة الصيانة يستخدمه موظفو المصنع فقط، والحسابات ينشئها مسؤول النظام؛ لا يوجد تسجيل عام.</Text>
             <Text><b>ما يُحفظ:</b> بيانات الحساب (الاسم، البريد الوظيفي، الدور، القسم، التخصص)، والأعمال المسجلة (أوامر العمل، الطلبات، القراءات، الساعات، قطع الغيار، الورديات)، والصور والملفات التي ترفقها، وسجلات الأمان (أوقات الدخول وعنوان IP وسجل التعديلات).</Text>
             <Text><b>الكاميرا:</b> تُستخدم فقط عند مسح رمز QR أو إضافة صورة داخل التطبيق. لا يقرأ التطبيق جهات الاتصال أو الرسائل أو الموقع، ولا يعرض إعلانات.</Text>
             <Text><b>الاطلاع والتخزين:</b> البيانات متاحة فقط لموظفي المصنع المسجلين حسب الدور والقسم، ومحفوظة على خادم المصنع ونسخه الاحتياطية، وتُنقل عبر اتصال مشفر. لا تُباع ولا تُشارك مع أي طرف ثالث.</Text>

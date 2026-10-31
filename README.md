@@ -1,4 +1,4 @@
-# Paper Mill CMMS Cloud
+# PlantPulse – maintenance management (CMMS) for industrial plants
 
 A database-driven Computerized Maintenance Management System for paper manufacturing plants: asset hierarchy,
 preventive / predictive / corrective maintenance, lubrication, shifts and handover, spare parts, shutdowns, KPIs

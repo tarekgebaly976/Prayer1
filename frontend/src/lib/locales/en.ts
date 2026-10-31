@@ -1,5 +1,5 @@
 export const en = {
-  app: { name: "Paper Mill CMMS", tagline: "Maintenance management for paper manufacturing", online: "Online", offline: "Offline — changes cannot be saved",
+  app: { name: "PlantPulse", tagline: "Maintenance management for industrial plants", online: "Online", offline: "Offline — changes cannot be saved",
     plant: "Plant", language: "Language", logout: "Sign out", loading: "Loading…", noAccess: "You do not have access to this page.",
     noPlants: "Your account has no active plant membership. Contact your administrator." },
   nav: { dashboard: "Dashboard", myWork: "My work", scan: "Scan QR", requests: "Work requests", workOrders: "Work orders", assets: "Assets",

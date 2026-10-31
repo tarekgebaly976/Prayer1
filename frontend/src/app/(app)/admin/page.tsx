@@ -89,11 +89,17 @@ function Users() {
   );
 }
 
+// General types for any industry, then the paper-mill areas already in use.
+const DEPT_TYPES = [
+  { group: "General", items: ["PRODUCTION", "MAINTENANCE", "UTILITIES", "FACILITIES", "QUALITY", "WAREHOUSE", "OTHER"].map((v) => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() })) },
+  { group: "Paper mill", items: ["PM", "SP", "FH", "WWTP", "EAI", "UTIL"] },
+];
+
 function Basics() {
   const { t } = useTranslation();
   const depts = useQ<Department[]>("/departments");
   const codes = useQ<FailureCode[]>("/failure-codes");
-  const [d, setD] = useState({ code: "", name: "", name_ar: "", type: "UTIL" });
+  const [d, setD] = useState({ code: "", name: "", name_ar: "", type: "PRODUCTION" });
   const [c, setC] = useState({ kind: "problem", code: "", description: "" });
   const addD = useMut(() => post("/departments", { ...d, name_ar: d.name_ar || null }));
   const addC = useMut(() => post("/failure-codes", c), { onDone: () => setC({ ...c, code: "", description: "" }) });
@@ -106,7 +112,7 @@ function Basics() {
         <Text fw={600}>{t("admin.departments")}</Text>
         <Group align="end" wrap="wrap"><TextInput label={t("common.code")} w={90} value={d.code} onChange={(e) => setD({ ...d, code: e.currentTarget.value })} />
           <TextInput label={t("common.name")} value={d.name} onChange={(e) => setD({ ...d, name: e.currentTarget.value })} />
-          <Select label={t("common.type")} w={110} data={["PM", "SP", "FH", "WWTP", "EAI", "UTIL"]} value={d.type} onChange={(v) => setD({ ...d, type: v ?? "UTIL" })} />
+          <Select label={t("common.type")} w={170} data={DEPT_TYPES} value={d.type} onChange={(v) => setD({ ...d, type: v ?? "OTHER" })} />
           <Button disabled={!d.code || !d.name} onClick={() => addD.mutate(undefined)}>{t("common.add")}</Button></Group>
         <DataTable rows={depts.data} columns={[{ key: "c", label: t("common.code"), render: (x) => x.code }, { key: "n", label: t("common.name"), render: (x) => `${x.name}${x.name_ar ? ` / ${x.name_ar}` : ""}` }, { key: "t", label: t("common.type"), render: (x) => x.type }]} />
       </Stack>

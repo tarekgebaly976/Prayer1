@@ -2,7 +2,7 @@ import type { Dict } from "./en";
 
 // Typed against the English dictionary: the build fails if any key is missing.
 export const ar: Dict = {
-  app: { name: "نظام إدارة صيانة مصنع الورق", tagline: "إدارة الصيانة لصناعة الورق", online: "متصل", offline: "غير متصل — لا يمكن حفظ التغييرات",
+  app: { name: "PlantPulse", tagline: "إدارة الصيانة للمنشآت الصناعية", online: "متصل", offline: "غير متصل — لا يمكن حفظ التغييرات",
     plant: "المصنع", language: "اللغة", logout: "تسجيل الخروج", loading: "جارٍ التحميل…", noAccess: "ليس لديك صلاحية الوصول إلى هذه الصفحة.",
     noPlants: "لا توجد عضوية نشطة في أي مصنع لحسابك. تواصل مع مسؤول النظام." },
   nav: { dashboard: "لوحة المعلومات", myWork: "أعمالي", scan: "مسح رمز QR", requests: "طلبات العمل", workOrders: "أوامر العمل", assets: "الأصول",

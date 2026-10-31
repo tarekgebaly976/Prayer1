@@ -2,6 +2,15 @@ from enum import StrEnum
 
 
 class DepartmentType(StrEnum):
+    # General types, for any industry
+    PRODUCTION = "PRODUCTION"
+    MAINTENANCE = "MAINTENANCE"
+    UTILITIES = "UTILITIES"
+    FACILITIES = "FACILITIES"
+    QUALITY = "QUALITY"
+    WAREHOUSE = "WAREHOUSE"
+    OTHER = "OTHER"
+    # Paper-mill areas (kept for plants that already use them)
     PM = "PM"
     SP = "SP"
     FH = "FH"
