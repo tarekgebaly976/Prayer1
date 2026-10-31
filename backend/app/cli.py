@@ -114,7 +114,8 @@ def run_sched(a: argparse.Namespace) -> None:
     from app.services.pm import run_scheduler
 
     with SessionLocal() as db:
-        plants = db.execute(select(Plant).where(Plant.is_active.is_(True))).scalars().all()
+        with db.begin():  # reading the plants opens a transaction; close it before each plant's own
+            plants = db.execute(select(Plant).where(Plant.is_active.is_(True))).scalars().all()
         for p in plants:
             if a.plant_code and p.code != a.plant_code:
                 continue

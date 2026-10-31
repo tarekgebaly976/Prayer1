@@ -210,3 +210,12 @@ def test_lists_filter_by_status_and_show_plan_and_asset(world):
     assert planner.get("/pm/plans", params={"q": "nothing"}).json()["total"] == 0
     codes = planner.ok("post", "/assets/codes", {"ids": [line["id"], str(plan["id"])]})
     assert codes == {line["id"]: "PM1"}  # unknown ids are skipped
+
+
+def test_cli_run_scheduler_command(world, capsys):
+    import argparse
+
+    from app.cli import run_sched
+
+    run_sched(argparse.Namespace(plant_code=world.plant.code))
+    assert capsys.readouterr().out.startswith(world.plant.code)
