@@ -121,7 +121,7 @@ function Users() {
   return (
     <>
       <UserImport opened={imp} onClose={() => setImp(false)} />
-      <Group mb="sm" align="start" wrap="nowrap"><Button onClick={() => setOpen(true)}>{t("admin.newUser")}</Button>
+      <Group mb="sm" align="start"><Button onClick={() => setOpen(true)} style={{ flexShrink: 0 }}>{t("admin.newUser")}</Button>
         <Button variant="light" onClick={() => setImp(true)} style={{ flexShrink: 0 }}>{t("admin.importUsers")}</Button><Text size="xs" c="dimmed" maw={760}>{t("admin.deptHint")}</Text></Group>
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
         { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
