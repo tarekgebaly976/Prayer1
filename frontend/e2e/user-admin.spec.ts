@@ -36,3 +36,24 @@ test("administrator assigns and clears a user's department from the users list",
   await clear.click(); // back to the whole plant
   await expect(field).toHaveValue("");
 });
+
+test("administrator imports users from Excel and gets their temporary passwords once", async ({ page }) => {
+  await login(page, "admin");
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Import users (Excel)" }).click();
+  const dlg = page.getByRole("dialog");
+  const dl = page.waitForEvent("download");
+  await dlg.getByRole("button", { name: "Download current users" }).click();
+  expect((await dl).suggestedFilename()).toBe("users.xlsx");
+  const email = `e2e.import.${Date.now()}@example.com`;
+  const csv = `full_name,email,role,department_code,trade,employee_no,hourly_rate,reset_password,old_email\nImported Tech,${email},technician,PM,mechanical,,,,\n`;
+  await dlg.locator('input[type="file"]').setInputFiles({ name: "users.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await dlg.getByRole("button", { name: "Preview" }).click();
+  await expect(dlg.getByTestId("users-preview")).toContainText("1 new");
+  await dlg.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(dlg.getByText("1 added, 0 changed.")).toBeVisible();
+  await expect(dlg.getByRole("cell", { name: email })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await dlg.getByRole("button", { name: "Save passwords (CSV)" }).click();
+  expect((await download).suggestedFilename()).toBe("new_passwords.csv");
+});

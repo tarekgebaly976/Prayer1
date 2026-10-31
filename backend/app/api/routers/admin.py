@@ -19,6 +19,7 @@ from app.models.tenancy import Department, IntegrationToken, NumberSequence, Pla
 from app.models.workorders import WOStatusTransition
 from app.schemas.common import ORM, In
 from app.services import failure_modes as fm
+from app.services import user_import
 from app.services.common import audit, utcnow
 from app.services.workflow import ensure_default_transitions
 
@@ -214,6 +215,40 @@ def _check_dept(db: Session, ctx: Ctx, dept_id: uuid.UUID | None) -> None:
         d = db.get(Department, dept_id)
         if d is None or d.plant_id != ctx.plant_id:
             raise HTTPException(422, "Department not in this plant")
+
+
+@router.get("/users/import/template.xlsx")
+def users_template(ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> Response:
+    """The plant's current users in the import layout: change rows or add new ones, then upload."""
+    return Response(
+        user_import.template_xlsx(db, ctx.plant),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="users.xlsx"'},
+    )
+
+
+@router.post("/users/import")
+def users_import(
+    apply: bool = False,
+    file: UploadFile = File(...),
+    ctx: Ctx = Depends(require("user.manage")),
+    db: Session = Depends(get_db, scope="function"),
+) -> dict:
+    """apply=false: preview. apply=true: add and update everyone, or nothing if any row is wrong. Temporary passwords of
+    new people are in the answer, once."""
+    content = file.file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 5 MB)")
+    try:
+        checked = user_import.check(db, ctx.plant, file.filename or "", content, ctx.user.is_system_admin)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    if not apply:
+        return checked["preview"]
+    try:
+        return {**checked["preview"], **user_import.commit(db, ctx.plant, checked, ctx.user.id)}
+    except ValueError as e:
+        raise HTTPException(422, {"message": str(e), **checked["preview"]}) from e
 
 
 @router.patch("/users/{user_id}", response_model=MemberOut)

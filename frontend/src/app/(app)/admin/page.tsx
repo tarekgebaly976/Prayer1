@@ -49,10 +49,64 @@ function EditUser({ m, roleOpts, onClose }: { m: Member; roleOpts: { value: stri
   );
 }
 
+interface UserImportResult { new: number; updated: number; unchanged: number; passwords: number; invalid: number;
+  errors: { row: number; code: string | null; errors: string[] }[]; credentials?: { name: string; email: string; temporary_password: string }[] }
+
+/** Many users at once from Excel; temporary passwords of new people are shown once, to hand out. */
+function UserImport({ opened, onClose }: { opened: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [file, setFile] = useState<File | null>(null);
+  const [res, setRes] = useState<UserImportResult | null>(null);
+  const [done, setDone] = useState<UserImportResult | null>(null);
+  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
+  const close = () => { setFile(null); setRes(null); setDone(null); onClose(); };
+  const preview = useMut(() => api<UserImportResult>("POST", "/users/import?apply=false", fd()), { success: false, onDone: setRes });
+  const commit = useMut(() => api<UserImportResult>("POST", "/users/import?apply=true", fd()), { onDone: setDone });
+  const saveCsv = () => {
+    const lines = [["name", "email", "temporary_password"], ...(done?.credentials ?? []).map((c) => [c.name, c.email, c.temporary_password])];
+    const csv = "\ufeff" + lines.map((l) => l.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = "new_passwords.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  return (
+    <Modal opened={opened} onClose={close} title={t("admin.importUsers")} size="lg">
+      {done ? (
+        <Stack>
+          <Alert color="teal">{t("admin.importDone", { n: done.new, u: done.updated })}</Alert>
+          {(done.credentials ?? []).length > 0 && <>
+            <Alert color="orange">{t("admin.passwordsOnce")}</Alert>
+            <DataTable rows={done.credentials} rowKey={(c) => c.email} columns={[
+              { key: "n", label: t("common.name"), render: (c) => c.name }, { key: "e", label: t("common.email"), render: (c) => c.email },
+              { key: "p", label: t("common.password"), render: (c) => <Code>{c.temporary_password}</Code> }]} />
+            <Button variant="light" w="fit-content" onClick={saveCsv}>{t("admin.savePasswords")}</Button>
+          </>}
+          <Button onClick={close}>{t("common.close")}</Button>
+        </Stack>
+      ) : (
+        <Stack>
+          <Text size="sm" c="dimmed">{t("admin.importUsersHint")}</Text>
+          <Button variant="light" w="fit-content" onClick={() => void download("/users/import/template.xlsx")}>{t("admin.usersTemplate")}</Button>
+          <FileInput label={t("common.file")} accept=".xlsx,.csv" clearable value={file} onChange={(v) => { setFile(v); setRes(null); }} />
+          <Group><Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
+            <Button color="teal" disabled={!res || res.invalid > 0 || res.new + res.updated === 0} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button></Group>
+          {res && <Alert color={res.invalid ? "orange" : "teal"} data-testid="users-preview">
+            {t("admin.importPreview", { n: res.new, u: res.updated, s: res.unchanged, p: res.passwords })} · {res.invalid} {t("asset.invalid")}
+            {res.errors.slice(0, 30).map((e, i) => <div key={i}>Row {e.row} {e.code ?? ""}: {e.errors.join("; ")}</div>)}
+          </Alert>}
+        </Stack>
+      )}
+    </Modal>
+  );
+}
+
 function Users() {
   const { t } = useTranslation();
   const users = useQ<Member[]>("/users");
   const roles = useQ<{ code: string; name: string }[]>("/roles");
+  const [imp, setImp] = useState(false);
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<Member | null>(null);
   const [f, setF] = useState({ email: "", full_name: "", password: "", role: "technician", department_id: null as string | null, trade: "", employee_no: "", hourly_rate: "" as number | string });
@@ -63,7 +117,9 @@ function Users() {
   const roleOpts = (roles.data ?? []).map((r) => ({ value: r.code, label: r.name }));
   return (
     <>
-      <Group mb="sm" align="start" wrap="nowrap"><Button onClick={() => setOpen(true)}>{t("admin.newUser")}</Button><Text size="xs" c="dimmed" maw={760}>{t("admin.deptHint")}</Text></Group>
+      <UserImport opened={imp} onClose={() => setImp(false)} />
+      <Group mb="sm" align="start" wrap="nowrap"><Button onClick={() => setOpen(true)}>{t("admin.newUser")}</Button>
+        <Button variant="light" onClick={() => setImp(true)} style={{ flexShrink: 0 }}>{t("admin.importUsers")}</Button><Text size="xs" c="dimmed" maw={760}>{t("admin.deptHint")}</Text></Group>
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
         { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
         { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
