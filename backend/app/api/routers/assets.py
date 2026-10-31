@@ -110,7 +110,7 @@ def _get(db: Session, ctx: Ctx, asset_id: uuid.UUID) -> Asset:
 
 
 def _dept_filter(ctx: Ctx, q):
-    return q.where(Asset.department_id == ctx.department_id) if ctx.department_id else q
+    return q.where(ctx.dept_where(Asset.department_id))
 
 
 @router.get("", response_model=dict)
@@ -266,7 +266,7 @@ def asset_codes(body: CodesIn, ctx: Ctx = Depends(require("asset.view")), db: Se
 
 @router.post("", response_model=AssetOut, status_code=201)
 def create_asset(body: AssetIn, ctx: Ctx = Depends(require("asset.edit")), db: Session = Depends(get_db, scope="function")) -> Asset:
-    if ctx.department_id and body.department_id != ctx.department_id:
+    if not ctx.dept_ok(body.department_id):
         raise HTTPException(403, "Your access is limited to your department")
     parent = svc.validate_parent(db, ctx.plant_id, body.level, body.parent_id, body.department_id)
     a = Asset(id=uuid.uuid4(), plant_id=ctx.plant_id, qr_token=svc.new_qr_token(), created_by_id=ctx.user.id, **body.model_dump())

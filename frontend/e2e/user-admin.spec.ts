@@ -21,20 +21,29 @@ test("administrator edits a user from the Users list", async ({ page }) => {
   await expect(page.getByRole("cell", { name: original, exact: true })).toBeVisible();
 });
 
-test("administrator assigns and clears a user's department from the users list", async ({ page }) => {
+test("administrator gives a user several departments and clears them from the users list", async ({ page }) => {
   await login(page, "admin");
   await page.goto("/admin");
   const row = page.getByRole("row", { name: /store@demo\.example\.com/ });
-  const field = row.getByPlaceholder("All departments");
-  const clear = row.locator(".mantine-InputClearButton-root, .mantine-CloseButton-root").first();
-  if (await clear.isVisible()) { await field.hover(); await clear.click(); } // left over from an interrupted run
-  await expect(field).toHaveValue("");
+  const field = row.getByLabel("Departments");
+  const pills = row.locator(".mantine-Pill-label");
+  const clear = row.locator(".mantine-InputClearButton-root, .mantine-CloseButton-root").last(); // "clear all", after the pills' own ✕
+  await expect(field).toBeVisible(); // users loaded before looking for a left-over
+  if (await pills.count()) { await field.hover(); await clear.click(); } // left over from an interrupted run
+  await expect(pills).toHaveCount(0);
   await field.click();
-  await page.getByRole("option", { name: /^SP — / }).click();
-  await expect(field).toHaveValue(/^SP — /);
+  await page.getByRole("option", { name: "SP", exact: true }).click();
+  await expect(pills).toHaveText(["SP"]);
+  await page.getByRole("option", { name: "PM", exact: true }).click();
+  await expect(pills).toHaveText(["SP", "PM"]);
+  await page.keyboard.press("Escape");
+  await page.reload(); // saved: the main department first
+  await expect(pills).toHaveText(["SP", "PM"]);
   await field.hover();
   await clear.click(); // back to the whole plant
-  await expect(field).toHaveValue("");
+  await expect(pills).toHaveCount(0);
+  await page.reload();
+  await expect(pills).toHaveCount(0);
 });
 
 test("administrator imports users from Excel and gets their temporary passwords once", async ({ page }) => {

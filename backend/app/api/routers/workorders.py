@@ -326,7 +326,7 @@ def get_wo(db: Session, ctx: Ctx, wo_id: uuid.UUID, lock: bool = False) -> WorkO
     if lock:
         q = q.with_for_update(key_share=True)
     wo = db.execute(q).scalar_one_or_none()
-    if wo is None or (ctx.department_id and wo.department_id != ctx.department_id):
+    if wo is None or not ctx.dept_ok(wo.department_id):
         raise HTTPException(404, "Work order not found")
     return wo
 
@@ -357,8 +357,7 @@ def list_work_orders(
     from fastapi import Query  # noqa: F401
 
     stmt = select(WorkOrder).where(WorkOrder.plant_id == ctx.plant_id)
-    if ctx.department_id:
-        stmt = stmt.where(WorkOrder.department_id == ctx.department_id)
+    stmt = stmt.where(ctx.dept_where(WorkOrder.department_id))
     if q:
         like = f"%{q}%"
         stmt = stmt.where(or_(WorkOrder.number.ilike(like), WorkOrder.title.ilike(like)))
@@ -404,7 +403,7 @@ def list_work_orders(
 @router.post("/work-orders", response_model=WOOut, status_code=201)
 def create_wo(body: WOCreate, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db, scope="function")) -> WorkOrder:
     a = _asset(db, ctx, body.asset_id)
-    if ctx.department_id and a.department_id != ctx.department_id:
+    if not ctx.dept_ok(a.department_id):
         raise HTTPException(403, "Your access is limited to your department")
     data = body.model_dump()
     for k in ("asset_id", "type", "title", "priority", "description", "symptoms", "due_date"):

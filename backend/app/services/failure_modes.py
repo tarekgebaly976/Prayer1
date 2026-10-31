@@ -9,6 +9,7 @@
 import io
 import re
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -227,7 +228,7 @@ def commit(db: Session, plant: Plant, checked: dict[str, Any], user_id: uuid.UUI
 
 
 def pareto(
-    db: Session, plant: Plant, start: date, end: date, under: Asset | None, by: str, department_id: uuid.UUID | None = None
+    db: Session, plant: Plant, start: date, end: date, under: Asset | None, by: str, department_ids: Sequence[uuid.UUID] = ()
 ) -> dict[str, Any]:
     """Work orders per failure mode (problem code) in the period, most frequent first. by='mode' adds up the same
     failure mode across equipment types (e.g. all bearing failures); by='code' keeps them apart; by='symptom'
@@ -250,8 +251,8 @@ def pareto(
         .where(WorkOrder.plant_id == plant.id, WorkOrder.status != WOStatus.CANCELLED, when >= t0, when < t1)
         .group_by(FailureCode.code, FailureCode.description, FailureCode.equipment_type)
     )
-    if department_id:
-        q = q.where(WorkOrder.department_id == department_id)
+    if department_ids:
+        q = q.where(WorkOrder.department_id.in_(department_ids))
     if under is not None:
         q = q.join(Asset, Asset.id == WorkOrder.asset_id).where(Asset.path.startswith(under.path))
     rows: dict[str, dict[str, Any]] = {}
@@ -287,7 +288,7 @@ def pareto(
             WorkOrder.plant_id == plant.id,
             WorkOrder.problem_code_id.is_(None),
             WorkOrder.status == WOStatus.CLOSED,
-            WorkOrder.department_id == department_id if department_id else true(),
+            WorkOrder.department_id.in_(department_ids) if department_ids else true(),
             when >= t0,
             when < t1,
             WorkOrder.type.in_((WOType.CORRECTIVE, WOType.EMERGENCY)),

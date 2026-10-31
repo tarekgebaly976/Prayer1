@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { FailureCodeImport } from "@/components/FailureModes";
 import { PlanImport } from "@/components/PlanImport";
-import { DataTable, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
+import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { api, del, download, patch, post } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
 import type { Department, FailureCode, Member, Page } from "@/lib/types";
@@ -16,11 +16,13 @@ interface PlantCfg { id: string; code: string; name: string; timezone: string; c
 interface Audit { id: number; at: string; user_id: string | null; action: string; entity_type: string | null; entity_id: string | null; data: Record<string, unknown>; ip: string | null }
 interface Job { id: string; job: string; status: string; started_at: string; finished_at: string | null; error: string | null; details: Record<string, unknown> }
 
+const deptIds = (m: Member) => m.department_ids ?? (m.department_id ? [m.department_id] : []);
+
 function EditUser({ m, roleOpts, onClose }: { m: Member; roleOpts: { value: string; label: string }[]; onClose: () => void }) {
   const { t } = useTranslation();
   const u = m.user;
   const [f, setF] = useState({ email: u.email, full_name: u.full_name, employee_no: u.employee_no ?? "", trade: u.trade ?? "",
-    hourly_rate: (u.hourly_rate ?? "") as number | string, role: m.role_code, department_id: m.department_id });
+    hourly_rate: (u.hourly_rate ?? "") as number | string, role: m.role_code, department_ids: deptIds(m) });
   const [pw, setPw] = useState("");
   const save = useMut(() => patch(`/users/${u.id}`, { ...f, employee_no: f.employee_no || null, trade: f.trade || null,
     hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) }), { onDone: onClose });
@@ -32,7 +34,7 @@ function EditUser({ m, roleOpts, onClose }: { m: Member; roleOpts: { value: stri
         <TextInput label={t("common.email")} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.currentTarget.value })} />
         <TextInput label={t("common.name")} value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.currentTarget.value })} />
         <Select label={t("common.role")} data={roleOpts} value={f.role} onChange={(v) => setF({ ...f, role: v ?? f.role })} allowDeselect={false} />
-        <DeptSelect clearable value={f.department_id} onChange={(v) => setF({ ...f, department_id: v })} label={`${t("common.department")} (${t("common.optional")})`} />
+        <DeptMultiSelect value={f.department_ids} onChange={(v) => setF({ ...f, department_ids: v })} label={t("admin.departments")} placeholder={t("admin.allDepts")} />
         <SimpleGrid cols={3}><TextInput label="Trade" value={f.trade} onChange={(e) => setF({ ...f, trade: e.currentTarget.value })} />
           <TextInput label="Employee #" value={f.employee_no} onChange={(e) => setF({ ...f, employee_no: e.currentTarget.value })} />
           <NumberInput label="Rate/h" min={0} value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} /></SimpleGrid>
@@ -109,11 +111,11 @@ function Users() {
   const [imp, setImp] = useState(false);
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<Member | null>(null);
-  const [f, setF] = useState({ email: "", full_name: "", password: "", role: "technician", department_id: null as string | null, trade: "", employee_no: "", hourly_rate: "" as number | string });
+  const [f, setF] = useState({ email: "", full_name: "", password: "", role: "technician", department_ids: [] as string[], trade: "", employee_no: "", hourly_rate: "" as number | string });
   const create = useMut(() => post("/users", { ...f, trade: f.trade || null, employee_no: f.employee_no || null, hourly_rate: f.hourly_rate === "" ? null : Number(f.hourly_rate) }), { onDone: () => setOpen(false) });
   const toggle = useMut((m: Member) => patch(`/users/${m.user.id}`, { is_active: !m.is_active }));
   const setRole = useMut((a: { id: string; role: string }) => patch(`/users/${a.id}`, { role: a.role }));
-  const setDept = useMut((a: { id: string; dept: string | null }) => patch(`/users/${a.id}`, { department_id: a.dept }));
+  const setDept = useMut((a: { id: string; depts: string[] }) => patch(`/users/${a.id}`, { department_ids: a.depts }));
   const roleOpts = (roles.data ?? []).map((r) => ({ value: r.code, label: r.name }));
   return (
     <>
@@ -123,8 +125,8 @@ function Users() {
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
         { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
         { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
-        { key: "d", label: t("common.department"), render: (m) => <div style={{ width: 170 }}><DeptSelect label="" clearable value={m.department_id}
-          onChange={(v) => setDept.mutate({ id: m.user.id, dept: v })} placeholder={t("admin.allDepts")} /></div> },
+        { key: "d", label: t("admin.departments"), render: (m) => <div style={{ width: 210 }}><DeptMultiSelect label="" compact value={deptIds(m)}
+          onChange={(v) => setDept.mutate({ id: m.user.id, depts: v })} placeholder={t("admin.allDepts")} /></div> },
         { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
         { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
       {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}
@@ -134,7 +136,7 @@ function Users() {
           <TextInput label={t("common.name")} value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.currentTarget.value })} />
           <TextInput label={t("common.password")} type="password" description="≥ 12 characters, 3 of: lower, upper, digit, symbol" value={f.password} onChange={(e) => setF({ ...f, password: e.currentTarget.value })} />
           <Select label={t("common.role")} data={roleOpts} value={f.role} onChange={(v) => setF({ ...f, role: v ?? "technician" })} />
-          <DeptSelect clearable value={f.department_id} onChange={(v) => setF({ ...f, department_id: v })} label={`${t("common.department")} (${t("common.optional")})`} />
+          <DeptMultiSelect value={f.department_ids} onChange={(v) => setF({ ...f, department_ids: v })} label={t("admin.departments")} placeholder={t("admin.allDepts")} />
           <SimpleGrid cols={3}><TextInput label="Trade" value={f.trade} onChange={(e) => setF({ ...f, trade: e.currentTarget.value })} />
             <TextInput label="Employee #" value={f.employee_no} onChange={(e) => setF({ ...f, employee_no: e.currentTarget.value })} />
             <NumberInput label="Rate/h" min={0} value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} /></SimpleGrid>

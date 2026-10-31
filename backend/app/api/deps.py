@@ -3,6 +3,7 @@
 import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import ColumnElement, select, true
@@ -42,26 +43,42 @@ class Ctx:
         return self.plant.id
 
     @property
+    def department_ids(self) -> list[uuid.UUID]:
+        """Departments the user is limited to ([] = whole plant)."""
+        return self.membership.department_ids if self.membership else []
+
+    @property
     def department_id(self) -> uuid.UUID | None:
-        """Department restriction from the membership (None = whole plant)."""
+        """The user's main department (None = whole plant). For access checks use dept_ok / dept_where."""
         return self.membership.department_id if self.membership else None
 
-    def in_department(self, asset_col: ColumnElement) -> ColumnElement[bool]:
-        """SQL condition: the row's asset is in the user's department (always true for whole-plant users)."""
-        if not self.department_id:
+    def dept_ok(self, department_id: uuid.UUID | None) -> bool:
+        """May the user see a record of this department?"""
+        ids = self.department_ids
+        return not ids or department_id in ids
+
+    def dept_where(self, dept_col: Any) -> ColumnElement[bool]:
+        """SQL condition on a department column: one of the user's departments (always true for whole-plant users)."""
+        ids = self.department_ids
+        return dept_col.in_(ids) if ids else true()
+
+    def in_department(self, asset_col: Any) -> ColumnElement[bool]:
+        """SQL condition: the row's asset is in one of the user's departments (always true for whole-plant users)."""
+        ids = self.department_ids
+        if not ids:
             return true()
         from app.models.assets import Asset
 
-        return asset_col.in_(select(Asset.id).where(Asset.department_id == self.department_id))
+        return asset_col.in_(select(Asset.id).where(Asset.department_id.in_(ids)))
 
     def check_asset(self, db: Session, asset_id: uuid.UUID, missing: str = "Not found", code: int = 404) -> None:
-        """Refuse a record whose asset is outside the user's department (404 hides it; 403 for a create)."""
-        if not self.department_id:
+        """Refuse a record whose asset is outside the user's departments (404 hides it; 403 for a create)."""
+        if not self.department_ids:
             return
         from app.models.assets import Asset
 
         a = db.get(Asset, asset_id)
-        if a is None or a.department_id != self.department_id:
+        if a is None or not self.dept_ok(a.department_id):
             raise HTTPException(code, missing if code == 404 else "Your access is limited to your department")
 
     def has(self, perm: str) -> bool:

@@ -285,7 +285,7 @@ def list_occurrences(
     due_to: date | None = None,
 ) -> dict:
     q = select(PMOccurrence).where(PMOccurrence.plant_id == ctx.plant_id)
-    if ctx.department_id:
+    if ctx.department_ids:
         q = q.where(PMOccurrence.pm_plan_id.in_(select(PMPlan.id).where(ctx.in_department(PMPlan.asset_id))))
     if plan_id:
         q = q.where(PMOccurrence.pm_plan_id == plan_id)

@@ -188,8 +188,7 @@ def _wo_rows(db: Session, ctx: Ctx, start: date | None, end: date | None) -> lis
     assets = {a.id: a.code for a in db.execute(select(Asset).where(Asset.plant_id == ctx.plant_id)).scalars()}
     depts = {d.id: d.code for d in db.execute(select(Department).where(Department.plant_id == ctx.plant_id)).scalars()}
     q = select(WorkOrder).where(WorkOrder.plant_id == ctx.plant_id)
-    if ctx.department_id:
-        q = q.where(WorkOrder.department_id == ctx.department_id)
+    q = q.where(ctx.dept_where(WorkOrder.department_id))
     s = kpisvc.Scope(plant=ctx.plant, start=start or date(2000, 1, 1), end=end or plant_today(ctx.plant))
     q = q.where(WorkOrder.created_at >= s.t0, WorkOrder.created_at < s.t1)
     out = []
@@ -321,7 +320,7 @@ def parts_used_report(
     offset: int = 0,
 ) -> dict:
     """Spare parts used per work order and machine (asset filter includes everything below it)."""
-    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_id)
+    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_ids)
     rows = [part_usage.row(*r) for r in db.execute(q).all()]
     by_part: dict[str, dict] = {}
     for r in rows:
@@ -348,7 +347,7 @@ def parts_used_xlsx(
     asset_id: uuid.UUID | None = None,
     part_id: uuid.UUID | None = None,
 ) -> Response:
-    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_id)
+    q = part_usage.report_query(ctx.plant_id, start, end, _usage_filters(db, ctx, asset_id), part_id, ctx.department_ids)
     wb = Workbook()
     ws = wb.active
     assert ws is not None
@@ -407,8 +406,16 @@ def export_kpis(
     department_id: uuid.UUID | None = None,
 ) -> Response:
     today = plant_today(ctx.plant)
+    if department_id and not ctx.dept_ok(department_id):
+        raise HTTPException(403, "Your access is limited to your department")
+    mine = ctx.department_ids
+    department_id = department_id or (mine[0] if len(mine) == 1 else None)
     s = kpisvc.Scope(
-        plant=ctx.plant, start=start or today.replace(day=1), end=end or today, department_id=ctx.department_id or department_id
+        plant=ctx.plant,
+        start=start or today.replace(day=1),
+        end=end or today,
+        department_id=department_id,
+        department_ids=() if department_id else tuple(mine),
     )
     data = reports.kpi_xlsx(db, s)
     return Response(
@@ -439,7 +446,14 @@ def kpi_pdf(
     end: date | None = None,
 ) -> StreamingResponse:
     today = plant_today(ctx.plant)
-    s = kpisvc.Scope(plant=ctx.plant, start=start or today.replace(day=1), end=end or today, department_id=ctx.department_id)
+    mine = ctx.department_ids
+    s = kpisvc.Scope(
+        plant=ctx.plant,
+        start=start or today.replace(day=1),
+        end=end or today,
+        department_id=mine[0] if len(mine) == 1 else None,
+        department_ids=tuple(mine) if len(mine) > 1 else (),
+    )
     return StreamingResponse(
         io.BytesIO(reports.kpi_pdf(db, s)),
         media_type="application/pdf",

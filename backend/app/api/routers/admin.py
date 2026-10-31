@@ -122,6 +122,7 @@ class MemberOut(ORM):
     user: UserOut
     role_code: str
     department_id: uuid.UUID | None
+    department_ids: list[uuid.UUID] = []
     is_active: bool
 
 
@@ -131,6 +132,7 @@ class UserCreate(In):
     password: str
     role: str
     department_id: uuid.UUID | None = None
+    department_ids: list[uuid.UUID] | None = None  # several areas; the first is the main one (overrides department_id)
     employee_no: str | None = None
     trade: str | None = None
     hourly_rate: float | None = Field(None, ge=0)
@@ -143,6 +145,7 @@ class MembershipUpdate(In):
     employee_no: str | None = None
     role: str | None = None
     department_id: uuid.UUID | None = None
+    department_ids: list[uuid.UUID] | None = None
     is_active: bool | None = None
     trade: str | None = None
     hourly_rate: float | None = Field(None, ge=0)
@@ -163,9 +166,23 @@ def list_users(ctx: Ctx = Depends(require("wo.view")), db: Session = Depends(get
         .where(Membership.plant_id == ctx.plant_id)
         .order_by(User.full_name)
     ).all()
-    return [
-        {"user": u, "role_code": m.role.code, "department_id": m.department_id, "is_active": m.is_active and u.is_active} for m, u in rows
-    ]
+    return [_member_out(m, u) for m, u in rows]
+
+
+def _member_out(m: Membership, u: User) -> dict:
+    return {
+        "user": u,
+        "role_code": m.role.code,
+        "department_id": m.department_id,
+        "department_ids": m.department_ids,
+        "is_active": m.is_active and u.is_active,
+    }
+
+
+def _dept_list(db: Session, ctx: Ctx, ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    for d in ids:
+        _check_dept(db, ctx, d)
+    return list(dict.fromkeys(ids))
 
 
 @router.post("/users", response_model=MemberOut, status_code=201)
@@ -177,7 +194,7 @@ def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db
     role = _role(db, body.role)
     if role.code == "system_admin" and not ctx.user.is_system_admin:
         raise HTTPException(403, "Only system administrators can grant the system administrator role")
-    _check_dept(db, ctx, body.department_id)
+    depts = _dept_list(db, ctx, body.department_ids if body.department_ids is not None else [d for d in [body.department_id] if d])
     email = body.email.lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
@@ -200,14 +217,15 @@ def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db
         # Re-adding someone removed earlier: the form's details and password replace the old ones (history is kept).
         user.full_name, user.password_hash, user.password_changed_at = body.full_name, hash_password(body.password), utcnow()
         user.employee_no, user.trade, user.hourly_rate, user.is_active = body.employee_no, body.trade, body.hourly_rate, True
-    m = Membership(user_id=user.id, plant_id=ctx.plant_id, role_id=role.id, department_id=body.department_id)
+    m = Membership(user_id=user.id, plant_id=ctx.plant_id, role_id=role.id)
+    m.set_departments(depts)
     db.add(m)
     try:
         db.flush()
     except IntegrityError as e:
         raise HTTPException(409, "User is already a member of this plant") from e
     audit(db, "user.create", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user.id, data={"role": role.code})
-    return {"user": user, "role_code": role.code, "department_id": m.department_id, "is_active": True}
+    return _member_out(m, user)
 
 
 def _check_dept(db: Session, ctx: Ctx, dept_id: uuid.UUID | None) -> None:
@@ -264,9 +282,10 @@ def update_membership(
         if role.code == "system_admin" and not ctx.user.is_system_admin:
             raise HTTPException(403, "Only system administrators can grant the system administrator role")
         m.role_id = role.id
-    if "department_id" in data:
-        _check_dept(db, ctx, data["department_id"])
-        m.department_id = data["department_id"]
+    if data.get("department_ids") is not None:
+        m.set_departments(_dept_list(db, ctx, data["department_ids"]))
+    elif "department_id" in data:
+        m.set_departments(_dept_list(db, ctx, [d for d in [data["department_id"]] if d]))
     user = db.get(User, user_id)
     assert user is not None
     if data.get("email") and data["email"].lower() != user.email:
@@ -291,7 +310,7 @@ def update_membership(
     db.flush()
     db.refresh(m)
     audit(db, "user.update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user_id, data=data)
-    return {"user": user, "role_code": m.role.code, "department_id": m.department_id, "is_active": m.is_active and user.is_active}
+    return _member_out(m, user)
 
 
 class PasswordResetIn(In):

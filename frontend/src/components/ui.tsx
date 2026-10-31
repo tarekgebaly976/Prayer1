@@ -1,6 +1,6 @@
 "use client";
 
-import { ActionIcon, Badge, Button, Center, CloseButton, Group, Loader, Modal, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
+import { ActionIcon, Badge, Button, Center, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
 import Link from "next/link";
@@ -157,6 +157,17 @@ export function DeptSelect({ value, onChange, label, clearable, placeholder }: {
   const q = useQ<{ id: string; code: string; name: string; name_ar: string | null }[]>("/departments");
   return <Select label={label ?? t("common.department")} clearable={clearable} value={value} onChange={onChange} placeholder={placeholder} size={label === "" ? "xs" : undefined}
     data={(q.data ?? []).map((d) => ({ value: d.id, label: `${d.code} — ${i18n.language === "ar" && d.name_ar ? d.name_ar : d.name}` }))} />;
+}
+
+/** Several departments (a user who covers more than one area); the first chosen is the main one. Empty = all. */
+export function DeptMultiSelect({ value, onChange, label, placeholder, compact }: {
+  value: string[]; onChange: (v: string[]) => void; label?: string; placeholder?: string; compact?: boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const q = useQ<{ id: string; code: string; name: string; name_ar: string | null }[]>("/departments");
+  return <MultiSelect label={label ?? t("common.department")} aria-label={label === "" ? t("admin.departments") : undefined} value={value} onChange={onChange} clearable searchable
+    placeholder={value.length ? undefined : placeholder} size={compact ? "xs" : undefined}
+    data={(q.data ?? []).map((d) => ({ value: d.id, label: compact ? d.code : `${d.code} — ${i18n.language === "ar" && d.name_ar ? d.name_ar : d.name}` }))} />;
 }
 
 export function KV({ label, children }: { label: string; children: ReactNode }) {

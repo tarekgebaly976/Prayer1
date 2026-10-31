@@ -40,6 +40,7 @@ class PlantAccess(BaseModel):
     currency: str
     role: str
     department_id: uuid.UUID | None
+    department_ids: list[uuid.UUID] = []
     permissions: list[str]
 
 
@@ -101,6 +102,7 @@ def build_me(db: Session, user: User, csrf: str) -> MeOut:
                     currency=p.currency,
                     role=m.role.code,
                     department_id=m.department_id,
+                    department_ids=m.department_ids,
                     permissions=sorted(role_permissions(db, m.role_id)),
                 )
             )

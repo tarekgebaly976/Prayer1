@@ -146,8 +146,7 @@ class RouteOut(ORM):
 @router.get("/routes", response_model=list[RouteOut])
 def list_routes(ctx: Ctx = Depends(require("lube.view")), db: Session = Depends(get_db, scope="function")) -> list[LubeRoute]:
     q = select(LubeRoute).where(LubeRoute.plant_id == ctx.plant_id)
-    if ctx.department_id:
-        q = q.where(LubeRoute.department_id == ctx.department_id)
+    q = q.where(ctx.dept_where(LubeRoute.department_id))
     return list(db.execute(q.order_by(LubeRoute.code)).scalars())
 
 
@@ -156,7 +155,7 @@ def create_route(body: RouteIn, ctx: Ctx = Depends(require("lube.manage")), db: 
     d = db.get(Department, body.department_id)
     if d is None or d.plant_id != ctx.plant_id:
         raise HTTPException(422, "Department not found")
-    if ctx.department_id and d.id != ctx.department_id:
+    if not ctx.dept_ok(d.id):
         raise HTTPException(403, "Your access is limited to your department")
     r = LubeRoute(plant_id=ctx.plant_id, **body.model_dump())
     db.add(r)
@@ -176,7 +175,7 @@ def generate(
     route_id: uuid.UUID, body: GenerateIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")
 ) -> dict:
     r = db.get(LubeRoute, route_id)
-    if r is None or r.plant_id != ctx.plant_id or (ctx.department_id and r.department_id != ctx.department_id):
+    if r is None or r.plant_id != ctx.plant_id or not ctx.dept_ok(r.department_id):
         raise HTTPException(404, "Route not found")
     wo = svc.generate_route(db, ctx.plant, r, body.as_of, ctx.user.id)
     return {

@@ -67,7 +67,7 @@ def template_xlsx(db: Session, plant: Plant) -> bytes:
                 u.full_name,
                 u.email,
                 m.role.code,
-                depts.get(m.department_id, ""),
+                ",".join(depts[d] for d in m.department_ids if d in depts),
                 u.trade,
                 u.employee_no,
                 float(u.hourly_rate) if u.hourly_rate is not None else None,
@@ -84,7 +84,7 @@ def template_xlsx(db: Session, plant: Plant) -> bytes:
     ws.freeze_panes = "A2"
     last = max(ws.max_row + 300, 400)
     dv_role = DataValidation(type="list", formula1=f'"{",".join(c for c, _ in roles)}"', allow_blank=False)
-    dv_dept = DataValidation(type="list", formula1=f'"{",".join(sorted(depts.values()))}"', allow_blank=True)
+    dv_dept = DataValidation(type="list", formula1=f'"{",".join(sorted(depts.values()))}"', allow_blank=True, showErrorMessage=False)
     dv_yes = DataValidation(type="list", formula1='"yes"', allow_blank=True)
     for dv, col in ((dv_role, "C"), (dv_dept, "D"), (dv_yes, "H")):
         ws.add_data_validation(dv)
@@ -94,7 +94,11 @@ def template_xlsx(db: Session, plant: Plant) -> bytes:
         ["full_name", "Name as it should appear in the system"],
         ["email", "Login e-mail (unique). To change someone's e-mail, type the new one here and keep the old one in old_email"],
         ["role", "One of: " + ", ".join(f"{c} ({n})" for c, n in roles)],
-        ["department_code", "Limits the person to that area (" + ", ".join(sorted(depts.values())) + "); blank = whole plant"],
+        [
+            "department_code",
+            "Limits the person to that area (" + ", ".join(sorted(depts.values())) + "); several areas: PM,SP (the first is the main one); "
+            "blank = whole plant",
+        ],
         ["trade", "e.g. mechanical, electrical, instrument (optional)"],
         ["employee_no / hourly_rate", "Optional; hourly rate is used for labour cost"],
         ["reset_password", "yes = give an existing user a new temporary password"],
@@ -135,10 +139,11 @@ def check(db: Session, plant: Plant, filename: str, content: bytes, may_grant_ad
             errs.append("unknown role")
         elif role.code == "system_admin" and not may_grant_admin:
             errs.append("only a system administrator can give the system administrator role")
-        dcode = (_s(r.get("department_code")) or "").upper()
-        dept = depts.get(dcode) if dcode else None
-        if dcode and dept is None:
-            errs.append(f"department {dcode} not found")
+        dcodes = [c.strip() for c in re.split(r"[,;/+ ]+", (_s(r.get("department_code")) or "").upper()) if c.strip()]
+        dlist = [depts[c] for c in dict.fromkeys(dcodes) if c in depts]
+        for c in dcodes:
+            if c not in depts:
+                errs.append(f"department {c} not found")
         rate = None
         if _s(r.get("hourly_rate")) is not None:
             try:
@@ -165,7 +170,7 @@ def check(db: Session, plant: Plant, filename: str, content: bytes, may_grant_ad
             "full_name": name,
             "email": email,
             "role": role,
-            "dept": dept,
+            "depts": dlist,
             "trade": _s(r.get("trade")),
             "employee_no": _s(r.get("employee_no")),
             "hourly_rate": rate,
@@ -179,7 +184,7 @@ def check(db: Session, plant: Plant, filename: str, content: bytes, may_grant_ad
             u.full_name == name
             and u.email.lower() == email
             and m.role_id == role.id
-            and m.department_id == (dept.id if dept else None)
+            and m.department_ids == [d.id for d in dlist]
             and (u.trade or None) == vals["trade"]
             and (u.employee_no or None) == vals["employee_no"]
             and (float(u.hourly_rate) if u.hourly_rate is not None else None) == rate
@@ -211,7 +216,7 @@ def commit(db: Session, plant: Plant, checked: dict[str, Any], admin_id: uuid.UU
     now = utcnow()
     credentials: list[dict[str, str]] = []
     for p in checked["plan"]:
-        dept_id = p["dept"].id if p["dept"] else None
+        dept_ids = [d.id for d in p["depts"]]
         if p["action"] == "add":
             pw = temp_password()
             u = p["existing_user"]
@@ -231,16 +236,18 @@ def commit(db: Session, plant: Plant, checked: dict[str, Any], admin_id: uuid.UU
             db.flush()
             m = db.execute(select(Membership).where(Membership.user_id == u.id, Membership.plant_id == plant.id)).scalar_one_or_none()
             if m is None:
-                db.add(Membership(user_id=u.id, plant_id=plant.id, role_id=p["role"].id, department_id=dept_id))
-            else:
-                m.role_id, m.department_id, m.is_active = p["role"].id, dept_id, True
+                m = Membership(user_id=u.id, plant_id=plant.id, role_id=p["role"].id)
+                db.add(m)
+            m.role_id, m.is_active = p["role"].id, True
+            m.set_departments(dept_ids)
             credentials.append({"name": p["full_name"], "email": p["email"], "temporary_password": pw})
             continue
         u, m = p["user"], p["membership"]
         u.full_name, u.email = p["full_name"], p["email"]
         u.trade, u.employee_no, u.hourly_rate = p["trade"], p["employee_no"], p["hourly_rate"]
         u.is_active, m.is_active = True, True
-        m.role_id, m.department_id = p["role"].id, dept_id
+        m.role_id = p["role"].id
+        m.set_departments(dept_ids)
         if p["reset"]:
             pw = temp_password()
             u.password_hash, u.password_changed_at = hash_password(pw), now

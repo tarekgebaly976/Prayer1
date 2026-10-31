@@ -1,6 +1,7 @@
 """Spare parts used on work orders without moving stock (see PartUsage)."""
 
 import uuid
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 
@@ -79,7 +80,7 @@ def report_query(
     end: date | None = None,
     asset: Asset | None = None,
     part_id: uuid.UUID | None = None,
-    department_id: uuid.UUID | None = None,
+    department_ids: Sequence[uuid.UUID] = (),
 ) -> Select:
     """Usage rows with work order, machine and part; `asset` includes everything below it in the hierarchy."""
     q = (
@@ -97,8 +98,8 @@ def report_query(
         q = q.where(Asset.path.startswith(asset.path))
     if part_id:
         q = q.where(PartUsage.part_id == part_id)
-    if department_id:
-        q = q.where(WorkOrder.department_id == department_id)
+    if department_ids:
+        q = q.where(WorkOrder.department_id.in_(department_ids))
     return q.order_by(PartUsage.used_on.desc(), WorkOrder.number)
 
 

@@ -31,13 +31,23 @@ def _scope(
     start = start or end.replace(day=1)
     if end < start or (end - start).days > 731:
         raise HTTPException(422, "Invalid period (max 2 years)")
-    if ctx.department_id:
-        department_id = ctx.department_id
+    mine = ctx.department_ids
+    if department_id and not ctx.dept_ok(department_id):
+        raise HTTPException(403, "Your access is limited to your department")
+    if department_id is None and len(mine) == 1:
+        department_id = mine[0]
     if department_id:
         d = db.get(Department, department_id)
         if d is None or d.plant_id != ctx.plant_id:
             raise HTTPException(422, "Department not found")
-    return svc.Scope(plant=ctx.plant, start=start, end=end, department_id=department_id, asset_id=asset_id)
+    return svc.Scope(
+        plant=ctx.plant,
+        start=start,
+        end=end,
+        department_id=department_id,
+        asset_id=asset_id,
+        department_ids=() if department_id else tuple(mine),
+    )
 
 
 @router.get("/definitions")
@@ -208,7 +218,7 @@ def failure_modes(
     root = db.get(Asset, under) if under else None
     if under and (root is None or root.plant_id != ctx.plant_id):
         raise HTTPException(422, "Asset not found")
-    return fm.pareto(db, ctx.plant, start, end, root, by, ctx.department_id)
+    return fm.pareto(db, ctx.plant, start, end, root, by, ctx.department_ids)
 
 
 @router.get("/{code}")

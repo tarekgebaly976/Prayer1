@@ -50,8 +50,17 @@ class RolePermission(Base):
     permission_code: Mapped[str] = mapped_column(String(60), ForeignKey("permissions.code", ondelete="CASCADE"), primary_key=True)
 
 
+class MembershipDepartment(Base):
+    """Extra departments of an area-restricted member (the first one is Membership.department_id)."""
+
+    __tablename__ = "membership_departments"
+    membership_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("memberships.id", ondelete="CASCADE"), primary_key=True)
+    department_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True)
+
+
 class Membership(Base, Timestamped):
-    """Grants a user a role within one plant, optionally restricted to one department."""
+    """Grants a user a role within one plant, optionally restricted to one or more departments
+    (department_id = the main one, extra ones in membership_departments; none = whole plant)."""
 
     __tablename__ = "memberships"
     __table_args__ = (UniqueConstraint("user_id", "plant_id"),)
@@ -64,6 +73,22 @@ class Membership(Base, Timestamped):
 
     user: Mapped[User] = relationship(back_populates="memberships")
     role: Mapped[Role] = relationship(lazy="joined")
+    extra_departments: Mapped[list[MembershipDepartment]] = relationship(lazy="selectin", cascade="all, delete-orphan")
+
+    @property
+    def department_ids(self) -> list[uuid.UUID]:
+        """All departments the member is limited to, main first; [] = whole plant."""
+        if self.department_id is None:
+            return []
+        return [self.department_id] + [e.department_id for e in self.extra_departments if e.department_id != self.department_id]
+
+    def set_departments(self, ids: list[uuid.UUID]) -> None:
+        ids = list(dict.fromkeys(ids))
+        self.department_id = ids[0] if ids else None
+        keep = set(ids[1:])
+        self.extra_departments = [e for e in self.extra_departments if e.department_id in keep]
+        have = {e.department_id for e in self.extra_departments}
+        self.extra_departments += [MembershipDepartment(department_id=d) for d in ids[1:] if d not in have]
 
 
 class UserSession(Base):

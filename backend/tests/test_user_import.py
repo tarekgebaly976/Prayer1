@@ -73,3 +73,18 @@ def test_users_from_excel_add_update_and_hand_out_passwords(world):
     )
     assert len(reset["credentials"]) == 1 and reset["credentials"][0]["temporary_password"] != creds["rahim@example.com"]
     assert rahim.get("/auth/me").status_code == 401  # old sessions signed out after a reset
+
+
+def test_user_import_several_departments(world):
+    admin = world.api("admin")
+    rows = [["Multi Area", "multi@example.com", "technician", "PM, SP", "", "", "", "", ""]]
+    res = admin.ok("post", "/users/import", params={"apply": True}, files=_xlsx(rows))
+    assert res["created"] == 1
+    m = next(u for u in admin.ok("get", "/users") if u["user"]["email"] == "multi@example.com")
+    assert m["department_ids"] == [str(world.depts["PM"].id), str(world.depts["SP"].id)]
+    sheet = load_workbook(io.BytesIO(admin.get("/users/import/template.xlsx").content))["users"]
+    assert {r[1]: r[3] for r in sheet.iter_rows(min_row=2, values_only=True)}["multi@example.com"] == "PM,SP"
+    # the same file again changes nothing; an unknown code is refused
+    assert admin.ok("post", "/users/import", files=_xlsx(rows))["unchanged"] == 1
+    bad = admin.ok("post", "/users/import", files=_xlsx([["X Y", "xy@example.com", "technician", "PM,ZZ", "", "", "", "", ""]]))
+    assert bad["invalid"] == 1 and "department ZZ not found" in bad["errors"][0]["errors"]

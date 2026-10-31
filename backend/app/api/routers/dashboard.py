@@ -31,8 +31,7 @@ def summary(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="fu
 
     def wo_count(*conds) -> int:
         q = select(func.count()).select_from(WorkOrder).where(WorkOrder.plant_id == ctx.plant_id, *conds)
-        if ctx.department_id:
-            q = q.where(WorkOrder.department_id == ctx.department_id)
+        q = q.where(ctx.dept_where(WorkOrder.department_id))
         return db.execute(q).scalar_one()
 
     if ctx.has("wo.view"):

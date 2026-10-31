@@ -150,3 +150,39 @@ def test_general_department_types_for_any_industry(world):
     d = admin.ok("post", "/departments", {"code": "PACK", "name": "Packaging line", "type": "PRODUCTION"}, status=201)
     assert d["type"] == "PRODUCTION"
     assert admin.post("/departments", {"code": "X1", "name": "Bad", "type": "NOPE"}).status_code == 422
+
+
+def test_user_with_several_departments(world):
+    planner, admin = world.api("planner"), world.api("admin")
+    lines = {d: mk_asset(planner, world, f"{d}-M", dept=d) for d in ("PM", "SP", "FH")}
+    wos = {
+        d: planner.ok("post", "/work-orders", {"asset_id": a["id"], "type": "corrective", "title": f"{d} job"}, status=201)
+        for d, a in lines.items()
+    }
+    uid = str(world.users["sp_sup"].id)
+    m = admin.ok("patch", f"/users/{uid}", {"department_ids": [str(world.depts["SP"].id), str(world.depts["FH"].id)]})
+    assert m["department_id"] == str(world.depts["SP"].id)  # the first is the main one
+    assert m["department_ids"] == [str(world.depts["SP"].id), str(world.depts["FH"].id)]
+
+    sp = login("sp_sup@example.com", world.plant.id)
+    me = sp.get("/auth/me").json()["plants"][0]
+    assert len(me["department_ids"]) == 2
+    assert {w["id"] for w in sp.get("/work-orders").json()["items"]} == {wos["SP"]["id"], wos["FH"]["id"]}
+    assert {a["code"] for a in sp.get("/assets").json()["items"]} == {"SP-M", "FH-M"}
+    assert sp.get(f"/work-orders/{wos['FH']['id']}").status_code == 200
+    assert sp.get(f"/work-orders/{wos['PM']['id']}").status_code == 404
+    assert sp.post("/work-orders", {"asset_id": lines["FH"]["id"], "type": "corrective", "title": "FH too"}).status_code == 201
+    assert sp.post("/work-orders", {"asset_id": lines["PM"]["id"], "type": "corrective", "title": "not mine"}).status_code == 403
+    assert sp.get("/kpis").status_code in (200, 403)  # KPIs over both departments do not fail
+
+    # a request on FH equipment notifies them, one on PM equipment does not
+    tech = world.api("tech")
+    r_fh = tech.ok("post", "/work-requests", {"asset_id": lines["FH"]["id"], "title": "Leak FH"}, status=201)
+    r_pm = tech.ok("post", "/work-requests", {"asset_id": lines["PM"]["id"], "title": "Leak PM"}, status=201)
+    links = [n["link"] for n in sp.get("/notifications").json()["items"]]
+    assert any(r_fh["id"] in x for x in links) and not any(r_pm["id"] in x for x in links)
+
+    # back to one department; [] = whole plant
+    assert admin.ok("patch", f"/users/{uid}", {"department_id": str(world.depts["SP"].id)})["department_ids"] == [str(world.depts["SP"].id)]
+    assert admin.ok("patch", f"/users/{uid}", {"department_ids": []})["department_id"] is None
+    assert len(login("sp_sup@example.com", world.plant.id).get("/work-orders").json()["items"]) == 4

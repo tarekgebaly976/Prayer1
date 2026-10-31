@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.enums import DeliveryStatus
-from app.models.identity import Membership, RolePermission, User
+from app.models.identity import Membership, MembershipDepartment, RolePermission, User
 from app.models.system import EmailOutbox, Notification
 from app.services.common import utcnow
 
@@ -34,7 +34,8 @@ def users_with_permission(db: Session, plant_id: uuid.UUID, permission: str, dep
         )
     )
     if department_id:
-        q = q.where(or_(Membership.department_id.is_(None), Membership.department_id == department_id))
+        extra = select(MembershipDepartment.membership_id).where(MembershipDepartment.department_id == department_id)
+        q = q.where(or_(Membership.department_id.is_(None), Membership.department_id == department_id, Membership.id.in_(extra)))
     return list(db.execute(q).scalars().unique())
 
 

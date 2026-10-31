@@ -50,6 +50,16 @@ class Scope:
     end: date
     department_id: uuid.UUID | None = None
     asset_id: uuid.UUID | None = None
+    # A user limited to several departments, with no single one chosen: all of them together.
+    department_ids: tuple[uuid.UUID, ...] = ()
+
+    @property
+    def scoped(self) -> bool:
+        return bool(self.department_id or self.department_ids)
+
+    def dept(self, col: Any) -> Any:
+        """SQL condition on a department column for this scope (only used when `scoped`)."""
+        return col == self.department_id if self.department_id else col.in_(self.department_ids)
 
     @property
     def tz(self) -> ZoneInfo:
@@ -119,15 +129,15 @@ def _asset_ids(db: Session, s: Scope) -> list[uuid.UUID] | None:
         if a is None or a.plant_id != s.plant.id:
             return []
         return list(db.execute(select(Asset.id).where(Asset.plant_id == s.plant.id, Asset.path.startswith(a.path))).scalars())
-    if s.department_id:
-        return list(db.execute(select(Asset.id).where(Asset.plant_id == s.plant.id, Asset.department_id == s.department_id)).scalars())
+    if s.scoped:
+        return list(db.execute(select(Asset.id).where(Asset.plant_id == s.plant.id, s.dept(Asset.department_id))).scalars())
     return None
 
 
 def _wo_scope(q: Any, s: Scope, ids: list[uuid.UUID] | None) -> Any:
     q = q.where(WorkOrder.plant_id == s.plant.id)
-    if s.department_id:
-        q = q.where(WorkOrder.department_id == s.department_id)
+    if s.scoped:
+        q = q.where(s.dept(WorkOrder.department_id))
     if ids is not None and s.asset_id:
         q = q.where(WorkOrder.asset_id.in_(ids))
     return q
@@ -295,8 +305,8 @@ def backlog(db: Session, s: Scope) -> KPIResult:
         .join(Role, Role.id == Membership.role_id)
         .where(Membership.plant_id == s.plant.id, Membership.is_active.is_(True), Role.code.in_(tech_roles))
     )
-    if s.department_id:
-        q = q.where(Membership.department_id == s.department_id)
+    if s.scoped:
+        q = q.where(s.dept(Membership.department_id))
     techs = db.execute(q).scalar_one()
     weekly = techs * float(s.plant.working_hours_per_day) * len(s.plant.working_days or [])
     weeks = hours / weekly if weekly else None
@@ -502,8 +512,8 @@ def _production(db: Session, s: Scope) -> list[ProductionRecord]:
     q = select(ProductionRecord).where(
         ProductionRecord.plant_id == s.plant.id, ProductionRecord.record_date >= s.start, ProductionRecord.record_date <= s.end
     )
-    if s.department_id:
-        q = q.where(ProductionRecord.department_id == s.department_id)
+    if s.scoped:
+        q = q.where(s.dept(ProductionRecord.department_id))
     if s.asset_id:
         q = q.where(ProductionRecord.asset_id == s.asset_id)
     return list(db.execute(q).scalars())
@@ -666,11 +676,7 @@ def budget_vs_actual(db: Session, s: Scope) -> KPIResult:
         months.add((d.year, d.month))
         d = (d + timedelta(days=32)).replace(day=1)
     q = select(MaintenanceBudget).where(MaintenanceBudget.plant_id == s.plant.id)
-    q = (
-        q.where(MaintenanceBudget.department_id == s.department_id)
-        if s.department_id
-        else q.where(MaintenanceBudget.department_id.is_(None))
-    )
+    q = q.where(s.dept(MaintenanceBudget.department_id)) if s.scoped else q.where(MaintenanceBudget.department_id.is_(None))
     budgets = [b for b in db.execute(q).scalars() if (b.year, b.month) in months]
     rows = cost_rows(db, s)
     actual = sum(r["amount"] for r in rows)
@@ -840,9 +846,9 @@ def labor_utilization(db: Session, s: Scope) -> KPIResult:
         RosterEntry.work_date <= s.end,
         RosterEntry.kind.in_([RosterKind.WORK, RosterKind.OVERTIME, RosterKind.CALLOUT]),
     )
-    if s.department_id:
+    if s.scoped:
         q = q.join(Membership, and_(Membership.user_id == RosterEntry.user_id, Membership.plant_id == s.plant.id)).where(
-            Membership.department_id == s.department_id
+            s.dept(Membership.department_id)
         )
     avail = sum(float(r.hours) + float(r.overtime_hours) + float(r.callout_hours) for r in db.execute(q).scalars())
     booked = sum(float(lab.hours) for lab, _ in _labor_rows(db, s))
@@ -866,8 +872,8 @@ def shutdown_progress(db: Session, s: Scope) -> KPIResult:
         Shutdown.planned_start < s.t1,
         Shutdown.planned_end >= s.t0,
     )
-    if s.department_id:
-        q = q.where(Shutdown.department_id == s.department_id)
+    if s.scoped:
+        q = q.where(s.dept(Shutdown.department_id))
     sds = db.execute(q.order_by(Shutdown.planned_start.desc())).scalars().all()
     if not sds:
         return unavailable("shutdown_progress", "%", "No shutdown overlaps the period")

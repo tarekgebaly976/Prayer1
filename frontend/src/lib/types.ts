@@ -2,7 +2,7 @@ export type UUID = string;
 
 export interface PlantAccess {
   plant_id: UUID; plant_code: string; plant_name: string; timezone: string; currency: string;
-  role: string; department_id: UUID | null; permissions: string[];
+  role: string; department_id: UUID | null; department_ids?: UUID[]; permissions: string[];
 }
 export interface Me { id: UUID; email: string; full_name: string; locale: string; is_system_admin: boolean; plants: PlantAccess[]; csrf_token: string }
 export interface Page<T> { items: T[]; total: number; limit: number; offset: number }
@@ -49,7 +49,7 @@ export interface WODetail {
     quantity: number; unit: string; method: string | null; status: string; quantity_actual: number | null; due_date: string }[];
   safety_signed_by: string | null; tested_by: string | null;
 }
-export interface Member { user: { id: UUID; email: string; full_name: string; trade: string | null; is_active: boolean; hourly_rate: number | null; employee_no: string | null; locale: string }; role_code: string; department_id: UUID | null; is_active: boolean }
+export interface Member { user: { id: UUID; email: string; full_name: string; trade: string | null; is_active: boolean; hourly_rate: number | null; employee_no: string | null; locale: string }; role_code: string; department_id: UUID | null; department_ids?: UUID[]; is_active: boolean }
 export interface FailureCode { id: UUID; kind: "symptom" | "problem" | "cause" | "remedy"; code: string; description: string; equipment_type: string | null; category: string | null; suggested: boolean }
 export interface KPI { code: string; value: number | null; unit: string; available: boolean; reason: string | null; numerator: number | null; denominator: number | null; details: Record<string, unknown>; records?: Record<string, unknown>[] }
 export interface Notification { id: UUID; kind: string; severity: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null }
