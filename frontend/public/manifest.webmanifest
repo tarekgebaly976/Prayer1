@@ -1,16 +1,22 @@
 {
+  "id": "/",
   "name": "Paper Mill CMMS",
   "short_name": "Mill CMMS",
-  "description": "Maintenance management for paper manufacturing",
+  "description": "Maintenance management for paper manufacturing: work orders, preventive maintenance, lubrication, condition monitoring, QR scanning and shift rosters.",
+  "lang": "en",
+  "dir": "auto",
   "start_url": "/my-work",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#1f3b57",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

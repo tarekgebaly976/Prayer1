@@ -82,6 +82,7 @@ services:
       CMMS_DOMAIN: ${CMMS_DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./well-known:/srv/.well-known:ro
       - caddy_data:/data
     depends_on: [web, api]
     # "edge" also reaches the optional test copy (deploy/docker-compose.test.yml) at test.<domain>.

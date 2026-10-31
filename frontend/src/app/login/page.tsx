@@ -46,6 +46,7 @@ export default function LoginPage() {
             <PasswordInput label={t("auth.password")} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.currentTarget.value)} name="password" />
             <Button type="submit" loading={busy} fullWidth className="tap-target">{t("auth.submit")}</Button>
             <Text size="xs" c="dimmed">{t("auth.sessionNote")}</Text>
+            <Text size="xs" ta="center"><a href="/privacy" style={{ color: "inherit" }}>Privacy policy / سياسة الخصوصية</a></Text>
             <Group justify="center" gap="xs">
               {LANGS.map((l) => <Button key={l.code} variant="subtle" size="xs" onClick={() => switchLang(l.code)}>{l.label}</Button>)}
             </Group>

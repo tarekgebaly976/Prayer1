@@ -15,6 +15,11 @@
 	handle /api/* {
 		reverse_proxy api:8000
 	}
+	# Android app link (Google Play): deploy/well-known/assetlinks.json, once the app is signed.
+	handle /.well-known/assetlinks.json {
+		root * /srv
+		file_server
+	}
 	handle {
 		reverse_proxy web:3000
 	}
