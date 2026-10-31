@@ -1,0 +1,85 @@
+# Test copy of the CMMS on the same server: its own database and attachments, reached at https://test.<domain>
+# through the main Caddy. Uses the images built for the real system, so it runs the same version.
+# Managed by scripts/test-copy.sh (start | refresh | stop | remove | status); do not start it by hand.
+name: papermill-cmms-test
+
+x-test-env: &test-env
+  CMMS_ENVIRONMENT: staging
+  CMMS_INSTANCE_LABEL: ${CMMS_INSTANCE_LABEL:-TEST}
+  CMMS_DATABASE_URL: postgresql+psycopg://cmms_app:${CMMS_TEST_APP_DB_PASSWORD}@test-db:5432/cmms
+  CMMS_MIGRATION_DATABASE_URL: postgresql+psycopg://cmms_owner:${CMMS_TEST_OWNER_DB_PASSWORD}@test-db:5432/cmms
+  CMMS_COOKIE_SECURE: "true"
+  CMMS_STORAGE_BACKEND: local
+  CMMS_STORAGE_LOCAL_PATH: /app/var/storage
+  # No mail server: notifications stay inside the test copy, nobody gets a test e-mail.
+  CMMS_SMTP_HOST: ""
+  CMMS_SMTP_FROM: ""
+
+services:
+  test-db:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cmms
+      POSTGRES_USER: cmms_owner
+      POSTGRES_PASSWORD: ${CMMS_TEST_OWNER_DB_PASSWORD:?run scripts/test-copy.sh}
+      CMMS_APP_DB_PASSWORD: ${CMMS_TEST_APP_DB_PASSWORD:?run scripts/test-copy.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmms_owner -d cmms"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  test-migrate:
+    image: papermill-cmms-api
+    command: ["alembic", "upgrade", "head"]
+    environment: *test-env
+    depends_on:
+      test-db: { condition: service_healthy }
+    restart: "no"
+
+  test-api:
+    image: papermill-cmms-api
+    restart: unless-stopped
+    environment: *test-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      test-migrate: { condition: service_completed_successfully }
+    networks:
+      default: {}
+      edge: { aliases: [cmms-test-api] }
+
+  test-worker:
+    image: papermill-cmms-api
+    command: ["python", "-m", "app.worker"]
+    healthcheck: { disable: true }  # background jobs only; the image's check probes the web API
+    restart: unless-stopped
+    environment: *test-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      test-migrate: { condition: service_completed_successfully }
+
+  test-web:
+    image: papermill-cmms-web
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://test-api:8000
+    depends_on: [test-api]
+    networks:
+      default: {}
+      edge: { aliases: [cmms-test-web] }
+
+networks:
+  default: {}
+  edge:
+    name: papermill-cmms-edge
+    external: true
+
+volumes:
+  pgdata:
+  storage:

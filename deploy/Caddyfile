@@ -23,3 +23,24 @@
 		format json
 	}
 }
+
+# Optional test copy (scripts/test-copy.sh): a separate database and app at test.<domain>. Until it is started,
+# this address answers 502; the real system above is not affected either way.
+test.{$CMMS_DOMAIN:localhost} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	request_body {
+		max_size 30MB
+	}
+	handle /api/* {
+		reverse_proxy cmms-test-api:8000
+	}
+	handle {
+		reverse_proxy cmms-test-web:3000
+	}
+}

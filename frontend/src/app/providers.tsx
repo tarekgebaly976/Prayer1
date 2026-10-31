@@ -5,6 +5,7 @@ import { Notifications } from "@mantine/notifications";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
+import { InstanceBanner } from "@/components/InstanceBanner";
 import i18n from "@/lib/i18n";
 import { SessionProvider } from "@/lib/session";
 
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <DirectionProvider detectDirection>
         <MantineProvider theme={theme} defaultColorScheme="light">
           <Notifications position="top-center" />
+          <InstanceBanner />
           <QueryClientProvider client={qc}>
             <SessionProvider>{children}</SessionProvider>
           </QueryClientProvider>

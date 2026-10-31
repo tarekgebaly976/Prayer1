@@ -138,6 +138,11 @@ def create_app() -> FastAPI:
     def live() -> dict:
         return {"status": "ok"}
 
+    @app.get(f"{API}/meta", tags=["health"])
+    def meta() -> dict:
+        """Public facts the sign-in page needs before anyone is logged in."""
+        return {"instance_label": get_settings().instance_label}
+
     @app.get(f"{API}/health/ready", tags=["health"])
     def ready() -> JSONResponse:
         checks = {}

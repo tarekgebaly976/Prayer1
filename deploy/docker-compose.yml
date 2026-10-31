@@ -58,6 +58,7 @@ services:
     image: papermill-cmms-api
     build: ../backend
     command: ["python", "-m", "app.worker"]
+    healthcheck: { disable: true }  # background jobs only; the image's check probes the web API
     restart: unless-stopped
     environment: *api-env
     volumes:
@@ -83,6 +84,13 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on: [web, api]
+    # "edge" also reaches the optional test copy (deploy/docker-compose.test.yml) at test.<domain>.
+    networks: [default, edge]
+
+networks:
+  default: {}
+  edge:
+    name: papermill-cmms-edge
 
 volumes:
   pgdata:

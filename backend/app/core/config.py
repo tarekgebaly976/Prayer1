@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
 
     scheduler_enabled: bool = True
+    # Shown as a red banner on every page, e.g. "TEST copy": marks a test installation so nobody mistakes it for the real one.
+    instance_label: str = ""
     log_level: str = "INFO"
     log_json: bool = True
 

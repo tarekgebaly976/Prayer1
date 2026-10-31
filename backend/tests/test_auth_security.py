@@ -124,3 +124,12 @@ def test_interface_language_choices(world):
     assert tech.post("/auth/locale", json={"locale": "bn"}).status_code == 204
     assert tech.get("/auth/me").json()["locale"] == "bn"  # remembered for the next sign-in, on any device
     assert tech.post("/auth/locale", json={"locale": "xx"}).status_code == 422
+
+
+def test_meta_is_public_and_carries_the_instance_label(world, monkeypatch):
+    from app.core.config import get_settings
+
+    anon = make_client()
+    assert anon.get("/api/v1/meta").json() == {"instance_label": ""}
+    monkeypatch.setattr(get_settings(), "instance_label", "TEST")
+    assert anon.get("/api/v1/meta").json() == {"instance_label": "TEST"}
