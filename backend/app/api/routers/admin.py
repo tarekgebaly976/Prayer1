@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
@@ -71,6 +71,74 @@ def update_plant(body: PlantUpdate, ctx: Ctx = Depends(require("plant.admin")), 
     return ctx.plant
 
 
+# ---------- daily summary e-mail (administrators only) ----------
+class DailySummaryCfg(In):
+    enabled: bool
+    send_time: time  # plant-local, e.g. "06:30"
+    # Frequency: ISO weekdays to send on (1 = Monday .. 7 = Sunday). All 7 = daily, one day = weekly. Omitted = unchanged.
+    days: list[int] | None = Field(None, min_length=1, max_length=7)
+
+
+@router.get("/daily-summary")
+def get_daily_summary(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
+    from app.core.config import get_settings
+    from app.services import daily_summary
+
+    people = daily_summary.recipients(db, ctx.plant)
+    return {
+        "enabled": ctx.plant.daily_summary_enabled,
+        "send_time": ctx.plant.daily_summary_time.strftime("%H:%M"),
+        "days": daily_summary.send_days(ctx.plant),
+        "working_days": ctx.plant.working_days,
+        "timezone": ctx.plant.timezone,
+        "recipients": [{"user_id": u.id, "full_name": u.full_name, "email": u.email, "department_ids": d} for u, d in people],
+        "email_configured": get_settings().email_enabled,
+        "suppressed": daily_summary.suppressed_reason(),
+    }
+
+
+@router.put("/daily-summary")
+def set_daily_summary(
+    body: DailySummaryCfg, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    if body.days is not None:
+        if any(d < 1 or d > 7 for d in body.days):
+            raise HTTPException(422, "Days are ISO weekdays 1 (Monday) to 7 (Sunday)")
+        ctx.plant.daily_summary_days = sorted(set(body.days))
+    ctx.plant.daily_summary_enabled = body.enabled
+    ctx.plant.daily_summary_time = body.send_time.replace(second=0, microsecond=0, tzinfo=None)
+    audit(
+        db,
+        "daily_summary.update",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="plant",
+        entity_id=ctx.plant_id,
+        data={
+            "enabled": body.enabled,
+            "send_time": ctx.plant.daily_summary_time.strftime("%H:%M"),
+            "days": ctx.plant.daily_summary_days,
+        },
+    )
+    db.flush()
+    return get_daily_summary(ctx, db)
+
+
+@router.get("/daily-summary/preview")
+def preview_daily_summary(
+    user_id: uuid.UUID | None = None, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    """What the chosen member (default: yourself) would receive today; nothing is sent."""
+    from app.services import daily_summary
+    from app.services.common import plant_today
+
+    m, user = _member(db, ctx, user_id) if user_id else (None, ctx.user)
+    dept_ids = m.department_ids if m is not None else ctx.department_ids
+    stats = daily_summary.collect(db, ctx.plant, plant_today(ctx.plant))
+    subject, body = daily_summary.compose(db, ctx.plant, stats, user, dept_ids)
+    return {"subject": subject, "body": body}
+
+
 class DepartmentIn(In):
     code: str = Field(min_length=1, max_length=32)
     name: str
@@ -124,6 +192,7 @@ class MemberOut(ORM):
     department_id: uuid.UUID | None
     department_ids: list[uuid.UUID] = []
     is_active: bool
+    daily_summary: bool = False
 
 
 class UserCreate(In):
@@ -149,6 +218,7 @@ class MembershipUpdate(In):
     is_active: bool | None = None
     trade: str | None = None
     hourly_rate: float | None = Field(None, ge=0)
+    daily_summary: bool | None = None  # receives the daily summary e-mail
 
 
 def _role(db: Session, code: str) -> Role:
@@ -176,6 +246,7 @@ def _member_out(m: Membership, u: User) -> dict:
         "department_id": m.department_id,
         "department_ids": m.department_ids,
         "is_active": m.is_active and u.is_active,
+        "daily_summary": m.daily_summary,
     }
 
 
@@ -307,6 +378,8 @@ def update_membership(
             s.revoked_at = utcnow()
     elif data.get("is_active") is True:
         m.is_active = True
+    if data.get("daily_summary") is not None:
+        m.daily_summary = data["daily_summary"]
     db.flush()
     db.refresh(m)
     audit(db, "user.update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user_id, data=data)

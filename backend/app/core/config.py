@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     # Shown as a red banner on every page, e.g. "TEST copy": marks a test installation so nobody mistakes it for the real one.
     instance_label: str = ""
+    # Address of the web app, used for links in e-mails (e.g. https://cmms.example.com); empty = no link.
+    public_url: str = ""
     log_level: str = "INFO"
     log_json: bool = True
 

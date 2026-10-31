@@ -18,7 +18,7 @@ from app.core.logging import configure_logging
 from app.models.identity import LoginAttempt, UserSession
 from app.models.system import JobRun
 from app.models.tenancy import Plant
-from app.services import lubrication, pdm, pm
+from app.services import daily_summary, lubrication, pdm, pm
 from app.services.common import plant_today, sync_rbac, utcnow
 from app.services.notifications import deliver_outbox
 
@@ -75,6 +75,10 @@ def job_email(db: Session, _: Plant) -> dict:
     return deliver_outbox(db)
 
 
+def job_daily_summary(db: Session, plant: Plant) -> dict:
+    return daily_summary.run(db, plant)
+
+
 def job_kpi_snapshot(db: Session, plant: Plant) -> dict:
     from app.api.routers.kpi import snapshot_month
 
@@ -99,6 +103,8 @@ def main() -> None:
     sched.add_job(run_job, "interval", minutes=60, args=["lubrication", job_lube], id="lubrication", next_run_time=utcnow())
     sched.add_job(run_job, "interval", minutes=60, args=["pdm_stale", job_pdm_stale], id="pdm_stale")
     sched.add_job(run_job, "interval", minutes=1, args=["email_outbox", job_email, False], id="email_outbox")
+    # Checked every 5 minutes; each plant sends once a day after its own (plant-local) send time.
+    sched.add_job(run_job, "interval", minutes=5, args=["daily_summary", job_daily_summary], id="daily_summary", next_run_time=utcnow())
     sched.add_job(run_job, "cron", hour=0, minute=17, args=["kpi_snapshot", job_kpi_snapshot], id="kpi_snapshot")
     sched.add_job(run_job, "cron", hour=1, minute=7, args=["housekeeping", job_housekeeping, False], id="housekeeping")
     signal.signal(signal.SIGTERM, lambda *_: sched.shutdown(wait=False))

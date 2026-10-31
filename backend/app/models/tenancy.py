@@ -1,8 +1,8 @@
 import uuid
 from datetime import date as date_
-from datetime import datetime
+from datetime import datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint, false, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,13 @@ class Plant(Base, Timestamped):
     working_hours_per_day: Mapped[float] = mapped_column(default=8.0)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Summary e-mail (administrators only): sent on these ISO weekdays (1 = Monday .. 7 = Sunday) at this plant-local
+    # time to members flagged for it. All 7 days = daily; working days; or one day = weekly.
+    daily_summary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    daily_summary_time: Mapped[time] = mapped_column(Time, default=time(7, 0), server_default="07:00")
+    daily_summary_days: Mapped[list[int]] = mapped_column(
+        JSONB, default=lambda: [1, 2, 3, 4, 5, 6, 7], server_default=text("'[1, 2, 3, 4, 5, 6, 7]'::jsonb")
+    )
 
     organization: Mapped[Organization] = relationship()
 

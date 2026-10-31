@@ -38,6 +38,21 @@ A user may hold one role per plant. System administrators see all plants of thei
 * **E-mail:** set `CMMS_SMTP_HOST/PORT/USER/PASSWORD/FROM`. Until set, e-mails are recorded with status `disabled`.
 * **ERP/Infor:** not integrated. PO numbers can be typed as external references.
 
+## Daily summary e-mail
+Administration → **Daily summary** (permission `plant.admin`):
+* **Send the summary e-mail** – plant on/off switch (off by default).
+* **Send time** – plant-local time (plant timezone). The worker checks every 5 minutes and sends once per send day.
+* **Frequency** – Every day, Working days (the plant working calendar), Weekly (one day) or Custom days.
+  "Completed / closed" covers the time since the previous send day (yesterday when daily, the last week when weekly).
+* **Recipients** – Administration → Users → **Daily summary** switch (permission `user.manage`). Users cannot turn it
+  on or off themselves. A user limited to departments gets only those departments; a user with no department
+  (planners, managers) gets the whole plant plus each department that has something to report.
+* Contents: work orders due today, overdue, completed / closed, open breakdowns (emergency WOs), PM compliance (month
+  to date), open critical condition alerts, and the 10 most overdue work orders.
+* **Preview** shows what a chosen user would receive today; nothing is sent.
+* Delivery uses the normal notifications (in-app + e-mail outbox) and is never repeated for the same user and day.
+  A test copy (`CMMS_INSTANCE_LABEL` set) never sends. Links use `CMMS_PUBLIC_URL` (set from `CMMS_DOMAIN` in Docker Compose).
+
 ## Audit and monitoring
 **Audit log**: logins, lockouts, user/role changes, workflow changes, status transitions, safety sign-offs, inventory
 movements, approvals, imports, attachment changes — append-only. **Background jobs**: last runs of the scheduler,

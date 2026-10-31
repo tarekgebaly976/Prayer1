@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +70,8 @@ class Membership(Base, Timestamped):
     role_id: Mapped[uuid.UUID] = fk("roles.id")
     department_id: Mapped[uuid.UUID | None] = fk("departments.id", nullable=True, ondelete="SET NULL")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Receives the daily summary e-mail for its departments (whole plant when none). Set by administrators only.
+    daily_summary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     user: Mapped[User] = relationship(back_populates="memberships")
     role: Mapped[Role] = relationship(lazy="joined")

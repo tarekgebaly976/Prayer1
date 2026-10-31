@@ -1,13 +1,13 @@
 "use client";
 
-import { Alert, Button, Code, FileInput, Group, Modal, NumberInput, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Code, FileInput, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { FailureCodeImport } from "@/components/FailureModes";
 import { PlanImport } from "@/components/PlanImport";
 import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
-import { api, del, download, patch, post } from "@/lib/api";
+import { api, del, download, patch, post, put } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
 import type { Department, FailureCode, Member, Page } from "@/lib/types";
 
@@ -116,6 +116,7 @@ function Users() {
   const toggle = useMut((m: Member) => patch(`/users/${m.user.id}`, { is_active: !m.is_active }));
   const setRole = useMut((a: { id: string; role: string }) => patch(`/users/${a.id}`, { role: a.role }));
   const setDept = useMut((a: { id: string; depts: string[] }) => patch(`/users/${a.id}`, { department_ids: a.depts }));
+  const setSummary = useMut((m: Member) => patch(`/users/${m.user.id}`, { daily_summary: !m.daily_summary }), { success: false });
   const roleOpts = (roles.data ?? []).map((r) => ({ value: r.code, label: r.name }));
   return (
     <>
@@ -128,6 +129,7 @@ function Users() {
         { key: "d", label: t("admin.departments"), render: (m) => <div style={{ width: 210 }}><DeptMultiSelect label="" compact value={deptIds(m)}
           onChange={(v) => setDept.mutate({ id: m.user.id, depts: v })} placeholder={t("admin.allDepts")} /></div> },
         { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
+        { key: "s", label: t("admin.dsColumn"), render: (m) => <Switch checked={!!m.daily_summary} onChange={() => setSummary.mutate(m)} aria-label="daily summary" /> },
         { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
       {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}
       <Modal opened={open} onClose={() => setOpen(false)} title={t("admin.newUser")}>
@@ -217,6 +219,75 @@ function PlantSettings() {
       <Switch label="Allow negative stock (not recommended)" checked={f.allow_negative_stock} onChange={(e) => setF({ ...f, allow_negative_stock: e.currentTarget.checked })} />
       <TextInput label="settings (JSON)" className="mono" defaultValue={JSON.stringify(f.settings)} onBlur={(e) => { try { setF({ ...f, settings: JSON.parse(e.currentTarget.value) as Record<string, unknown> }); } catch { /* keep previous */ } }} />
       <Group><Button onClick={() => save.mutate(undefined)}>{t("common.save")}</Button></Group>
+    </Stack>
+  );
+}
+
+interface SummaryCfg { enabled: boolean; send_time: string; days: number[]; working_days: number[]; timezone: string; email_configured: boolean;
+  suppressed: string | null; recipients: { user_id: string; full_name: string; email: string; department_ids: string[] }[] }
+
+const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
+// ISO weekday (1 = Monday) to a short local name; 2024-01-01 was a Monday.
+const dayName = (d: number, lang: string) => new Date(Date.UTC(2024, 0, d)).toLocaleDateString(lang, { weekday: "short", timeZone: "UTC" });
+const sameDays = (a: number[], b: number[]) => a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+
+/** Summary e-mail: switch, frequency and send time for the plant; recipients are chosen in Users. Administrators only. */
+function DailySummary() {
+  const { t, i18n } = useTranslation();
+  const q = useQ<SummaryCfg>("/daily-summary");
+  const users = useQ<Member[]>("/users");
+  const depts = useQ<Department[]>("/departments");
+  const [f, setF] = useState<{ enabled: boolean; send_time: string; days: number[] } | null>(null);
+  const [mode, setMode] = useState<string | null>(null);
+  const [who, setWho] = useState<string | null>(null);
+  const [pv, setPv] = useState<{ subject: string; body: string } | null>(null);
+  if (q.data && f === null) {
+    const d = q.data;
+    setF({ enabled: d.enabled, send_time: d.send_time, days: d.days });
+    setMode(sameDays(d.days, ALL_DAYS) ? "daily" : sameDays(d.days, d.working_days) ? "working" : d.days.length === 1 ? "weekly" : "custom");
+  }
+  const save = useMut(() => put("/daily-summary", f));
+  const preview = useMut(() => api<{ subject: string; body: string }>("GET", `/daily-summary/preview${who ? `?user_id=${who}` : ""}`), { success: false, onDone: setPv });
+  if (!f || !q.data) return null;
+  const cfg = q.data;
+  const deptCode = new Map((depts.data ?? []).map((d) => [d.id, d.code]));
+  const pickMode = (m: string) => {
+    setMode(m);
+    if (m === "daily") setF({ ...f, days: ALL_DAYS });
+    else if (m === "working") setF({ ...f, days: cfg.working_days });
+    else if (m === "weekly") setF({ ...f, days: [f.days[0] ?? 7] });
+  };
+  return (
+    <Stack maw={760}>
+      {cfg.suppressed && <Alert color="red">{t("admin.dsSuppressed")}</Alert>}
+      {!cfg.email_configured && !cfg.suppressed && <Alert color="orange">{t("admin.dsNoEmail")}</Alert>}
+      <Text size="sm" c="dimmed">{t("admin.dsHint")}</Text>
+      <Switch label={t("admin.dsEnabled")} checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.currentTarget.checked })} />
+      <TextInput type="time" w={220} label={t("admin.dsTime")} description={cfg.timezone} value={f.send_time} onChange={(e) => setF({ ...f, send_time: e.currentTarget.value })} />
+      <Stack gap={6}>
+        <Text size="sm" fw={500}>{t("admin.dsFrequency")}</Text>
+        <SegmentedControl w="fit-content" value={mode ?? "daily"} onChange={pickMode} data={[
+          { value: "daily", label: t("admin.dsDaily") }, { value: "working", label: t("admin.dsWorking") },
+          { value: "weekly", label: t("admin.dsWeekly") }, { value: "custom", label: t("admin.dsCustom") }]} />
+        {mode === "weekly" && <Select w={220} label={t("admin.dsDay")} allowDeselect={false} value={String(f.days[0] ?? 7)}
+          data={ALL_DAYS.map((d) => ({ value: String(d), label: dayName(d, i18n.language) }))} onChange={(v) => v && setF({ ...f, days: [Number(v)] })} />}
+        {mode === "custom" && <Checkbox.Group value={f.days.map(String)} onChange={(v) => setF({ ...f, days: v.map(Number) })}>
+          <Group>{ALL_DAYS.map((d) => <Checkbox key={d} value={String(d)} label={dayName(d, i18n.language)} />)}</Group></Checkbox.Group>}
+      </Stack>
+      <Group><Button disabled={!f.send_time || f.days.length === 0} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button></Group>
+      <Text fw={600} mt="md">{t("admin.dsRecipients")} ({cfg.recipients.length})</Text>
+      {cfg.recipients.length === 0 ? <Text size="sm" c="dimmed">{t("admin.dsNone")}</Text> :
+        <DataTable rows={cfg.recipients} rowKey={(r) => r.user_id} columns={[
+          { key: "n", label: t("common.name"), render: (r) => r.full_name }, { key: "e", label: t("common.email"), render: (r) => r.email },
+          { key: "d", label: t("admin.departments"), render: (r) => r.department_ids.length ? r.department_ids.map((d) => deptCode.get(d) ?? "?").join(", ") : t("admin.allDepts") }]} />}
+      <Group align="end" mt="md">
+        <Select w={280} label={t("admin.dsPreviewFor")} clearable searchable value={who} onChange={setWho}
+          data={(users.data ?? []).map((m) => ({ value: m.user.id, label: m.user.full_name }))} />
+        <Button variant="light" loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("admin.dsPreview")}</Button>
+      </Group>
+      <Modal opened={!!pv} onClose={() => setPv(null)} title={pv?.subject} size="xl">
+        <Code block style={{ whiteSpace: "pre-wrap" }}>{pv?.body}</Code>
+      </Modal>
     </Stack>
   );
 }
@@ -315,13 +386,14 @@ export default function AdminPage() {
       <Tabs defaultValue="users" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="users">{t("admin.users")}</Tabs.Tab><Tabs.Tab value="basics">{t("admin.departments")} / {t("admin.failureCodes")}</Tabs.Tab>
-          <Tabs.Tab value="workflow">{t("admin.workflow")}</Tabs.Tab><Tabs.Tab value="plant">{t("admin.plant")}</Tabs.Tab><Tabs.Tab value="import">{t("common.import")}</Tabs.Tab>
+          <Tabs.Tab value="workflow">{t("admin.workflow")}</Tabs.Tab><Tabs.Tab value="plant">{t("admin.plant")}</Tabs.Tab><Tabs.Tab value="summary">{t("admin.dsTab")}</Tabs.Tab><Tabs.Tab value="import">{t("common.import")}</Tabs.Tab>
           <Tabs.Tab value="tokens">{t("admin.tokens")}</Tabs.Tab><Tabs.Tab value="audit">{t("admin.audit")}</Tabs.Tab><Tabs.Tab value="jobs">{t("admin.jobs")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="users" pt="md"><Users /></Tabs.Panel>
         <Tabs.Panel value="basics" pt="md"><Basics /></Tabs.Panel>
         <Tabs.Panel value="workflow" pt="md"><Workflow /></Tabs.Panel>
         <Tabs.Panel value="plant" pt="md"><PlantSettings /></Tabs.Panel>
+        <Tabs.Panel value="summary" pt="md"><DailySummary /></Tabs.Panel>
         <Tabs.Panel value="import" pt="md"><Stack><HistoryImports /><PartsImport /></Stack></Tabs.Panel>
         <Tabs.Panel value="tokens" pt="md"><Tokens /></Tabs.Panel>
         <Tabs.Panel value="audit" pt="md"><AuditLog /></Tabs.Panel>
