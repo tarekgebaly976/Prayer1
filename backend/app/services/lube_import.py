@@ -33,7 +33,12 @@ def validate_lube_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
     routes = {r.code.upper(): r for r in db.execute(select(LubeRoute).where(LubeRoute.plant_id == plant.id)).scalars()}
     depts = {d.id: d for d in db.execute(select(Department).where(Department.plant_id == plant.id)).scalars()}
     point_codes = {c.upper() for c in db.execute(select(LubricationPoint.code).where(LubricationPoint.plant_id == plant.id)).scalars()}
-    per_asset = Counter(a for a in db.execute(select(LubricationPoint.asset_id).where(LubricationPoint.plant_id == plant.id)).scalars())
+    per_asset = Counter(
+        a
+        for a in db.execute(
+            select(LubricationPoint.asset_id).where(LubricationPoint.plant_id == plant.id, LubricationPoint.is_active.is_(True))
+        ).scalars()
+    )
     new_lubes: dict[str, dict] = {}
     new_routes: dict[str, dict] = {}
     seen: dict[str, int] = {}

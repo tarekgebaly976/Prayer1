@@ -18,7 +18,7 @@ from app.models.pdm import ConditionAlert, ConditionReading, MeasurementPoint
 from app.models.tenancy import IntegrationToken, Plant
 from app.schemas.common import ORM, In
 from app.services import pdm as svc
-from app.services import pdm_history, pdm_priority
+from app.services import pdm_history, pdm_priority, plan_removal
 from app.services.common import audit, utcnow
 
 router = APIRouter(prefix="/pdm", tags=["condition monitoring"])
@@ -98,9 +98,12 @@ def list_points(
     q: str | None = None,
     under: uuid.UUID | None = None,
     limit: int = 2000,  # the screen list; Excel downloads pass a higher cap so every point is included
+    include_inactive: bool = False,  # removed (deactivated) points are hidden unless asked for
 ) -> list[MeasurementPoint]:
     """`q` searches point code/name and the asset's code/name; `under` keeps the points on an asset and everything below it."""
     stmt = select(MeasurementPoint).where(MeasurementPoint.plant_id == ctx.plant_id, ctx.in_department(MeasurementPoint.asset_id))
+    if not include_inactive:
+        stmt = stmt.where(MeasurementPoint.is_active.is_(True))
     if asset_id:
         stmt = stmt.where(MeasurementPoint.asset_id == asset_id)
     if q and q.strip():
@@ -433,3 +436,21 @@ def ingest(
         dup += res["duplicate"]
         accepted += not res["duplicate"]
     return {"accepted": accepted, "duplicates": dup, "unknown_tags": sorted(set(unknown))}
+
+
+# ---------- remove (measurement points): delete if never used, otherwise deactivate and keep the history ----------
+class RemoveIn(In):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/points/remove")
+def remove_pdm_points(body: RemoveIn, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    return plan_removal.remove_many(db, ctx.plant, "pdm_point", body.ids, ctx.user.id, ctx.dept_ok)
+
+
+@router.delete("/points/{pid}")
+def remove_pdm_point(pid: uuid.UUID, ctx: Ctx = Depends(require("pdm.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    r = plan_removal.remove_many(db, ctx.plant, "pdm_point", [pid], ctx.user.id, ctx.dept_ok)
+    if r["not_found"]:
+        raise HTTPException(404, "Measurement point not found")
+    return r

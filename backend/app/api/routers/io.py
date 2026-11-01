@@ -3,7 +3,7 @@ import io
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from app.core.db import get_db
 from app.models.assets import Asset
 from app.models.tenancy import Department
 from app.models.workorders import WorkOrder
-from app.services import history_import, lube_import, part_usage, pdm_import, pm_import, reports, shutdown_import, wo_import
+from app.services import history_import, lube_import, part_usage, pdm_import, plan_removal, pm_import, reports, shutdown_import, wo_import
 from app.services import imports as imp
 from app.services import kpi as kpisvc
 from app.services.common import plant_today
@@ -131,20 +131,48 @@ def _plan_import(kind: str, ctx: Ctx):
     return spec
 
 
+# Imports that can first remove the current plans of the equipment in the file ("Replace existing plans").
+REPLACEABLE = {"pm_plans", "pdm_plans", "lube_plans"}
+
+
+def _replace(kind: str, replace: bool, db: Session, ctx: Ctx, rows: list[dict]) -> dict | None:
+    if not replace:
+        return None
+    if kind not in REPLACEABLE:
+        raise HTTPException(422, "Replace is only available for PM, PdM and lubrication plans")
+    return plan_removal.replace_for_import(db, ctx.plant, kind, rows, ctx.user.id, ctx.dept_ok)
+
+
 @router.post("/imports/{kind}/preview")
 def preview_plans(
-    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+    kind: str,
+    file: UploadFile = File(...),
+    replace: bool = Form(False),
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
 ) -> dict:
     validate, _, summary, _ = _plan_import(kind, ctx)
-    return summary(_validate(kind, validate, db, ctx, _read(file)))
+    rows = _read(file)
+    sp = db.begin_nested()  # a replace preview removes, validates against the result, then puts everything back
+    try:
+        replaced = _replace(kind, replace, db, ctx, rows)
+        out = summary(_validate(kind, validate, db, ctx, rows))
+    finally:
+        sp.rollback()
+    return out | ({"replaced": replaced} if replaced is not None else {})
 
 
 @router.post("/imports/{kind}/commit")
 def commit_plans(
-    kind: str, file: UploadFile = File(...), ctx: Ctx = Depends(require("asset.view")), db: Session = Depends(get_db, scope="function")
+    kind: str,
+    file: UploadFile = File(...),
+    replace: bool = Form(False),
+    ctx: Ctx = Depends(require("asset.view")),
+    db: Session = Depends(get_db, scope="function"),
 ) -> dict:
     validate, commit, summary, _ = _plan_import(kind, ctx)
     rows = _read(file)
+    replaced = _replace(kind, replace, db, ctx, rows)  # undone with everything else if the import fails
     v = _validate(kind, validate, db, ctx, rows)
     if v["invalid"]:
         raise HTTPException(422, {"message": "Import has validation errors; nothing was imported", **summary(v)})
@@ -152,7 +180,7 @@ def commit_plans(
         created = commit(db, ctx.plant, rows, ctx.user.id, ctx) if kind in CTX_IMPORTS else commit(db, ctx.plant, rows, ctx.user.id)
     except ValueError as e:
         raise HTTPException(422, {"message": str(e), **summary(v)}) from e
-    return {"created": created}
+    return {"created": created} | ({"replaced": replaced} if replaced is not None else {})
 
 
 @router.post("/imports/{kind}/errors.csv")

@@ -36,6 +36,12 @@ class Role(Base):
     code: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(String(400))
+    # A built-in role the administrator has edited: start-up no longer resets its permissions to the default matrix.
+    customized: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Custom roles belong to the organization that created them; built-in roles (from app.core.permissions) have none.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True
+    )
 
 
 class Permission(Base):

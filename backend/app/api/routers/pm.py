@@ -24,6 +24,7 @@ from app.models.enums import (
 from app.models.inventory import Part
 from app.models.pm import JobPlan, JobPlanMaterial, JobPlanTask, PMOccurrence, PMPlan
 from app.schemas.common import ORM, In
+from app.services import plan_removal
 from app.services import pm as svc
 from app.services.common import audit, plant_today
 from app.services.system import record_job
@@ -450,3 +451,21 @@ def run_scheduler(body: RunIn, ctx: Ctx = Depends(require("pm.run_scheduler")), 
         details.update(res)
     audit(db, "pm.scheduler_run", user_id=ctx.user.id, plant_id=ctx.plant_id, data=res)
     return res
+
+
+# ---------- remove (pm plans): delete if never used, otherwise deactivate and keep the history ----------
+class RemoveIn(In):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/plans/remove")
+def remove_pm_plans(body: RemoveIn, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    return plan_removal.remove_many(db, ctx.plant, "pm_plan", body.ids, ctx.user.id, ctx.dept_ok)
+
+
+@router.delete("/plans/{plan_id}")
+def remove_pm_plan(plan_id: uuid.UUID, ctx: Ctx = Depends(require("pm.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    r = plan_removal.remove_many(db, ctx.plant, "pm_plan", [plan_id], ctx.user.id, ctx.dept_ok)
+    if r["not_found"]:
+        raise HTTPException(404, "PM plan not found")
+    return r

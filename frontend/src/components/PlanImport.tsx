@@ -1,13 +1,16 @@
 "use client";
 
-import { Alert, Button, FileInput, Group, Modal, Stack, Table, Text } from "@mantine/core";
+import { Alert, Button, Checkbox, FileInput, Group, Modal, Stack, Table, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, download, downloadPost } from "@/lib/api";
 import { useMut } from "@/lib/hooks";
 
 type Kind = "pm_plans" | "lube_plans" | "pdm_plans" | "wo_history" | "parts_history" | "work_orders" | "shutdown_plan";
-interface Result { total: number; valid: number; invalid: number; plans?: number; new_lubricants?: number; errors: { row: number; code: string | null; errors: string[] }[] }
+interface Replaced { assets: number; deleted: number; deactivated: number; open_work_orders: number }
+interface Result { total: number; valid: number; invalid: number; plans?: number; new_lubricants?: number; replaced?: Replaced; errors: { row: number; code: string | null; errors: string[] }[] }
+// Imports whose current plans for the equipment in the file can be replaced.
+const REPLACEABLE: Kind[] = ["pm_plans", "pdm_plans", "lube_plans"];
 
 /** Excel/CSV import of a maintenance plan (PM, lubrication or condition monitoring): template → preview → import. */
 export function PlanImport({ kind, title, opened, onClose, countLabel, help }: {
@@ -16,8 +19,9 @@ export function PlanImport({ kind, title, opened, onClose, countLabel, help }: {
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [res, setRes] = useState<Result | null>(null);
-  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
-  const close = () => { setFile(null); setRes(null); onClose(); };
+  const [replace, setReplace] = useState(false);
+  const fd = () => { const d = new FormData(); if (file) d.append("file", file); if (replace) d.append("replace", "true"); return d; };
+  const close = () => { setFile(null); setRes(null); setReplace(false); onClose(); };
   const preview = useMut(() => api<Result>("POST", `/imports/${kind}/preview`, fd()), { success: false, onDone: setRes });
   const commit = useMut(() => api<{ created: number }>("POST", `/imports/${kind}/commit`, fd()), { success: t("common.saved"), onDone: close });
   return (
@@ -26,6 +30,8 @@ export function PlanImport({ kind, title, opened, onClose, countLabel, help }: {
         <Text size="sm" c="dimmed">{help ?? t("planImport.help")}</Text>
         <Button variant="subtle" onClick={() => void download(`/imports/templates/${kind}.xlsx`)}>{t("asset.template")}</Button>
         <FileInput label={t("common.file")} accept=".csv,.xlsx" clearable value={file} onChange={(f) => { setFile(f); setRes(null); }} />
+        {REPLACEABLE.includes(kind) && <Checkbox label={t("removal.replace")} description={t("removal.replaceHint")} checked={replace}
+          onChange={(e) => { setReplace(e.currentTarget.checked); setRes(null); }} />}
         <Group>
           <Button disabled={!file} loading={preview.isPending} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
           <Button color="teal" disabled={!res || res.invalid > 0} loading={commit.isPending} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button>
@@ -37,6 +43,7 @@ export function PlanImport({ kind, title, opened, onClose, countLabel, help }: {
               {res.plans !== undefined && <> · {res.plans} {countLabel ?? t("planImport.plans")}</>}
               {res.new_lubricants ? <> · {res.new_lubricants} {t("planImport.newLubricants")}</> : null}
             </Alert>
+            {res.replaced && <Alert color="orange">{t("removal.replacePreview", { a: res.replaced.assets, d: res.replaced.deleted, x: res.replaced.deactivated })}</Alert>}
             {res.invalid > 0 && (
               <>
                 <Button variant="light" size="xs" onClick={() => void downloadPost(`/imports/${kind}/errors.csv`, fd(), `${kind}_import_errors.csv`)}>{t("asset.errorsReport")}</Button>

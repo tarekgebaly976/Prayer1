@@ -123,7 +123,9 @@ def kpis() -> str:
 def roles() -> str:
     codes = list(ROLES)
     out = ["# Roles and permissions", "", "_Generated from `app/core/permissions.py`. Enforced server-side on every endpoint; "
-           "the UI only hides what the server would refuse._", "", "| Permission | Description | " + " | ".join(ROLES[c][0] for c in codes) + " |",
+           "the UI only hides what the server would refuse._", "",
+           "_This is the **default** matrix. A System Administrator can change it (and add custom roles) in Administration → "
+           "Roles & permissions; edited roles keep their settings across updates._", "", "| Permission | Description | " + " | ".join(ROLES[c][0] for c in codes) + " |",
            "|---|---|" + "---|" * len(codes)]
     for p, desc in PERMISSIONS.items():
         out.append(f"| `{p}` | {desc} | " + " | ".join("✓" if p in ROLES[c][1] else "" for c in codes) + " |")

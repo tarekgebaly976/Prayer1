@@ -66,7 +66,11 @@ def _clean():
     tables = [t.name for t in Base.metadata.sorted_tables if t.name not in keep]
     with eng.begin() as c:
         c.execute(text("TRUNCATE " + ", ".join(tables) + " RESTART IDENTITY CASCADE"))
+        # roles reference organizations (custom roles), so the cascade empties them: rebuild the default matrix.
+        c.execute(text("DELETE FROM roles"))
     eng.dispose()
+    with SessionLocal() as db, db.begin():
+        sync_rbac(db)
 
 
 class Api:

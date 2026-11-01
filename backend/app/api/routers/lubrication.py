@@ -15,7 +15,7 @@ from app.models.enums import LubeTaskStatus
 from app.models.lubrication import LubeRoute, LubeTask, Lubricant, LubricantAlternative, LubricationPoint
 from app.models.tenancy import Department
 from app.schemas.common import ORM, In
-from app.services import labels
+from app.services import labels, plan_removal
 from app.services import lubrication as svc
 from app.services.assets import new_qr_token
 from app.services.common import audit, plant_today, utcnow
@@ -451,3 +451,23 @@ def consumption(
     if end:
         q = q.where(LubeTask.done_date <= end)
     return [{"lubricant": c, "product": p, "unit": u, "quantity": float(q_ or 0), "tasks": n} for c, p, u, q_, n in db.execute(q).all()]
+
+
+# ---------- remove (lubrication points): delete if never used, otherwise deactivate and keep the history ----------
+class RemoveIn(In):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=5000)
+
+
+@router.post("/points/remove")
+def remove_lube_points(body: RemoveIn, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    return plan_removal.remove_many(db, ctx.plant, "lube_point", body.ids, ctx.user.id, ctx.dept_ok)
+
+
+@router.delete("/points/{point_id}")
+def remove_lube_point(
+    point_id: uuid.UUID, ctx: Ctx = Depends(require("lube.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    r = plan_removal.remove_many(db, ctx.plant, "lube_point", [point_id], ctx.user.id, ctx.dept_ok)
+    if r["not_found"]:
+        raise HTTPException(404, "Lubrication point not found")
+    return r

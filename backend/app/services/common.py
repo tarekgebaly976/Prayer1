@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -123,8 +123,14 @@ def sync_kpi_definitions(db: Session) -> None:
 
 
 def sync_rbac(db: Session) -> None:
-    """Idempotently upsert the permission catalogue, the default role matrix and the KPI catalogue."""
+    """Idempotently upsert the permission catalogue, the built-in roles and the KPI catalogue.
+
+    A built-in role the administrator has not edited follows the default matrix in app.core.permissions. Once edited
+    (`customized`), its permissions are left as the administrator set them; only permissions that are new in this
+    release are added to it when the default matrix gives them to that role. Custom roles are never touched."""
     sync_kpi_definitions(db)
+    known = set(db.execute(select(Permission.code)).scalars())
+    new_codes = set(PERMISSIONS) - known
     for code, desc in PERMISSIONS.items():
         db.execute(
             pg_insert(Permission)
@@ -133,16 +139,29 @@ def sync_rbac(db: Session) -> None:
         )
     for code, (name, perms) in ROLES.items():
         db.execute(
-            pg_insert(Role)
-            .values(id=uuid.uuid4(), code=code, name=name)
-            .on_conflict_do_update(index_elements=["code"], set_={"name": name})
+            pg_insert(Role).values(id=uuid.uuid4(), code=code, name=name, customized=False).on_conflict_do_nothing(index_elements=["code"])
         )
         role = db.execute(select(Role).where(Role.code == code)).scalar_one()
         existing = set(db.execute(select(RolePermission.permission_code).where(RolePermission.role_id == role.id)).scalars())
-        for p in perms - existing:
+        if role.customized:
+            add, drop = (perms & new_codes) - existing, set()
+        else:
+            role.name = name
+            add, drop = perms - existing, existing - perms
+        for p in add:
             db.add(RolePermission(role_id=role.id, permission_code=p))
-        for p in existing - perms:
-            db.execute(RolePermission.__table__.delete().where(RolePermission.role_id == role.id, RolePermission.permission_code == p))
+        for p in drop:
+            db.execute(delete(RolePermission).where(RolePermission.role_id == role.id, RolePermission.permission_code == p))
+    db.flush()
+
+
+def reset_role(db: Session, role: Role) -> None:
+    """Put a built-in role back on the default matrix (and let start-up keep it there)."""
+    name, perms = ROLES[role.code]
+    db.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
+    for p in perms:
+        db.add(RolePermission(role_id=role.id, permission_code=p))
+    role.name, role.customized = name, False
     db.flush()
 
 

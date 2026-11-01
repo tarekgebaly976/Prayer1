@@ -32,7 +32,12 @@ def validate_pdm_plans(db: Session, plant: Plant, rows: list[dict]) -> dict:
     point_codes = {c.upper() for c in db.execute(select(MeasurementPoint.code).where(MeasurementPoint.plant_id == plant.id)).scalars()}
     plan_codes = {c.upper() for c in db.execute(select(PMPlan.code).where(PMPlan.plant_id == plant.id)).scalars()}
     plan_codes |= {c.upper() for c in db.execute(select(JobPlan.code).where(JobPlan.plant_id == plant.id)).scalars()}
-    per_asset = Counter(a for a in db.execute(select(MeasurementPoint.asset_id).where(MeasurementPoint.plant_id == plant.id)).scalars())
+    per_asset = Counter(
+        a
+        for a in db.execute(
+            select(MeasurementPoint.asset_id).where(MeasurementPoint.plant_id == plant.id, MeasurementPoint.is_active.is_(True))
+        ).scalars()
+    )
     seen: dict[str, int] = {}
     groups: OrderedDict[str, dict] = OrderedDict()
     out = []

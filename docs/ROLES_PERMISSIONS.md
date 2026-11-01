@@ -2,6 +2,8 @@
 
 _Generated from `app/core/permissions.py`. Enforced server-side on every endpoint; the UI only hides what the server would refuse._
 
+_This is the **default** matrix. A System Administrator can change it (and add custom roles) in Administration → Roles & permissions; edited roles keep their settings across updates._
+
 | Permission | Description | System Administrator | Maintenance Manager | Maintenance Planner | Mechanical Supervisor | Electrical/Automation Supervisor | Reliability Engineer | Engineer | Technician | Storekeeper | Production User | Management Viewer |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `plant.admin` | Administer plant settings, users, numbering, workflow | ✓ |  |  |  |  |  |  |  |  |  |  |

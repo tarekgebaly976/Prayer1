@@ -26,7 +26,11 @@
 
 ## Multi-plant
 Each plant has its own assets, numbering (`WO-<PLANT>-000001`, configurable via `PUT /api/v1/numbering`), timezone,
-currency and calendars. Add a plant with `bootstrap --org-code <existing org> --plant-code <new>` and add memberships.
+currency and calendars. **New, empty plant / mill:** Administration → Plant settings → **New plant / mill** (System
+Administrators): code, name, time zone, currency and the starting departments (paper mill, general or none). The plant
+starts with departments and the work-order workflow only — no assets, plans or work orders; switch to it with the plant
+switcher and load assets, parts, users and plans from the import screens. From the server shell the same is
+`python -m app.cli bootstrap --org-code <existing org> --plant-code <new> … --departments paper|general|none`.
 A user may hold one role per plant. System administrators see all plants of their organisation.
 
 ## Integrations
@@ -37,6 +41,33 @@ A user may hold one role per plant. System administrators see all plants of thei
   Keep the gateway on the OT network with outbound HTTPS only. The CMMS never sends commands to control systems.
 * **E-mail:** set `CMMS_SMTP_HOST/PORT/USER/PASSWORD/FROM`. Until set, e-mails are recorded with status `disabled`.
 * **ERP/Infor:** not integrated. PO numbers can be typed as external references.
+
+## Roles and permissions (controlled by the administrator)
+Administration → **Roles & permissions**. Pick a role, tick what it may do, **Save**. Examples:
+* only managers approve work orders → untick `wo.approve` on the supervisor roles;
+* only planners assign → keep `wo.assign` on Planner, untick it elsewhere;
+* nobody but reliability may delete / change PdM plans → `pdm.manage` on Reliability Engineer only;
+  PM plans → `pm.manage`; lubrication → `lube.manage`; closing many WOs at once → `wo.bulk_close`.
+
+Rules: only a **System Administrator** changes roles; the System Administrator role always has everything (cannot lock
+yourself out). Changes apply to every user with that role in every plant at their next page load, and are kept across
+updates. An edited built-in role shows *Built-in (edited)* and can go back with **Reset to default**. **New role**
+creates your own role (optionally copying another), e.g. "Area Engineer"; give it to users in Users → Edit. A custom
+role can be deleted once nobody has it. Every change is in the audit log (`role.*`).
+
+Administration → **Workflow** decides which permission each work-order step needs (e.g. *Approved* needs `wo.approve`)
+and can switch a step off.
+
+## Removing / replacing PM, PdM and lubrication plans
+* **Remove selected** (PM → Plans, Condition monitoring → Points, Lubrication → Points; needs `pm.manage`,
+  `pdm.manage`, `lube.manage`): items never used are **deleted**; items with history (work orders, readings,
+  lubrication done) are **deactivated** — nothing new is generated, waiting dates are cancelled, history stays, and the
+  code gets `~OFF` so the same code can be imported again. Open work orders they created stay open (bulk close/cancel
+  them if not needed). PM → Plans → *Show removed / inactive* lists them.
+* **Import plan → Replace existing plans of the equipment in this file**: first removes (same rule) the current plans of
+  every asset in the file — PM plans for a PM file; points and PdM rounds for a PdM file; lubrication points for a
+  lubrication file — then imports the file. Preview shows how many will go; if the file has errors nothing changes.
+  Equipment not in the file is not touched.
 
 ## Roles and trades
 * **Role** = what someone may do in the system (Technician, Supervisor, Planner …).

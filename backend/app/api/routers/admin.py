@@ -4,7 +4,7 @@ from datetime import datetime, time
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,14 +13,15 @@ from app.api.pagination import PageQ, paginate
 from app.core.db import get_db
 from app.core.security import hash_password, hash_token, new_token, validate_password_strength
 from app.models.enums import DepartmentType, FailureCodeKind
-from app.models.identity import Membership, Role, User, UserSession
+from app.models.identity import Membership, Role, RolePermission, User, UserSession
 from app.models.system import AuditLog
 from app.models.tenancy import Department, IntegrationToken, NumberSequence, Plant
 from app.models.workorders import WOStatusTransition
 from app.schemas.common import ORM, In
 from app.services import failure_modes as fm
 from app.services import user_import
-from app.services.common import audit, utcnow
+from app.services.common import audit, reset_role, role_permissions, utcnow
+from app.services.plants import create_plant
 from app.services.workflow import ensure_default_transitions
 
 router = APIRouter(tags=["admin"])
@@ -361,8 +362,13 @@ class MembershipUpdate(In):
     daily_summary: bool | None = None  # receives the daily summary e-mail
 
 
-def _role(db: Session, code: str) -> Role:
-    role = db.execute(select(Role).where(Role.code == code)).scalar_one_or_none()
+def _org_roles(ctx: Ctx):  # noqa: ANN202 - SQL condition
+    """Roles this organization may use: the built-in ones and its own custom roles."""
+    return or_(Role.organization_id.is_(None), Role.organization_id == ctx.user.organization_id)
+
+
+def _role(db: Session, code: str, ctx: Ctx) -> Role:
+    role = db.execute(select(Role).where(Role.code == code, _org_roles(ctx))).scalar_one_or_none()
     if role is None:
         raise HTTPException(422, f"Unknown role {code}")
     return role
@@ -402,7 +408,7 @@ def create_user(body: UserCreate, ctx: Ctx = Depends(require("user.manage")), db
         validate_password_strength(body.password)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
-    role = _role(db, body.role)
+    role = _role(db, body.role, ctx)
     if role.code == "system_admin" and not ctx.user.is_system_admin:
         raise HTTPException(403, "Only system administrators can grant the system administrator role")
     depts = _dept_list(db, ctx, body.department_ids if body.department_ids is not None else [d for d in [body.department_id] if d])
@@ -489,7 +495,7 @@ def update_membership(
         raise HTTPException(404, "Member not found")
     data = body.model_dump(exclude_unset=True)
     if "role" in data:
-        role = _role(db, data["role"])
+        role = _role(db, data["role"], ctx)
         if role.code == "system_admin" and not ctx.user.is_system_admin:
             raise HTTPException(403, "Only system administrators can grant the system administrator role")
         m.role_id = role.id
@@ -600,7 +606,218 @@ def list_trades(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope
 
 @router.get("/roles")
 def list_roles(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[dict]:
-    return [{"code": r.code, "name": r.name} for r in db.execute(select(Role).order_by(Role.name)).scalars()]
+    return [{"code": r.code, "name": r.name} for r in db.execute(select(Role).where(_org_roles(ctx)).order_by(Role.name)).scalars()]
+
+
+# ---------- roles & permissions (what each role may do) ----------
+# The matrix is shared by every plant of the organization. Only a System Administrator edits it; the System
+# Administrator role itself is not editable, so the administrator can never lock themselves out.
+LOCKED_ROLES = {"system_admin"}
+
+
+def _sysadmin(ctx: Ctx, what: str) -> None:
+    if not ctx.user.is_system_admin:
+        raise HTTPException(403, f"Only a System Administrator can {what}")
+
+
+def _editable_role(db: Session, code: str, ctx: Ctx) -> Role:
+    _sysadmin(ctx, "change roles")
+    role = _role(db, code, ctx)
+    if role.code in LOCKED_ROLES:
+        raise HTTPException(409, "The System Administrator role always has every permission and cannot be changed")
+    return role
+
+
+@router.get("/permissions")
+def list_permissions(ctx: Ctx = Depends(require("user.manage"))) -> list[dict]:
+    from app.core.permissions import PERMISSIONS
+
+    return [{"code": c, "description": d, "group": c.split(".")[0]} for c, d in PERMISSIONS.items()]
+
+
+@router.get("/roles/matrix")
+def roles_matrix(ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
+    from app.core.permissions import ROLES
+
+    roles = list(db.execute(select(Role).where(_org_roles(ctx)).order_by(Role.name)).scalars())
+    perms: dict[uuid.UUID, list[str]] = {r.id: [] for r in roles}
+    for rid, code in db.execute(select(RolePermission.role_id, RolePermission.permission_code).where(RolePermission.role_id.in_(perms))):
+        perms[rid].append(code)
+    members: dict[uuid.UUID, int] = {
+        rid: n
+        for rid, n in db.execute(
+            select(Membership.role_id, func.count())
+            .join(Plant, Plant.id == Membership.plant_id)
+            .where(Plant.organization_id == ctx.user.organization_id, Membership.is_active.is_(True))
+            .group_by(Membership.role_id)
+        )
+    }
+    return [
+        {
+            "code": r.code,
+            "name": r.name,
+            "builtin": r.code in ROLES,
+            "customized": r.customized,
+            "locked": r.code in LOCKED_ROLES,
+            "members": members.get(r.id, 0),
+            "permissions": sorted(perms[r.id]),
+        }
+        for r in roles
+    ]
+
+
+class RolePermissionsIn(In):
+    permissions: list[str]
+
+
+@router.put("/roles/{code}/permissions")
+def set_role_permissions(
+    code: str, body: RolePermissionsIn, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    from app.core.permissions import PERMISSIONS, ROLES
+
+    role = _editable_role(db, code, ctx)
+    wanted = set(body.permissions)
+    unknown = wanted - set(PERMISSIONS)
+    if unknown:
+        raise HTTPException(422, f"Unknown permission(s): {', '.join(sorted(unknown))}")
+    before = role_permissions(db, role.id)
+    for p in wanted - before:
+        db.add(RolePermission(role_id=role.id, permission_code=p))
+    for p in before - wanted:
+        db.execute(delete(RolePermission).where(RolePermission.role_id == role.id, RolePermission.permission_code == p))
+    if role.code in ROLES:
+        role.customized = True
+    audit(
+        db,
+        "role.permissions",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="role",
+        entity_id=role.id,
+        data={"role": role.code, "added": sorted(wanted - before), "removed": sorted(before - wanted)},
+    )
+    return {"code": role.code, "permissions": sorted(wanted)}
+
+
+class RoleCreate(In):
+    name: str = Field(min_length=2, max_length=120)
+    copy_from: str | None = None  # start with the permissions of this role
+
+
+@router.post("/roles", status_code=201)
+def create_role(body: RoleCreate, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    _sysadmin(ctx, "create roles")
+    name = body.name.strip()
+    if db.execute(select(Role.id).where(_org_roles(ctx), func.lower(Role.name) == name.lower())).first():
+        raise HTTPException(409, f"A role named {name} already exists")
+    perms: set[str] = set()
+    if body.copy_from:
+        src = _role(db, body.copy_from, ctx)
+        perms = role_permissions(db, src.id)
+    role = Role(code=f"c_{uuid.uuid4().hex[:12]}", name=name, organization_id=ctx.user.organization_id, customized=True)
+    db.add(role)
+    db.flush()
+    for p in perms:
+        db.add(RolePermission(role_id=role.id, permission_code=p))
+    audit(
+        db,
+        "role.create",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant_id,
+        entity_type="role",
+        entity_id=role.id,
+        data={"name": name, "copy_from": body.copy_from},
+    )
+    return {"code": role.code, "name": role.name, "permissions": sorted(perms)}
+
+
+class RoleRename(In):
+    name: str = Field(min_length=2, max_length=120)
+
+
+@router.patch("/roles/{code}")
+def rename_role(
+    code: str, body: RoleRename, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    from app.core.permissions import ROLES
+
+    role = _editable_role(db, code, ctx)
+    name = body.name.strip()
+    if db.execute(select(Role.id).where(_org_roles(ctx), func.lower(Role.name) == name.lower(), Role.id != role.id)).first():
+        raise HTTPException(409, f"A role named {name} already exists")
+    role.name = name
+    if role.code in ROLES:
+        role.customized = True
+    audit(db, "role.rename", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="role", entity_id=role.id, data={"name": name})
+    return {"code": role.code, "name": role.name}
+
+
+@router.post("/roles/{code}/reset")
+def reset_builtin_role(code: str, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> dict:
+    from app.core.permissions import ROLES
+
+    role = _editable_role(db, code, ctx)
+    if role.code not in ROLES:
+        raise HTTPException(409, "Only built-in roles have a default to go back to")
+    reset_role(db, role)
+    audit(db, "role.reset", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="role", entity_id=role.id, data={"role": role.code})
+    return {"code": role.code, "permissions": sorted(role_permissions(db, role.id))}
+
+
+@router.delete("/roles/{code}", status_code=204)
+def delete_role(code: str, ctx: Ctx = Depends(require("user.manage")), db: Session = Depends(get_db, scope="function")) -> None:
+    from app.core.permissions import ROLES
+
+    role = _editable_role(db, code, ctx)
+    if role.code in ROLES:
+        raise HTTPException(409, "Built-in roles cannot be deleted; take permissions away instead")
+    used = db.execute(select(func.count()).select_from(Membership).where(Membership.role_id == role.id)).scalar_one()
+    if used:
+        raise HTTPException(409, f"{used} user(s) still have this role; give them another role first")
+    audit(db, "role.delete", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="role", entity_id=role.id, data={"name": role.name})
+    db.delete(role)
+
+
+# ---------- plants (a new, empty plant / mill) ----------
+class PlantCreate(In):
+    code: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str = Field(min_length=2, max_length=200)
+    timezone: str = "Asia/Riyadh"
+    currency: str = Field("SAR", min_length=3, max_length=3)
+    departments: str = Field("general", pattern="^(general|paper|none)$")
+
+
+@router.get("/plants")
+def list_plants(ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
+    rows = db.execute(select(Plant).where(Plant.organization_id == ctx.user.organization_id).order_by(Plant.code)).scalars()
+    return [
+        {"id": p.id, "code": p.code, "name": p.name, "timezone": p.timezone, "currency": p.currency, "is_active": p.is_active} for p in rows
+    ]
+
+
+@router.post("/plants", status_code=201)
+def new_plant(body: PlantCreate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """An empty plant in the same organization: starting departments and the default workflow, nothing else.
+    System Administrators see it at once in the plant switcher; other users are added from Admin → Users there."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    _sysadmin(ctx, "create plants")
+    try:
+        ZoneInfo(body.timezone)
+    except (ZoneInfoNotFoundError, ValueError) as e:
+        raise HTTPException(422, f"Unknown time zone {body.timezone}") from e
+    plant = create_plant(db, ctx.user.organization_id, body.code, body.name, body.timezone, body.currency, body.departments)
+    audit(
+        db,
+        "plant.create",
+        user_id=ctx.user.id,
+        plant_id=plant.id,
+        entity_type="plant",
+        entity_id=plant.id,
+        data={"code": plant.code, "name": plant.name, "departments": body.departments},
+    )
+    return {"id": plant.id, "code": plant.code, "name": plant.name}
 
 
 # ---------- failure codes ----------

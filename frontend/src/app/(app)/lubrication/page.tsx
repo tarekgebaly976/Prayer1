@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { LabelPrint } from "@/components/LabelPrint";
 import { PlanImport } from "@/components/PlanImport";
+import { RemovePlans } from "@/components/RemovePlans";
 import { AssetPicker, DataTable, DeptSelect, PageHeader, StatusBadge, UserPicker } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
@@ -36,6 +37,7 @@ function Lube() {
   const [modal, setModal] = useState<"lub" | "route" | "point" | "alt" | null>(null);
   const [imp, setImp] = useState(false);
   const [labels, setLabels] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
   const [lf, setLf] = useState({ code: "", manufacturer: "", product: "", kind: "grease", viscosity_grade: "", specification: "" });
   const [rf, setRf] = useState({ code: "", name: "", department_id: null as string | null, lead_days: 2 as number | string });
   const [pf, setPf] = useState({ code: "", asset_id: null as string | null, component: "", lubricant_id: null as string | null, quantity: 10 as number | string, unit: "g",
@@ -66,7 +68,8 @@ function Lube() {
           <Tabs.Tab value="tasks">{t("lube.tasks")}</Tabs.Tab><Tabs.Tab value="lubricants">{t("lube.lubricants")}</Tabs.Tab><Tabs.Tab value="consumption">{t("lube.consumption")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="points" pt="md">
-          <DataTable rows={points.data} columns={[
+          {can("lube.manage") && <Group mb="sm"><RemovePlans path="/lubrication/points/remove" ids={picked} onDone={() => setPicked([])} /></Group>}
+          <DataTable rows={points.data} selected={picked} onSelect={can("lube.manage") ? setPicked : undefined} columns={[
             { key: "c", label: t("common.code"), render: (p) => p.code }, { key: "a", label: t("common.asset"), render: (p) => <Link href={`/assets/${p.asset_id}`}>{amap.get(p.asset_id)}</Link> },
             { key: "m", label: "Component", render: (p) => p.component }, { key: "l", label: t("lube.lubricant"), render: (p) => lmap.get(p.lubricant_id) },
             { key: "q", label: t("common.quantity"), render: (p) => `${fmtNum(p.quantity)} ${p.unit}` },

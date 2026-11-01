@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { NewAsset } from "@/components/NewAsset";
 import { PlanImport } from "@/components/PlanImport";
+import { RemovePlans } from "@/components/RemovePlans";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { api, download, post, put } from "@/lib/api";
 import { fmtDate, fmtNum, useAssetCodes, useMut, useQ } from "@/lib/hooks";
@@ -153,6 +154,7 @@ function PdM() {
   const [prioOnly, setPrioOnly] = useState(false);
   const [prioXl, setPrioXl] = useState(false);
   const [hist, setHist] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
   const all = useQ<MPoint[]>("/pdm/points", { q: q || undefined, under });
   const points = { ...all, data: prioOnly ? all.data?.filter((p) => p.priority < 3 || p.last_status === "critical") : all.data };
   const chosen = useQ<Asset>(f.asset_id ? `/assets/${f.asset_id}` : null);
@@ -191,10 +193,11 @@ function PdM() {
             <TextInput label={t("common.search")} placeholder={t("pdm.searchHint")} value={search} onChange={(e) => setSearch(e.currentTarget.value)} w={260} />
             <div style={{ width: 340 }}><AssetPicker label={t("labels.under")} value={under} onChange={setUnder} clearable /></div>
             <Checkbox mb={8} label={t("pdm.prioOnly")} checked={prioOnly} onChange={(e) => setPrioOnly(e.currentTarget.checked)} />
+            {can("pdm.manage") && <RemovePlans path="/pdm/points/remove" ids={picked} onDone={() => { setPicked([]); setSel(null); }} />}
           </Group>
           {(all.data?.length ?? 0) >= 2000 && <Alert color="blue" mb="sm">{t("pdm.capped")}</Alert>}
           <SimpleGrid cols={wide && point ? 2 : 1}>
-            <DataTable rows={points.data} onRow={(p) => setSel(p.id)} columns={[
+            <DataTable rows={points.data} onRow={(p) => setSel(p.id)} selected={picked} onSelect={can("pdm.manage") ? setPicked : undefined} columns={[
               { key: "c", label: t("common.code"), render: (p) => <Group gap={6} wrap="nowrap"><PrioBadge p={p.priority} /><b>{p.code}</b></Group> }, { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
               { key: "t", label: t("pdm.technique"), render: (p) => p.technique }, { key: "v", label: t("pdm.lastValue"), render: (p) => `${fmtNum(p.last_value)} ${p.unit}` },
               { key: "s", label: t("common.status"), render: (p) => <StatusBadge value={p.last_status} /> }]} />

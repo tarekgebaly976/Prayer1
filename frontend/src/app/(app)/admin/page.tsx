@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Autocomplete, Button, Checkbox, Code, FileInput, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Autocomplete, Badge, Button, Checkbox, Code, FileInput, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
@@ -9,6 +9,7 @@ import { PlanImport } from "@/components/PlanImport";
 import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge, TradeInput } from "@/components/ui";
 import { api, del, download, patch, post, put } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
+import { useSession } from "@/lib/session";
 import type { Department, FailureCode, Member, Page } from "@/lib/types";
 
 interface Transition { id: string; from_status: string; to_status: string; permission: string; is_active: boolean }
@@ -281,11 +282,118 @@ function Basics() {
 function Workflow() {
   const { t } = useTranslation();
   const q = useQ<Transition[]>("/workflow/transitions");
+  const perms = useQ<Perm[]>("/permissions");
+  const opts = (perms.data ?? []).map((p) => ({ value: p.code, label: `${p.code} — ${p.description}` }));
   const upd = useMut((a: { id: string; body: object }) => patch(`/workflow/transitions/${a.id}`, a.body));
-  return <DataTable rows={q.data} columns={[
+  return <Stack>
+    <Text size="sm" c="dimmed">{t("roles.workflowHint")}</Text>
+    <DataTable rows={q.data} columns={[
     { key: "f", label: t("common.from"), render: (x) => <StatusBadge value={x.from_status} /> }, { key: "t", label: t("common.to"), render: (x) => <StatusBadge value={x.to_status} /> },
-    { key: "p", label: t("admin.permission"), render: (x) => <TextInput size="xs" defaultValue={x.permission} onBlur={(e) => e.currentTarget.value !== x.permission && upd.mutate({ id: x.id, body: { permission: e.currentTarget.value } })} /> },
-    { key: "a", label: t("common.active"), render: (x) => <Switch checked={x.is_active} onChange={() => upd.mutate({ id: x.id, body: { is_active: !x.is_active } })} /> }]} />;
+    { key: "p", label: t("admin.permission"), render: (x) => <Select size="xs" w={360} searchable allowDeselect={false} data={opts.length ? opts : [{ value: x.permission, label: x.permission }]}
+      value={x.permission} onChange={(v) => v && v !== x.permission && upd.mutate({ id: x.id, body: { permission: v } })} /> },
+    { key: "a", label: t("common.active"), render: (x) => <Switch checked={x.is_active} onChange={() => upd.mutate({ id: x.id, body: { is_active: !x.is_active } })} /> }]} />
+  </Stack>;
+}
+
+interface Perm { code: string; description: string; group: string }
+interface RoleRow { code: string; name: string; builtin: boolean; customized: boolean; locked: boolean; members: number; permissions: string[] }
+const GROUPS: Record<string, string> = { plant: "Administration", user: "Administration", audit: "Administration", asset: "Assets", request: "Work requests",
+  wo: "Work orders", pm: "PM", lube: "Lubrication", pdm: "PdM", shift: "Shifts", handover: "Shifts", inventory: "Inventory", purchase: "Inventory",
+  shutdown: "Shutdowns", kpi: "KPIs & reports", report: "KPIs & reports", attachment: "Attachments" };
+
+/** What each role may do. Only a System Administrator changes it; the change applies to every plant at the next page load. */
+function Roles() {
+  const { t } = useTranslation();
+  const { me } = useSession();
+  const editable = !!me?.is_system_admin;
+  const perms = useQ<Perm[]>("/permissions");
+  const roles = useQ<RoleRow[]>("/roles/matrix");
+  const [code, setCode] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const [newRole, setNewRole] = useState<{ name: string; copy_from: string | null } | null>(null);
+  const [rename, setRename] = useState<string | null>(null);
+  const role = roles.data?.find((r) => r.code === code) ?? null;
+  const cur = draft ?? role?.permissions ?? [];
+  const pick = (c: string | null) => { setCode(c); setDraft(null); };
+  const save = useMut(() => put(`/roles/${code}/permissions`, { permissions: cur }), { onDone: () => setDraft(null) });
+  const reset = useMut(() => post(`/roles/${code}/reset`, {}), { onDone: () => setDraft(null) });
+  const remove = useMut(() => del(`/roles/${code}`), { onDone: () => pick(null) });
+  const create = useMut(() => post<{ code: string }>("/roles", newRole), { onDone: (r) => { setNewRole(null); pick(r.code); } });
+  const ren = useMut(() => patch(`/roles/${code}`, { name: rename }), { onDone: () => setRename(null) });
+  const groups = new Map<string, Perm[]>();
+  for (const p of perms.data ?? []) { const g = GROUPS[p.group] ?? p.group; groups.set(g, [...(groups.get(g) ?? []), p]); }
+  const has = new Set(cur);
+  const flip = (c: string) => setDraft(has.has(c) ? cur.filter((x) => x !== c) : [...cur, c]);
+  const roleOpts = (roles.data ?? []).map((r) => ({ value: r.code, label: `${r.name} (${r.members})` }));
+  const dirty = draft !== null;
+  return (
+    <Stack>
+      <Alert color="blue">{editable ? t("roles.hint") : t("roles.readOnly")}</Alert>
+      <Group align="end">
+        <Select label={t("common.role")} w={340} searchable data={roleOpts} value={code} onChange={pick} placeholder={t("roles.pick")} />
+        {editable && <Button variant="light" onClick={() => setNewRole({ name: "", copy_from: code })}>{t("roles.new")}</Button>}
+        {editable && role && !role.locked && <Button variant="default" onClick={() => setRename(role.name)}>{t("roles.rename")}</Button>}
+        {editable && role?.builtin && role.customized && !role.locked && <Button variant="default" loading={reset.isPending} onClick={() => reset.mutate(undefined)}>{t("roles.reset")}</Button>}
+        {editable && role && !role.builtin && <Button color="red" variant="light" disabled={role.members > 0} title={role.members > 0 ? t("roles.inUse") : undefined}
+          loading={remove.isPending} onClick={() => remove.mutate(undefined)}>{t("common.delete")}</Button>}
+      </Group>
+      {role && <Group gap="xs">
+        <Badge variant="light" color={role.builtin ? (role.customized ? "orange" : "gray") : "violet"}>{t(role.builtin ? (role.customized ? "roles.kindEdited" : "roles.kindDefault") : "roles.kindCustom")}</Badge>
+        <Text size="sm" c="dimmed">{t("roles.members", { n: role.members })} · {t("roles.count", { n: cur.length, total: perms.data?.length ?? 0 })}</Text>
+      </Group>}
+      {role?.locked && <Alert color="gray">{t("roles.locked")}</Alert>}
+      {role && <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }}>
+        {[...groups.entries()].map(([g, ps]) => (
+          <Stack key={g} gap={4} p="sm" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+            <Group justify="space-between"><Text fw={600}>{g}</Text>
+              {editable && !role.locked && <Checkbox size="xs" label={t("roles.all")} checked={ps.every((p) => has.has(p.code))}
+                onChange={(e) => setDraft(e.currentTarget.checked ? [...new Set([...cur, ...ps.map((p) => p.code)])] : cur.filter((c) => !ps.some((p) => p.code === c)))} />}
+            </Group>
+            {ps.map((p) => <Checkbox key={p.code} disabled={!editable || role.locked} checked={has.has(p.code)} onChange={() => flip(p.code)}
+              label={<><Code>{p.code}</Code> {p.description}</>} />)}
+          </Stack>
+        ))}
+      </SimpleGrid>}
+      {editable && role && !role.locked && <Group><Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button>
+        {dirty && <Button variant="default" onClick={() => setDraft(null)}>{t("common.cancel")}</Button>}</Group>}
+      <Modal opened={!!newRole} onClose={() => setNewRole(null)} title={t("roles.new")}>
+        {newRole && <Stack>
+          <TextInput label={t("common.name")} placeholder="Area Engineer" value={newRole.name} onChange={(e) => setNewRole({ ...newRole, name: e.currentTarget.value })} />
+          <Select label={t("roles.copyFrom")} clearable data={roleOpts} value={newRole.copy_from} onChange={(v) => setNewRole({ ...newRole, copy_from: v })} />
+          <Button disabled={newRole.name.trim().length < 2} loading={create.isPending} onClick={() => create.mutate(undefined)}>{t("common.create")}</Button>
+        </Stack>}
+      </Modal>
+      <Modal opened={rename !== null} onClose={() => setRename(null)} title={t("roles.rename")}>
+        <Stack><TextInput label={t("common.name")} value={rename ?? ""} onChange={(e) => setRename(e.currentTarget.value)} />
+          <Button disabled={(rename ?? "").trim().length < 2} loading={ren.isPending} onClick={() => ren.mutate(undefined)}>{t("common.save")}</Button></Stack>
+      </Modal>
+    </Stack>
+  );
+}
+
+/** A new, empty plant / mill in the same organization (System Administrators only). */
+function NewPlant() {
+  const { t } = useTranslation();
+  const [f, setF] = useState({ code: "", name: "", timezone: "Asia/Riyadh", currency: "SAR", departments: "paper" });
+  const [made, setMade] = useState<{ id: string; code: string; name: string } | null>(null);
+  const create = useMut(() => post<{ id: string; code: string; name: string }>("/plants", f), { onDone: setMade });
+  const open = (id: string) => { window.localStorage.setItem("cmms.plant", id); window.location.reload(); };
+  return (
+    <Stack maw={600} mt="xl" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text fw={700}>{t("plants.new")}</Text>
+      <Text size="sm" c="dimmed">{t("plants.hint")}</Text>
+      <SimpleGrid cols={2}>
+        <TextInput label={t("common.code")} placeholder="MILL2" value={f.code} onChange={(e) => setF({ ...f, code: e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })} />
+        <TextInput label={t("common.name")} placeholder="New Mill" value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
+        <TextInput label={t("admin.timezone")} value={f.timezone} onChange={(e) => setF({ ...f, timezone: e.currentTarget.value })} />
+        <TextInput label={t("admin.currency")} maxLength={3} value={f.currency} onChange={(e) => setF({ ...f, currency: e.currentTarget.value.toUpperCase() })} />
+      </SimpleGrid>
+      <SegmentedControl value={f.departments} onChange={(v) => setF({ ...f, departments: v })} data={[
+        { value: "paper", label: t("plants.deptPaper") }, { value: "general", label: t("plants.deptGeneral") }, { value: "none", label: t("plants.deptNone") }]} />
+      <Group><Button disabled={!f.code || f.name.trim().length < 2} loading={create.isPending} onClick={() => create.mutate(undefined)}>{t("plants.create")}</Button></Group>
+      {made && <Alert color="teal">{t("plants.done", { code: made.code })} <Button size="xs" ml="sm" onClick={() => open(made.id)}>{t("plants.open")}</Button></Alert>}
+    </Stack>
+  );
 }
 
 function PlantSettings() {
@@ -465,19 +573,21 @@ function PartsImport() {
 
 export default function AdminPage() {
   const { t } = useTranslation();
+  const { me, can } = useSession();
   return (
     <Guard perm="plant.admin">
       <PageHeader title={t("nav.admin")} />
       <Tabs defaultValue="users" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="users">{t("admin.users")}</Tabs.Tab><Tabs.Tab value="basics">{t("admin.departments")} / {t("admin.failureCodes")}</Tabs.Tab>
-          <Tabs.Tab value="workflow">{t("admin.workflow")}</Tabs.Tab><Tabs.Tab value="plant">{t("admin.plant")}</Tabs.Tab><Tabs.Tab value="summary">{t("admin.dsTab")}</Tabs.Tab><Tabs.Tab value="import">{t("common.import")}</Tabs.Tab>
+          {can("user.manage") && <Tabs.Tab value="roles">{t("roles.tab")}</Tabs.Tab>}<Tabs.Tab value="workflow">{t("admin.workflow")}</Tabs.Tab><Tabs.Tab value="plant">{t("admin.plant")}</Tabs.Tab><Tabs.Tab value="summary">{t("admin.dsTab")}</Tabs.Tab><Tabs.Tab value="import">{t("common.import")}</Tabs.Tab>
           <Tabs.Tab value="tokens">{t("admin.tokens")}</Tabs.Tab><Tabs.Tab value="audit">{t("admin.audit")}</Tabs.Tab><Tabs.Tab value="jobs">{t("admin.jobs")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="users" pt="md"><Users /></Tabs.Panel>
         <Tabs.Panel value="basics" pt="md"><Basics /></Tabs.Panel>
+        <Tabs.Panel value="roles" pt="md"><Roles /></Tabs.Panel>
         <Tabs.Panel value="workflow" pt="md"><Workflow /></Tabs.Panel>
-        <Tabs.Panel value="plant" pt="md"><PlantSettings /></Tabs.Panel>
+        <Tabs.Panel value="plant" pt="md"><PlantSettings />{me?.is_system_admin && <NewPlant />}</Tabs.Panel>
         <Tabs.Panel value="summary" pt="md"><DailySummary /></Tabs.Panel>
         <Tabs.Panel value="import" pt="md"><Stack><HistoryImports /><PartsImport /></Stack></Tabs.Panel>
         <Tabs.Panel value="tokens" pt="md"><Tokens /></Tabs.Panel>

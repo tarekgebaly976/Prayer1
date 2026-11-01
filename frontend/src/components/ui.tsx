@@ -1,6 +1,6 @@
 "use client";
 
-import { ActionIcon, Autocomplete, Badge, Button, Center, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
+import { ActionIcon, Autocomplete, Badge, Button, Center, Checkbox, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
 import Link from "next/link";
@@ -52,19 +52,31 @@ export function ErrorText({ error }: { error: unknown }) {
 
 export interface Column<T> { key: string; label: ReactNode; render: (row: T) => ReactNode; hideOnMobile?: boolean }
 
-export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKey }: {
+export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKey, selected, onSelect }: {
   rows: T[] | undefined; columns: Column<T>[]; onRow?: (r: T) => void; empty?: string; rowKey?: (r: T, i: number) => string;
+  /** Row selection (checkbox column) by row id; shown when onSelect is given. */
+  selected?: string[]; onSelect?: (ids: string[]) => void;
 }) {
   const { t } = useTranslation();
   if (!rows) return <Loading />;
   if (rows.length === 0) return <Text c="dimmed" p="md">{empty ?? t("common.noData")}</Text>;
+  const idOf = (r: T, i: number) => (rowKey ? rowKey(r, i) : ("id" in r && typeof r.id === "string" ? r.id : String(i)));
+  const sel = new Set(selected ?? []);
+  const ids = rows.map(idOf);
+  const all = ids.length > 0 && ids.every((x) => sel.has(x));
+  const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); onSelect?.([...n]); };
   return (
     <ScrollArea type="auto">
       <Table striped highlightOnHover={!!onRow} verticalSpacing="xs" miw={600}>
-        <Table.Thead><Table.Tr>{columns.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}</Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr>
+          {onSelect && <Table.Th w={36}><Checkbox aria-label="all" checked={all} indeterminate={!all && ids.some((x) => sel.has(x))}
+            onChange={() => onSelect(all ? [...sel].filter((x) => !ids.includes(x)) : [...new Set([...sel, ...ids])])} /></Table.Th>}
+          {columns.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}
+        </Table.Tr></Table.Thead>
         <Table.Tbody>
           {rows.map((r, i) => (
-            <Table.Tr key={rowKey ? rowKey(r, i) : ("id" in r && typeof r.id === "string" ? r.id : String(i))} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
+            <Table.Tr key={idOf(r, i)} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
+              {onSelect && <Table.Td onClick={(e) => e.stopPropagation()}><Checkbox aria-label="select" checked={sel.has(idOf(r, i))} onChange={() => toggle(idOf(r, i))} /></Table.Td>}
               {columns.map((c) => <Table.Td key={c.key}>{c.render(r)}</Table.Td>)}
             </Table.Tr>
           ))}

@@ -14,7 +14,7 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -37,9 +37,11 @@ def temp_password() -> str:
             return pw
 
 
-def _roles(db: Session) -> dict[str, Role]:
+def _roles(db: Session, plant: Plant) -> dict[str, Role]:
+    """Built-in roles and the organization's own custom roles, by code and by name."""
     out: dict[str, Role] = {}
-    for r in db.execute(select(Role)).scalars():
+    q = select(Role).where(or_(Role.organization_id.is_(None), Role.organization_id == plant.organization_id))
+    for r in db.execute(q).scalars():
         out[r.code.lower()] = r
         out[r.name.lower()] = r
     return out
@@ -53,7 +55,7 @@ def _members(db: Session, plant: Plant) -> list[tuple[Membership, User]]:
 
 def template_xlsx(db: Session, plant: Plant) -> bytes:
     depts = {d.id: d.code for d in db.execute(select(Department).where(Department.plant_id == plant.id)).scalars()}
-    roles = sorted({(r.code, r.name) for r in _roles(db).values()})
+    roles = sorted({(r.code, r.name) for r in _roles(db, plant).values()})
     wb = Workbook()
     ws = wb.active
     assert ws is not None
@@ -117,7 +119,7 @@ def template_xlsx(db: Session, plant: Plant) -> bytes:
 
 def check(db: Session, plant: Plant, filename: str, content: bytes, may_grant_admin: bool) -> dict[str, Any]:
     rows = read_rows(filename, content)
-    roles = _roles(db)
+    roles = _roles(db, plant)
     depts = {d.code.upper(): d for d in db.execute(select(Department).where(Department.plant_id == plant.id)).scalars()}
     members = {u.email.lower(): (m, u) for m, u in _members(db, plant)}
     all_users = {u.email.lower(): u for u in db.execute(select(User).where(User.organization_id == plant.organization_id)).scalars()}

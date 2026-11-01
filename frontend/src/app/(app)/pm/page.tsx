@@ -1,12 +1,13 @@
 "use client";
 
-import { ActionIcon, Alert, Button, Checkbox, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea } from "@mantine/core";
+import { ActionIcon, Alert, Button, Checkbox, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea } from "@mantine/core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
+import { RemovePlans } from "@/components/RemovePlans";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge, TradeInput } from "@/components/ui";
 import { download, post, put } from "@/lib/api";
 import { fmtDate, useAssetCodes, useMut, useQ } from "@/lib/hooks";
@@ -203,7 +204,9 @@ function PM() {
   const [search, setSearch] = useState("");
   const [planOff, setPlanOff] = useState(0);
   const [occOff, setOccOff] = useState(0);
-  const plans = useQ<Page<Plan>>("/pm/plans", { limit: 100, offset: planOff, q: search });
+  const [showOff, setShowOff] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const plans = useQ<Page<Plan>>("/pm/plans", { limit: 100, offset: planOff, q: search, ...(showOff ? {} : { active: true }) });
   const jobs = useQ<JobPlan[]>("/pm/job-plans");
   const occ = useQ<Page<Occ>>("/pm/occurrences", { limit: 100, offset: occOff, status: ["scheduled", "generated", "deferred", "deferral_requested", "cancellation_requested"] });
   const approvals = useQ<Page<Occ>>("/pm/occurrences", { limit: 200, status: ["deferral_requested", "cancellation_requested"] });
@@ -239,8 +242,12 @@ function PM() {
           <Tabs.Tab value="approvals">{t("pm.approvals")} ({approvals.data?.total ?? 0})</Tabs.Tab><Tabs.Tab value="jobs">{t("pm.jobPlans")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="plans" pt="md">
-          <TextInput mb="sm" maw={360} placeholder={t("common.search")} value={search} onChange={(e) => { setSearch(e.currentTarget.value); setPlanOff(0); }} />
-          <DataTable rows={plans.data?.items} columns={[
+          <Group mb="sm" align="center">
+            <TextInput maw={360} placeholder={t("common.search")} value={search} onChange={(e) => { setSearch(e.currentTarget.value); setPlanOff(0); }} />
+            <Switch label={t("removal.showInactive")} checked={showOff} onChange={(e) => { setShowOff(e.currentTarget.checked); setPlanOff(0); }} />
+            {can("pm.manage") && <RemovePlans path="/pm/plans/remove" ids={picked} onDone={() => setPicked([])} />}
+          </Group>
+          <DataTable rows={plans.data?.items} selected={picked} onSelect={can("pm.manage") ? setPicked : undefined} columns={[
             { key: "c", label: t("common.code"), render: (p) => p.code }, { key: "n", label: t("common.name"), render: (p) => p.name },
             { key: "a", label: t("common.asset"), render: (p) => amap.get(p.asset_id) },
             { key: "f", label: t("pm.frequency"), render: (p) => (p.trigger === "calendar" ? `${p.frequency_interval} ${p.frequency_unit} · ${p.schedule_basis}` : `${p.meter_interval} (meter)`) },

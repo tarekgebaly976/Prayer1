@@ -6,7 +6,6 @@ from datetime import date, time, timedelta
 
 from sqlalchemy import select
 
-from app.cli import PAPER_DEPTS
 from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models.assets import Asset, AssetBOM, FailureCode, Meter
@@ -30,6 +29,7 @@ from app.models.tenancy import Department, Organization, Plant
 from app.services.assets import compute_path, new_qr_token
 from app.services.common import plant_today, sync_rbac, utcnow
 from app.services.inventory import receive
+from app.services.plants import PAPER_DEPTS
 from app.services.pm import plan_occurrences
 from app.services.workflow import ensure_default_transitions
 
