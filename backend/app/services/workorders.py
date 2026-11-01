@@ -294,6 +294,48 @@ def change_status(db: Session, ctx: Ctx, wo: WorkOrder, to: WOStatus, comment: s
     return wo
 
 
+def bulk_finish(db: Session, ctx: Ctx, wo: WorkOrder, action: str, comment: str) -> None:
+    """Administrative close / cancel for planners, engineers and managers (permission wo.bulk_close), e.g. to clear old
+    or already-done work. Skips the step-by-step workflow but keeps the side effects: a closed PM counts as done, a
+    cancelled PM occurrence is cancelled, reservations are released and the status history records who did it and why."""
+    if wo.status in (WOStatus.CLOSED, WOStatus.CANCELLED):
+        raise DomainError(f"already {wo.status.value}", "invalid_state", 409)
+    if action == "cancel" and wo.status == WOStatus.COMPLETED:
+        raise DomainError("already completed: close it instead", "invalid_state", 409)
+    frm, now = wo.status, utcnow()
+    note = f"Bulk {action}: {comment}"
+    if action == "close":
+        if wo.status != WOStatus.COMPLETED:
+            wo.status = WOStatus.COMPLETED
+            wo.completed_at = now
+            wo.actual_end = wo.actual_end or now
+            _on_completed(db, ctx.plant, wo, ctx.user.id)
+        wo.status, wo.closed_at = WOStatus.CLOSED, now
+    else:
+        wo.status = WOStatus.CANCELLED
+        if wo.pm_occurrence_id:
+            occ = db.get(PMOccurrence, wo.pm_occurrence_id)
+            if occ and occ.status != OccurrenceStatus.COMPLETED:
+                occ.status = OccurrenceStatus.CANCELLED
+                occ.decided_by_id, occ.decided_at, occ.request_reason = ctx.user.id, now, note
+    _release_reservations(db, wo)
+    db.add(
+        WOStatusHistory(
+            work_order_id=wo.id, from_status=frm.value, to_status=wo.status.value, changed_by_id=ctx.user.id, changed_at=now, comment=note
+        )
+    )
+    audit(
+        db,
+        f"wo.bulk_{action}",
+        user_id=ctx.user.id,
+        plant_id=ctx.plant.id,
+        entity_type="work_order",
+        entity_id=wo.id,
+        data={"from": frm, "to": wo.status, "comment": comment},
+        ip=ctx.ip,
+    )
+
+
 def _release_reservations(db: Session, wo: WorkOrder) -> None:
     from app.services.inventory import cancel_reservation
 

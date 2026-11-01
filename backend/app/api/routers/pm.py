@@ -283,8 +283,11 @@ def list_occurrences(
     status: list[OccurrenceStatus] | None = Query(None),
     due_from: date | None = None,
     due_to: date | None = None,
+    waiting: bool = False,  # held for release: no work order yet (Manual departments, or not yet in the lead window)
 ) -> dict:
     q = select(PMOccurrence).where(PMOccurrence.plant_id == ctx.plant_id)
+    if waiting:
+        q = q.where(PMOccurrence.work_order_id.is_(None), PMOccurrence.status.in_([OccurrenceStatus.SCHEDULED, OccurrenceStatus.DEFERRED]))
     if ctx.department_ids:
         q = q.where(PMOccurrence.pm_plan_id.in_(select(PMPlan.id).where(ctx.in_department(PMPlan.asset_id))))
     if plan_id:
@@ -340,6 +343,69 @@ def decide(
     occ_id: uuid.UUID, body: DecisionIn, ctx: Ctx = Depends(require("pm.approve_deferral")), db: Session = Depends(get_db, scope="function")
 ) -> PMOccurrence:
     return svc.decide_change(db, ctx.plant, _occ(db, ctx, occ_id), ctx.user.id, body.approve)
+
+
+class ReleaseIn(In):
+    occurrence_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+@router.post("/occurrences/release")
+def release(body: ReleaseIn, ctx: Ctx = Depends(require("wo.create")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """Create the work orders of chosen PM / PdM occurrences now (Manual mode, or ahead of the lead window)."""
+    allowed: list[uuid.UUID] = []
+    skipped: list[dict] = []
+    for oid in dict.fromkeys(body.occurrence_ids):
+        o = db.get(PMOccurrence, oid)
+        plan = db.get(PMPlan, o.pm_plan_id) if o is not None and o.plant_id == ctx.plant_id else None
+        asset = db.get(Asset, plan.asset_id) if plan else None
+        if o is None or asset is None or not ctx.dept_ok(asset.department_id):
+            skipped.append({"id": str(oid), "reason": "not found or not in your departments"})
+        elif o.work_order_id is not None or o.status not in (OccurrenceStatus.SCHEDULED, OccurrenceStatus.DEFERRED):
+            skipped.append({"id": str(oid), "reason": "already has a work order or is not open"})
+        else:
+            allowed.append(oid)
+    wos = svc.generate_work_orders(db, ctx.plant, plant_today(ctx.plant), occurrence_ids=allowed, user_id=ctx.user.id) if allowed else []
+    audit(db, "pm.release", user_id=ctx.user.id, plant_id=ctx.plant_id, data={"work_orders": [w.number for w in wos]})
+    return {"work_orders": [w.number for w in wos], "skipped": skipped}
+
+
+class ModeIn(In):
+    pm_auto_wo: bool | None = None
+    pdm_auto_wo: bool | None = None
+
+
+@router.get("/generation-modes")
+def generation_modes(ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")) -> list[dict]:
+    """Per department: does the system create PM / PdM work orders by itself (Auto) or wait for release (Manual)?"""
+    from app.models.tenancy import Department
+
+    q = select(Department).where(Department.plant_id == ctx.plant_id, Department.is_active.is_(True)).order_by(Department.code)
+    return [
+        {"department_id": d.id, "code": d.code, "name": d.name, "pm_auto_wo": d.pm_auto_wo, "pdm_auto_wo": d.pdm_auto_wo}
+        for d in db.execute(q).scalars()
+        if ctx.dept_ok(d.id)
+    ]
+
+
+@router.put("/generation-modes/{dept_id}")
+def set_generation_mode(
+    dept_id: uuid.UUID, body: ModeIn, ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    from app.models.tenancy import Department
+
+    d = db.get(Department, dept_id)
+    if d is None or d.plant_id != ctx.plant_id or not ctx.dept_ok(d.id):
+        raise HTTPException(404, "Department not found")
+    if body.pm_auto_wo is not None:
+        ctx.require("pm.manage")
+        d.pm_auto_wo = body.pm_auto_wo
+    if body.pdm_auto_wo is not None:
+        if not (ctx.has("pdm.manage") or ctx.has("pm.manage")):
+            raise HTTPException(403, "Not permitted")
+        d.pdm_auto_wo = body.pdm_auto_wo
+    data = body.model_dump(exclude_unset=True)
+    audit(db, "pm.generation_mode", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="department", entity_id=d.id, data=data)
+    return {"department_id": d.id, "code": d.code, "name": d.name, "pm_auto_wo": d.pm_auto_wo, "pdm_auto_wo": d.pdm_auto_wo}
 
 
 class RunIn(In):

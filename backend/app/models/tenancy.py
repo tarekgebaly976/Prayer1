@@ -2,7 +2,7 @@ import uuid
 from datetime import date as date_
 from datetime import datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint, false, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint, false, text, true
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,6 +61,10 @@ class Department(Base, PlantScoped, Timestamped):
     name_ar: Mapped[str | None] = mapped_column(String(200))
     type: Mapped[DepartmentType] = enum_col(DepartmentType)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Work-order generation: True = the scheduler / critical alerts create work orders automatically; False = they are
+    # held and the planning team releases them (or imports its own plan). PdM covers predictive rounds and alerts.
+    pm_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    pdm_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
 class NumberSequence(Base, PlantScoped):

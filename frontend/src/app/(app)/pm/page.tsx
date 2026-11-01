@@ -1,6 +1,6 @@
 "use client";
 
-import { ActionIcon, Alert, Button, Checkbox, Group, Modal, NumberInput, Select, SimpleGrid, Stack, Table, Tabs, TextInput, Textarea } from "@mantine/core";
+import { ActionIcon, Alert, Button, Checkbox, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea } from "@mantine/core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
-import { post } from "@/lib/api";
+import { post, put } from "@/lib/api";
 import { fmtDate, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Page } from "@/lib/types";
@@ -131,6 +131,60 @@ function OccActions({ o }: { o: Occ }) {
   );
 }
 
+interface Mode { department_id: string; code: string; name: string; pm_auto_wo: boolean; pdm_auto_wo: boolean }
+
+/** Per department: PM / PdM work orders created automatically, or held for the team to release / import. */
+function Modes() {
+  const { t } = useTranslation();
+  const { can } = useSession();
+  const q = useQ<Mode[]>("/pm/generation-modes");
+  const set = useMut((a: { id: string; body: Partial<Mode> }) => put(`/pm/generation-modes/${a.id}`, a.body), { success: false });
+  const opts = [{ value: "auto", label: t("planning.auto") }, { value: "manual", label: t("planning.manual") }];
+  const canPdm = can("pdm.manage") || can("pm.manage");
+  return (
+    <Stack>
+      <Text size="sm" c="dimmed">{t("planning.modesHint")}</Text>
+      <DataTable rows={q.data} rowKey={(m) => m.department_id} columns={[
+        { key: "d", label: t("admin.departments"), render: (m) => `${m.code} — ${m.name}` },
+        { key: "pm", label: t("planning.pmMode"), render: (m) => <SegmentedControl size="xs" data={opts} value={m.pm_auto_wo ? "auto" : "manual"} disabled={!can("pm.manage")}
+          onChange={(v) => set.mutate({ id: m.department_id, body: { pm_auto_wo: v === "auto" } })} /> },
+        { key: "pdm", label: t("planning.pdmMode"), render: (m) => <SegmentedControl size="xs" data={opts} value={m.pdm_auto_wo ? "auto" : "manual"} disabled={!canPdm}
+          onChange={(v) => set.mutate({ id: m.department_id, body: { pdm_auto_wo: v === "auto" } })} /> }]} />
+    </Stack>
+  );
+}
+
+/** Occurrences without a work order: select and release now (Manual departments, or ahead of the lead window). */
+function Waiting({ amap }: { amap: Map<string, string> }) {
+  const { t } = useTranslation();
+  const { can } = useSession();
+  const [off, setOff] = useState(0);
+  const [sel, setSel] = useState<string[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const q = useQ<Page<Occ>>("/pm/occurrences", { waiting: true, limit: 100, offset: off });
+  const codes = useAssetCodes((q.data?.items ?? []).map((o) => o.asset_id));
+  const rel = useMut(() => post<{ work_orders: string[] }>("/pm/occurrences/release", { occurrence_ids: sel }), { success: false,
+    onDone: (r) => { setMsg(t("planning.released", { n: r.work_orders.length })); setSel([]); } });
+  const items = q.data?.items ?? [];
+  const canRel = can("wo.create");
+  return (
+    <Stack>
+      <Group><Text size="sm" c="dimmed" style={{ flex: 1 }}>{t("planning.waitingHint")}</Text>
+        {canRel && <Button disabled={!sel.length} loading={rel.isPending} onClick={() => rel.mutate(undefined)}>{t("planning.release")} ({sel.length})</Button>}</Group>
+      {msg && <Alert color="teal" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+      <DataTable rows={items} rowKey={(o) => o.id} columns={[
+        ...(canRel ? [{ key: "sel", label: <Checkbox aria-label="select all" checked={!!items.length && items.every((o) => sel.includes(o.id))}
+          onChange={(e) => { const ids = items.map((o) => o.id); setSel(e.currentTarget.checked ? [...new Set([...sel, ...ids])] : sel.filter((x) => !ids.includes(x))); }} />,
+          render: (o: Occ) => <Checkbox aria-label="select" checked={sel.includes(o.id)} onChange={(e) => setSel(e.currentTarget.checked ? [...sel, o.id] : sel.filter((x) => x !== o.id))} /> }] : []),
+        { key: "p", label: t("pm.plans"), render: (o) => o.plan_code },
+        { key: "a", label: t("common.asset"), render: (o) => (o.asset_id ? codes.get(o.asset_id) ?? amap.get(o.asset_id) : "") },
+        { key: "d", label: t("common.dueDate"), render: (o) => o.due_date },
+        { key: "s", label: t("common.status"), render: (o) => <StatusBadge value={o.status} /> }]} />
+      <Pager page={q.data} setPage={(p) => setOff((p - 1) * 100)} />
+    </Stack>
+  );
+}
+
 function PM() {
   const { t } = useTranslation();
   const sp = useSearchParams();
@@ -138,6 +192,7 @@ function PM() {
   const [jp, setJp] = useState(false);
   const [np, setNp] = useState(false);
   const [imp, setImp] = useState(false);
+  const [woImp, setWoImp] = useState(false);
   const [runRes, setRunRes] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [planOff, setPlanOff] = useState(0);
@@ -164,13 +219,16 @@ function PM() {
         {can("pm.manage") && <Button onClick={() => setNp(true)}>{t("pm.newPlan")}</Button>}
         {can("pm.manage") && <Button variant="light" onClick={() => setJp(true)}>{t("pm.newJobPlan")}</Button>}
         {can("pm.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>}
+        {can("wo.create") && <Button variant="light" onClick={() => setWoImp(true)}>{t("planning.importWo")}</Button>}
         {can("pm.run_scheduler") && <Button variant="default" loading={run.isPending} onClick={() => run.mutate(undefined)}>{t("pm.runScheduler")}</Button>}
       </>} />
       <PlanImport kind="pm_plans" title={t("planImport.pm")} opened={imp} onClose={() => setImp(false)} />
+      <PlanImport kind="work_orders" title={t("planning.importWoTitle")} opened={woImp} onClose={() => setWoImp(false)} help={t("planning.importWoHelp")} countLabel={t("planning.importWoCount")} />
       {runRes && <Alert color="teal" mb="md" withCloseButton onClose={() => setRunRes(null)}>{runRes}</Alert>}
       <Tabs defaultValue={sp.get("tab") ?? "plans"}>
         <Tabs.List>
           <Tabs.Tab value="plans">{t("pm.plans")}</Tabs.Tab><Tabs.Tab value="schedule">{t("pm.occurrences")}</Tabs.Tab>
+          <Tabs.Tab value="waiting">{t("planning.waiting")}</Tabs.Tab><Tabs.Tab value="modes">{t("planning.modesTab")}</Tabs.Tab>
           <Tabs.Tab value="approvals">{t("pm.approvals")} ({approvals.data?.total ?? 0})</Tabs.Tab><Tabs.Tab value="jobs">{t("pm.jobPlans")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="plans" pt="md">
@@ -185,6 +243,8 @@ function PM() {
           <Pager page={plans.data} setPage={(p) => setPlanOff((p - 1) * 100)} />
         </Tabs.Panel>
         <Tabs.Panel value="schedule" pt="md"><DataTable rows={occ.data?.items} columns={occCols} /><Pager page={occ.data} setPage={(p) => setOccOff((p - 1) * 100)} /></Tabs.Panel>
+        <Tabs.Panel value="waiting" pt="md"><Waiting amap={amap} /></Tabs.Panel>
+        <Tabs.Panel value="modes" pt="md"><Modes /></Tabs.Panel>
         <Tabs.Panel value="approvals" pt="md"><DataTable rows={approvals.data?.items} columns={occCols} /></Tabs.Panel>
         <Tabs.Panel value="jobs" pt="md">
           <DataTable rows={jobs.data} columns={[

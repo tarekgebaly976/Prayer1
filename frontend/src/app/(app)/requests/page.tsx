@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Checkbox, Modal, Select, Stack, TextInput, Textarea } from "@mantine/core";
+import { Alert, Button, Checkbox, Modal, Select, Stack, Text, TextInput, Textarea } from "@mantine/core";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -63,13 +63,27 @@ function List() {
   const [status, setStatus] = useState<string | null>(can("request.triage") ? "submitted" : null);
   const [offset, setOffset] = useState(0);
   const q = useQ<Page<WReq>>("/work-requests", { status, limit: 50, offset, mine: !can("wo.view") });
+  const [sel, setSel] = useState<string[]>([]);
+  const [closing, setClosing] = useState(false);
+  const [comment, setComment] = useState("");
+  const [result, setResult] = useState<{ done: string[]; skipped: { number: string | null; reason: string }[] } | null>(null);
+  const bulk = useMut(() => post<{ done: string[]; skipped: { number: string | null; reason: string }[] }>("/work-requests/bulk-close", { request_ids: sel, comment }),
+    { success: false, onDone: (r) => { setResult(r); setSel([]); setComment(""); } });
+  const canBulk = can("wo.bulk_close");
+  const items = q.data?.items ?? [];
   return (
     <>
-      <PageHeader title={t("nav.requests")} actions={<Button color="red" onClick={() => setOpen(true)}>{t("req.new")}</Button>}>
+      <PageHeader title={t("nav.requests")} actions={<>
+        {canBulk && sel.length > 0 && <Button variant="light" color="orange" onClick={() => { setResult(null); setClosing(true); }}>{t("planning.reqClose")} ({sel.length})</Button>}
+        <Button color="red" onClick={() => setOpen(true)}>{t("req.new")}</Button></>}>
         <Select w={200} clearable value={status} onChange={setStatus} placeholder={t("common.status")}
           data={["submitted", "accepted", "rejected"].map((s) => ({ value: s, label: t(`status.${s}`) }))} />
       </PageHeader>
       <DataTable rows={q.data?.items} onRow={(r) => router.push(`/requests/${r.id}`)} columns={[
+        ...(canBulk ? [{ key: "sel", label: <Checkbox aria-label="select all" checked={items.some((r) => r.status === "submitted") && items.filter((r) => r.status === "submitted").every((r) => sel.includes(r.id))}
+          onChange={(e) => { const ids = items.filter((r) => r.status === "submitted").map((r) => r.id); setSel(e.currentTarget.checked ? [...new Set([...sel, ...ids])] : sel.filter((x) => !ids.includes(x))); }} />,
+          render: (r: WReq) => r.status === "submitted" ? <Checkbox aria-label="select" checked={sel.includes(r.id)} onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setSel(e.currentTarget.checked ? [...sel, r.id] : sel.filter((x) => x !== r.id))} /> : null }] : []),
         { key: "n", label: "#", render: (r) => <span className="mono">{r.number}</span> },
         { key: "t", label: t("wo.title"), render: (r) => <>{r.is_breakdown && "🛑 "}{r.title}</> },
         { key: "p", label: t("req.suggested"), render: (r) => <StatusBadge value={r.suggested_priority} /> },
@@ -78,6 +92,17 @@ function List() {
       ]} />
       <Pager page={q.data} setPage={(p) => setOffset((p - 1) * 50)} />
       <NewRequest opened={open} onClose={() => setOpen(false)} />
+      <Modal opened={closing} onClose={() => setClosing(false)} title={t("planning.reqCloseTitle")}>
+        {result ? <Stack>
+          <Alert color={result.skipped.length ? "orange" : "teal"}>{t("planning.result", { d: result.done.length, s: result.skipped.length })}</Alert>
+          {result.skipped.slice(0, 50).map((x, i) => <Text key={i} size="sm">{x.number ?? "—"}: {x.reason}</Text>)}
+          <Button onClick={() => setClosing(false)}>{t("common.close")}</Button>
+        </Stack> : <Stack>
+          <Text size="sm" c="dimmed">{t("planning.reqCloseHint")}</Text>
+          <Textarea label={t("planning.comment")} required value={comment} onChange={(e) => setComment(e.currentTarget.value)} autosize />
+          <Button color="orange" disabled={comment.trim().length < 3} loading={bulk.isPending} onClick={() => bulk.mutate(undefined)}>{t("planning.apply", { n: sel.length })}</Button>
+        </Stack>}
+      </Modal>
     </>
   );
 }

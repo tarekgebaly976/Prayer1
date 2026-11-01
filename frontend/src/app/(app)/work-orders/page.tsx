@@ -1,11 +1,12 @@
 "use client";
 
-import { Button, Checkbox, Group, Modal, MultiSelect, Switch, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Group, Modal, MultiSelect, SegmentedControl, Stack, Switch, Text, TextInput, Textarea } from "@mantine/core";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PlanImport } from "@/components/PlanImport";
 import { DataTable, PageHeader, Pager, StatusBadge, UserPicker } from "@/components/ui";
 import { download, post } from "@/lib/api";
 import { fmtDate, fmtMoney, useAssetCodes, useMut, useQ } from "@/lib/hooks";
@@ -31,12 +32,22 @@ function List() {
   const [tech, setTech] = useState<string | null>(null);
   const data = useQ<Page<WorkOrder>>("/work-orders", { q, status, type, open_only: openOnly, overdue, limit: 50, offset });
   const amap = useAssetCodes((data.data?.items ?? []).map((w) => w.asset_id));
+  const [finish, setFinish] = useState(false);
+  const [imp, setImp] = useState(false);
+  const [action, setAction] = useState("close");
+  const [comment, setComment] = useState("");
+  const [result, setResult] = useState<{ done: string[]; skipped: { number: string | null; reason: string }[] } | null>(null);
+  const bulkFinish = useMut(() => post<{ done: string[]; skipped: { number: string | null; reason: string }[] }>("/work-orders/bulk-finish",
+    { work_order_ids: sel, action, comment }), { success: false, onDone: (r) => { setResult(r); setSel([]); setComment(""); } });
+  const canSelect = can("wo.assign") || can("wo.bulk_close");
   const bulkAssign = useMut(() => post("/work-orders/bulk-assign", { work_order_ids: sel, user_ids: [tech], force: false }), { onDone: () => { setBulk(false); setSel([]); } });
   return (
     <>
       <PageHeader title={t("nav.workOrders")} actions={<>
         {can("wo.create") && <Button component={Link} href="/work-orders/new">{t("wo.new")}</Button>}
+        {can("wo.create") && <Button variant="light" onClick={() => setImp(true)}>{t("planning.importWo")}</Button>}
         {can("wo.assign") && sel.length > 0 && <Button variant="light" onClick={() => setBulk(true)}>{t("wo.bulkAssign")} ({sel.length})</Button>}
+        {can("wo.bulk_close") && sel.length > 0 && <Button variant="light" color="orange" onClick={() => { setResult(null); setFinish(true); }}>{t("planning.bulkFinish")} ({sel.length})</Button>}
         {can("report.export") && <Button variant="default" onClick={() => void download("/exports/work-orders.xlsx")}>{t("common.export")} XLSX</Button>}
       </>}>
         <Group gap="xs" wrap="wrap">
@@ -48,7 +59,9 @@ function List() {
         </Group>
       </PageHeader>
       <DataTable rows={data.data?.items} onRow={(w) => router.push(`/work-orders/${w.id}`)} columns={[
-        ...(can("wo.assign") ? [{ key: "sel", label: "", render: (w: WorkOrder) => (
+        ...(canSelect ? [{ key: "sel", label: <Checkbox aria-label="select all" checked={!!data.data?.items.length && data.data.items.every((w) => sel.includes(w.id))}
+          onChange={(e) => { const ids = (data.data?.items ?? []).map((w) => w.id); setSel(e.currentTarget.checked ? [...new Set([...sel, ...ids])] : sel.filter((x) => !ids.includes(x))); }} />,
+          render: (w: WorkOrder) => (
           <Checkbox aria-label="select" checked={sel.includes(w.id)} onClick={(e) => e.stopPropagation()}
             onChange={(e) => setSel(e.currentTarget.checked ? [...sel, w.id] : sel.filter((x) => x !== w.id))} />) }] : []),
         { key: "n", label: t("wo.number"), render: (w) => <span className="mono">{w.number}</span> },
@@ -61,6 +74,20 @@ function List() {
         { key: "c", label: t("wo.actualCost"), render: (w) => fmtMoney(w.actual_cost, plant?.currency ?? "SAR") },
       ]} />
       <Pager page={data.data} setPage={(p) => setOffset((p - 1) * 50)} />
+      <PlanImport kind="work_orders" title={t("planning.importWoTitle")} opened={imp} onClose={() => setImp(false)} help={t("planning.importWoHelp")} countLabel={t("planning.importWoCount")} />
+      <Modal opened={finish} onClose={() => setFinish(false)} title={t("planning.bulkTitle")}>
+        {result ? <Stack>
+          <Alert color={result.skipped.length ? "orange" : "teal"}>{t("planning.result", { d: result.done.length, s: result.skipped.length })}</Alert>
+          {result.skipped.slice(0, 50).map((x, i) => <Text key={i} size="sm">{x.number ?? "—"}: {x.reason}</Text>)}
+          <Button onClick={() => setFinish(false)}>{t("common.close")}</Button>
+        </Stack> : <Stack>
+          <Text size="sm" c="dimmed">{t("planning.bulkHint")}</Text>
+          <SegmentedControl value={action} onChange={setAction} data={[{ value: "close", label: t("planning.close") }, { value: "cancel", label: t("planning.cancel") }]} />
+          <Textarea label={t("planning.comment")} required value={comment} onChange={(e) => setComment(e.currentTarget.value)} autosize />
+          <Button color={action === "cancel" ? "red" : "teal"} disabled={comment.trim().length < 3} loading={bulkFinish.isPending}
+            onClick={() => bulkFinish.mutate(undefined)}>{t("planning.apply", { n: sel.length })}</Button>
+        </Stack>}
+      </Modal>
       <Modal opened={bulk} onClose={() => setBulk(false)} title={t("wo.bulkAssign")}>
         <UserPicker label={t("wo.assignees")} value={tech} onChange={setTech} />
         <Button mt="md" disabled={!tech} loading={bulkAssign.isPending} onClick={() => bulkAssign.mutate(undefined)}>{t("wo.assign")}</Button>

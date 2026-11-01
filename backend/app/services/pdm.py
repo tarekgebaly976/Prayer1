@@ -118,7 +118,7 @@ def record_reading(
         elif _RANK[status] > _RANK[alert.severity]:
             alert.severity, alert.message, alert.reading_id = status, f"Escalated: {msg}", rid
             _notify_alert(db, plant, alert, label)
-        if status == ConditionStatus.CRITICAL and p.auto_create_wo and alert.work_order_id is None:
+        if status == ConditionStatus.CRITICAL and p.auto_create_wo and alert.work_order_id is None and _dept_auto(db, p.asset_id):
             wo = create_wo_from_alert(db, plant, alert, None)
     return {
         "duplicate": False,
@@ -128,6 +128,15 @@ def record_reading(
         "work_order_id": wo.id if wo else None,
         "reading_id": rid,
     }
+
+
+def _dept_auto(db: Session, asset_id: uuid.UUID) -> bool:
+    """False when the asset's department holds PdM work orders for manual release (Manual mode)."""
+    from app.models.tenancy import Department
+
+    dept_id = _asset_dept(db, asset_id)
+    d = db.get(Department, dept_id) if dept_id else None
+    return d is None or d.pdm_auto_wo
 
 
 def _asset_dept(db: Session, asset_id: uuid.UUID) -> uuid.UUID | None:

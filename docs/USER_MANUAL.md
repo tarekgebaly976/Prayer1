@@ -80,6 +80,24 @@ Print at 100% / actual size. At most 2,400 labels (100 sheets) per PDF.
   Gantt chart; track material/permit/LOTO readiness, daily progress and delay reasons; pre-startup checks must be
   completed before the shutdown can be closed.
 
+### Planning tools (planners, engineers, managers)
+* **Auto / Manual work orders** – Preventive maintenance → **Auto / Manual**: per department, PM work orders and
+  PdM work orders (predictive rounds and critical-alert work orders) are either created by the system (**Auto**,
+  default) or held (**Manual**). Changing PM needs "PM plans" rights; PdM needs PdM or PM rights.
+* **Waiting for release** – Preventive maintenance → **Waiting for release** lists PM / PdM occurrences without a work
+  order. Tick them and press **Release selected** to create the work orders now (any date).
+* **Import work plan** – Work orders or Preventive maintenance → **Import work plan**: download the template, one row
+  per work order (equipment, type, priority, due date, planned start, hours, technicians). Put `pm_plan_code` on a
+  row to release that plan's next waiting occurrence, so it still counts in PM compliance. Only equipment in your
+  departments; assigning technicians needs the assign right. Preview first; nothing is saved if a row has an error.
+* **Import shutdown plan** – Shutdowns → **Import shutdown plan**: one row per work package. A new `shutdown_code`
+  creates the shutdown (name, start, end); existing package codes are updated; `predecessors` set the order and the
+  critical path is recalculated; `create_wo = yes` makes a shutdown work order for the equipment.
+* **Bulk close / cancel** – Work orders: tick work orders (or the header box for the whole page) → **Close / cancel
+  selected**. *Close* = work done (a PM counts as done), *Cancel* = not done. A reason is required and kept in each
+  work order's history. Work requests: tick open requests → **Close selected** (rejected with your reason).
+  Rights: planners, engineers, reliability engineers, managers (`wo.bulk_close`).
+
 ## 7. Storekeepers
 *Spare parts*: goods receipts (optionally against a purchase requisition line), issues and returns against work
 orders (cost goes to the work order at moving-average cost), adjustments (reason required), transfers, critical

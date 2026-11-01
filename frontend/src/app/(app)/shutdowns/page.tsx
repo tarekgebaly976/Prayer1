@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PlanImport } from "@/components/PlanImport";
 import { DataTable, PageHeader, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtDate, fromLocalInput, useMut, useQ } from "@/lib/hooks";
@@ -18,12 +19,16 @@ function List() {
   const { can, plant } = useSession();
   const q = useQ<SD[]>("/shutdowns");
   const [open, setOpen] = useState(false);
+  const [imp, setImp] = useState(false);
   const [f, setF] = useState({ code: "", name: "", scope: "", planned_start: "", planned_end: "" });
   const m = useMut(() => post<SD>("/shutdowns", { ...f, scope: f.scope || null, planned_start: fromLocalInput(f.planned_start), planned_end: fromLocalInput(f.planned_end) }),
     { onDone: (s) => router.push(`/shutdowns/${s.id}`) });
   return (
     <>
-      <PageHeader title={t("sd.list")} actions={can("shutdown.manage") ? <Button onClick={() => setOpen(true)}>{t("sd.new")}</Button> : null} />
+      <PageHeader title={t("sd.list")} actions={can("shutdown.manage") ? <>
+        <Button onClick={() => setOpen(true)}>{t("sd.new")}</Button>
+        <Button variant="light" onClick={() => setImp(true)}>{t("planning.importSd")}</Button></> : null} />
+      <PlanImport kind="shutdown_plan" title={t("planning.importSd")} opened={imp} onClose={() => setImp(false)} help={t("planning.importSdHelp")} countLabel={t("planning.importSdCount")} />
       <DataTable rows={q.data} onRow={(s) => router.push(`/shutdowns/${s.id}`)} columns={[
         { key: "c", label: t("common.code"), render: (s) => s.code }, { key: "n", label: t("common.name"), render: (s) => s.name },
         { key: "s", label: t("common.start"), render: (s) => fmtDate(s.planned_start, plant?.timezone, true) }, { key: "e", label: t("common.end"), render: (s) => fmtDate(s.planned_end, plant?.timezone, true) },

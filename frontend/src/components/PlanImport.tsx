@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api, download, downloadPost } from "@/lib/api";
 import { useMut } from "@/lib/hooks";
 
-type Kind = "pm_plans" | "lube_plans" | "pdm_plans" | "wo_history" | "parts_history";
+type Kind = "pm_plans" | "lube_plans" | "pdm_plans" | "wo_history" | "parts_history" | "work_orders" | "shutdown_plan";
 interface Result { total: number; valid: number; invalid: number; plans?: number; new_lubricants?: number; errors: { row: number; code: string | null; errors: string[] }[] }
 
 /** Excel/CSV import of a maintenance plan (PM, lubrication or condition monitoring): template → preview → import. */

@@ -14,15 +14,15 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.errors import DomainError
 from app.models.assets import Asset, Meter, MeterReading
-from app.models.enums import FrequencyUnit, OccurrenceStatus, PMTrigger, ScheduleBasis, WOStatus
+from app.models.enums import FrequencyUnit, OccurrenceStatus, PMTrigger, ScheduleBasis, WOStatus, WOType
 from app.models.pm import JobPlan, PMOccurrence, PMPlan
-from app.models.tenancy import Plant
+from app.models.tenancy import Department, Plant
 from app.models.workorders import WorkOrder
 from app.services.common import audit, plant_today, utcnow
 from app.services.notifications import notify_permission
@@ -119,22 +119,44 @@ def _refresh_next_due(db: Session, plan: PMPlan) -> None:
             plan.next_due_date = add_interval(base, plan.frequency_unit, plan.frequency_interval) if plan.last_completed_date else base
 
 
-def generate_work_orders(db: Session, plant: Plant, today: date, plan_id: uuid.UUID | None = None) -> list[WorkOrder]:
+def auto_wo_condition():
+    """SQL condition: the plan's department generates work orders automatically (PdM flag for predictive rounds)."""
+    return or_(
+        and_(PMPlan.wo_type == WOType.PREDICTIVE, func.coalesce(Department.pdm_auto_wo, True)),
+        and_(PMPlan.wo_type != WOType.PREDICTIVE, func.coalesce(Department.pm_auto_wo, True)),
+    )
+
+
+def generate_work_orders(
+    db: Session,
+    plant: Plant,
+    today: date,
+    plan_id: uuid.UUID | None = None,
+    occurrence_ids: list[uuid.UUID] | None = None,
+    user_id: uuid.UUID | None = None,
+) -> list[WorkOrder]:
+    """Automatic run (no `occurrence_ids`): occurrences inside their lead window, only for departments set to Auto.
+    Manual release (`occurrence_ids`): exactly those occurrences, whatever the date or the department setting."""
     from app.services.workorders import create_work_order
 
     q = (
         select(PMOccurrence)
         .join(PMPlan, PMPlan.id == PMOccurrence.pm_plan_id)
+        .join(Asset, Asset.id == PMPlan.asset_id)
+        .outerjoin(Department, Department.id == Asset.department_id)
         .where(
             PMOccurrence.plant_id == plant.id,
             PMOccurrence.work_order_id.is_(None),
             PMOccurrence.status.in_([OccurrenceStatus.SCHEDULED, OccurrenceStatus.DEFERRED]),
-            PMOccurrence.due_date - PMPlan.lead_days <= today,
             PMPlan.is_active.is_(True),
         )
         .order_by(PMOccurrence.due_date)
         .with_for_update(of=PMOccurrence, skip_locked=True, key_share=True)
     )
+    if occurrence_ids is not None:
+        q = q.where(PMOccurrence.id.in_(occurrence_ids))
+    else:
+        q = q.where(PMOccurrence.due_date - PMPlan.lead_days <= today, auto_wo_condition())
     if plan_id:
         q = q.where(PMOccurrence.pm_plan_id == plan_id)
     created: list[WorkOrder] = []
@@ -152,7 +174,7 @@ def generate_work_orders(db: Session, plant: Plant, today: date, plan_id: uuid.U
                 asset=asset,
                 type=plan.wo_type,
                 title=f"{plan.code} {plan.name}",
-                user_id=None,
+                user_id=user_id,
                 priority=plan.priority,
                 job_plan=jp,
                 due_date=occ.due_date,

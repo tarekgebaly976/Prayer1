@@ -705,6 +705,86 @@ def bulk_assign(body: BulkAssignIn, ctx: Ctx = Depends(require("wo.assign")), db
     return {"assigned": len(results), "warnings": results}
 
 
+class BulkFinishIn(In):
+    work_order_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    action: str = Field(pattern="^(close|cancel)$")
+    comment: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/work-orders/bulk-finish")
+def bulk_finish(body: BulkFinishIn, ctx: Ctx = Depends(require("wo.bulk_close")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """Close (done) or cancel (not done) many work orders at once. Each one is handled on its own: those that cannot be
+    changed (already closed, history, other department) are listed in `skipped` and the rest still go through."""
+    done: list[str] = []
+    skipped: list[dict] = []
+    for wid in dict.fromkeys(body.work_order_ids):
+        wo = db.execute(
+            select(WorkOrder).where(WorkOrder.id == wid, WorkOrder.plant_id == ctx.plant_id).with_for_update(key_share=True)
+        ).scalar_one_or_none()
+        if wo is None or not ctx.dept_ok(wo.department_id):
+            skipped.append({"id": str(wid), "number": None, "reason": "not found or not in your departments"})
+            continue
+        if wo.source == "migrated":
+            skipped.append({"id": str(wid), "number": wo.number, "reason": "imported history is read-only"})
+            continue
+        nested = db.begin_nested()
+        try:
+            svc.bulk_finish(db, ctx, wo, body.action, body.comment)
+            db.flush()
+            nested.commit()
+            done.append(wo.number)
+        except DomainError as e:
+            nested.rollback()
+            skipped.append({"id": str(wid), "number": wo.number, "reason": str(e)})
+    return {"done": done, "skipped": skipped}
+
+
+class BulkRequestCloseIn(In):
+    request_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    comment: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/work-requests/bulk-close")
+def bulk_close_requests(
+    body: BulkRequestCloseIn, ctx: Ctx = Depends(require("wo.bulk_close")), db: Session = Depends(get_db, scope="function")
+) -> dict:
+    """Close (reject with a reason) many open work requests at once; accepted ones already have a work order."""
+    done: list[str] = []
+    skipped: list[dict] = []
+    for rid in dict.fromkeys(body.request_ids):
+        r = db.execute(
+            select(WorkRequest).where(WorkRequest.id == rid, WorkRequest.plant_id == ctx.plant_id).with_for_update(key_share=True)
+        ).scalar_one_or_none()
+        if r is None:
+            skipped.append({"id": str(rid), "number": None, "reason": "not found"})
+            continue
+        try:
+            ctx.check_asset(db, r.asset_id, "not in your departments")
+        except HTTPException:
+            skipped.append({"id": str(rid), "number": r.number, "reason": "not found or not in your departments"})
+            continue
+        if r.status != RequestStatus.SUBMITTED:
+            skipped.append({"id": str(rid), "number": r.number, "reason": f"already {r.status.value}"})
+            continue
+        r.status, r.triaged_by_id, r.triaged_at, r.triage_note = (
+            RequestStatus.REJECTED,
+            ctx.user.id,
+            utcnow(),
+            f"Bulk close: {body.comment}",
+        )
+        audit(
+            db,
+            "request.bulk_close",
+            user_id=ctx.user.id,
+            plant_id=ctx.plant_id,
+            entity_type="work_request",
+            entity_id=r.id,
+            data={"comment": body.comment},
+        )
+        done.append(r.number)
+    return {"done": done, "skipped": skipped}
+
+
 class SafetyIn(In):
     permit_reference: str | None = None
     permit_types: list[str] | None = None

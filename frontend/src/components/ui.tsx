@@ -50,7 +50,7 @@ export function ErrorText({ error }: { error: unknown }) {
   return <Text c="red" size="sm">{(error as Error).message}</Text>;
 }
 
-export interface Column<T> { key: string; label: string; render: (row: T) => ReactNode; hideOnMobile?: boolean }
+export interface Column<T> { key: string; label: ReactNode; render: (row: T) => ReactNode; hideOnMobile?: boolean }
 
 export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKey }: {
   rows: T[] | undefined; columns: Column<T>[]; onRow?: (r: T) => void; empty?: string; rowKey?: (r: T, i: number) => string;
