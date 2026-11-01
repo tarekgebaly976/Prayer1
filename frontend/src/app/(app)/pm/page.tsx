@@ -131,7 +131,7 @@ function OccActions({ o }: { o: Occ }) {
   );
 }
 
-interface Mode { department_id: string; code: string; name: string; pm_auto_wo: boolean; pdm_auto_wo: boolean }
+interface Mode { department_id: string; code: string; name: string; pm_auto_wo: boolean; pdm_auto_wo: boolean; lube_auto_wo: boolean; pdm_alert_action: string }
 
 /** Per department: PM / PdM work orders created automatically, or held for the team to release / import. */
 function Modes() {
@@ -141,6 +141,7 @@ function Modes() {
   const set = useMut((a: { id: string; body: Partial<Mode> }) => put(`/pm/generation-modes/${a.id}`, a.body), { success: false });
   const opts = [{ value: "auto", label: t("planning.auto") }, { value: "manual", label: t("planning.manual") }];
   const canPdm = can("pdm.manage") || can("pm.manage");
+  const canLube = can("lube.manage") || can("pm.manage");
   return (
     <Stack>
       <Text size="sm" c="dimmed">{t("planning.modesHint")}</Text>
@@ -149,7 +150,12 @@ function Modes() {
         { key: "pm", label: t("planning.pmMode"), render: (m) => <SegmentedControl size="xs" data={opts} value={m.pm_auto_wo ? "auto" : "manual"} disabled={!can("pm.manage")}
           onChange={(v) => set.mutate({ id: m.department_id, body: { pm_auto_wo: v === "auto" } })} /> },
         { key: "pdm", label: t("planning.pdmMode"), render: (m) => <SegmentedControl size="xs" data={opts} value={m.pdm_auto_wo ? "auto" : "manual"} disabled={!canPdm}
-          onChange={(v) => set.mutate({ id: m.department_id, body: { pdm_auto_wo: v === "auto" } })} /> }]} />
+          onChange={(v) => set.mutate({ id: m.department_id, body: { pdm_auto_wo: v === "auto" } })} /> },
+        { key: "al", label: t("planning.alertMode"), render: (m) => <Select size="xs" w={170} allowDeselect={false} disabled={!canPdm} value={m.pdm_alert_action}
+          data={[{ value: "wo", label: t("planning.alertWo") }, { value: "wr", label: t("planning.alertWr") }, { value: "none", label: t("planning.alertNone") }]}
+          onChange={(v) => v && set.mutate({ id: m.department_id, body: { pdm_alert_action: v } })} /> },
+        { key: "lu", label: t("planning.lubeMode"), render: (m) => <SegmentedControl size="xs" data={opts} value={m.lube_auto_wo ? "auto" : "manual"} disabled={!canLube}
+          onChange={(v) => set.mutate({ id: m.department_id, body: { lube_auto_wo: v === "auto" } })} /> }]} />
     </Stack>
   );
 }

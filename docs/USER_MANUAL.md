@@ -81,9 +81,13 @@ Print at 100% / actual size. At most 2,400 labels (100 sheets) per PDF.
   completed before the shutdown can be closed.
 
 ### Planning tools (planners, engineers, managers)
-* **Auto / Manual work orders** – Preventive maintenance → **Auto / Manual**: per department, PM work orders and
-  PdM work orders (predictive rounds and critical-alert work orders) are either created by the system (**Auto**,
-  default) or held (**Manual**). Changing PM needs "PM plans" rights; PdM needs PdM or PM rights.
+* **Auto / Manual work orders** – Preventive maintenance → **Auto / Manual**, per department:
+  * **PM work orders** and **PdM rounds**: created by the system (**Auto**, default) or held in *Waiting for release*
+    (**Manual**).
+  * **Lubrication work orders**: Auto, or Manual = the team generates each route from Lubrication → **Generate**.
+  * **Critical PdM alert creates** (points set to auto-create): a **Work order**, a **Work request** for supervisors
+    to triage, or **Alert only**. Work requests are otherwise never created automatically; people raise them.
+  Rights: PM needs PM-plan rights; PdM needs PdM or PM rights; lubrication needs lubrication or PM rights.
 * **Waiting for release** – Preventive maintenance → **Waiting for release** lists PM / PdM occurrences without a work
   order. Tick them and press **Release selected** to create the work orders now (any date).
 * **Import work plan** – Work orders or Preventive maintenance → **Import work plan**: download the template, one row

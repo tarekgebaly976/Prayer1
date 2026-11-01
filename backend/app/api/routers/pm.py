@@ -385,6 +385,20 @@ def release(body: ReleaseIn, ctx: Ctx = Depends(require("wo.create")), db: Sessi
 class ModeIn(In):
     pm_auto_wo: bool | None = None
     pdm_auto_wo: bool | None = None
+    lube_auto_wo: bool | None = None
+    pdm_alert_action: str | None = Field(None, pattern="^(wo|wr|none)$")
+
+
+def _mode(d) -> dict:
+    return {
+        "department_id": d.id,
+        "code": d.code,
+        "name": d.name,
+        "pm_auto_wo": d.pm_auto_wo,
+        "pdm_auto_wo": d.pdm_auto_wo,
+        "lube_auto_wo": d.lube_auto_wo,
+        "pdm_alert_action": d.pdm_alert_action,
+    }
 
 
 @router.get("/generation-modes")
@@ -393,11 +407,7 @@ def generation_modes(ctx: Ctx = Depends(require("pm.view")), db: Session = Depen
     from app.models.tenancy import Department
 
     q = select(Department).where(Department.plant_id == ctx.plant_id, Department.is_active.is_(True)).order_by(Department.code)
-    return [
-        {"department_id": d.id, "code": d.code, "name": d.name, "pm_auto_wo": d.pm_auto_wo, "pdm_auto_wo": d.pdm_auto_wo}
-        for d in db.execute(q).scalars()
-        if ctx.dept_ok(d.id)
-    ]
+    return [_mode(d) for d in db.execute(q).scalars() if ctx.dept_ok(d.id)]
 
 
 @router.put("/generation-modes/{dept_id}")
@@ -416,9 +426,17 @@ def set_generation_mode(
         if not (ctx.has("pdm.manage") or ctx.has("pm.manage")):
             raise HTTPException(403, "Not permitted")
         d.pdm_auto_wo = body.pdm_auto_wo
+    if body.pdm_alert_action is not None:
+        if not (ctx.has("pdm.manage") or ctx.has("pm.manage")):
+            raise HTTPException(403, "Not permitted")
+        d.pdm_alert_action = body.pdm_alert_action
+    if body.lube_auto_wo is not None:
+        if not (ctx.has("lube.manage") or ctx.has("pm.manage")):
+            raise HTTPException(403, "Not permitted")
+        d.lube_auto_wo = body.lube_auto_wo
     data = body.model_dump(exclude_unset=True)
     audit(db, "pm.generation_mode", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="department", entity_id=d.id, data=data)
-    return {"department_id": d.id, "code": d.code, "name": d.name, "pm_auto_wo": d.pm_auto_wo, "pdm_auto_wo": d.pdm_auto_wo}
+    return _mode(d)
 
 
 class RunIn(In):

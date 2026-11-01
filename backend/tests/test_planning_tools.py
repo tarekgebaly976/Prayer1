@@ -126,17 +126,57 @@ def test_manual_pm_holds_work_orders_until_released(world):
         assert all(o.work_order_id for o in due)
 
 
-def test_manual_pdm_holds_alert_work_orders(world):
-    rel = world.api("reliability")
+def test_pdm_alert_action_work_order_request_or_nothing(world):
+    from app.models.workorders import WorkRequest
+
+    rel, tech = world.api("reliability"), world.api("tech")
     line = mk_asset(rel, world, "PM1")
-    body = {"code": "VIB1", "name": "Vib", "asset_id": line["id"], "technique": "vibration", "unit": "mm/s"}
-    p = rel.ok("post", "/pdm/points", {**body, "warning_high": 4.5, "alarm_high": 7.1, "auto_create_wo": True}, status=201)
-    rel.ok("put", f"/pm/generation-modes/{world.depts['PM'].id}", {"pdm_auto_wo": False})
-    r = world.api("tech").ok("post", f"/pdm/points/{p['id']}/readings", {"value": 9.0}, status=201)
+    body = {"name": "Vib", "asset_id": line["id"], "technique": "vibration", "unit": "mm/s", "warning_high": 4.5, "alarm_high": 7.1}
+    pts = [rel.ok("post", "/pdm/points", {**body, "code": f"VIB{i}", "auto_create_wo": True}, status=201) for i in range(3)]
+    dept = f"/pm/generation-modes/{world.depts['PM'].id}"
+    assert rel.ok("get", "/pm/generation-modes")[2]["pdm_alert_action"] == "wo"  # default
+    assert rel.put(dept, {"pdm_alert_action": "maybe"}).status_code == 422
+    assert tech.put(dept, {"pdm_alert_action": "wr"}).status_code == 403
+
+    # "none": alert only; the alert still offers "create work order".
+    rel.ok("put", dept, {"pdm_alert_action": "none"})
+    r = tech.ok("post", f"/pdm/points/{pts[0]['id']}/readings", {"value": 9.0}, status=201)
     assert r["status"] == "critical" and r["alert_id"] and r["work_order_id"] is None
-    # Manual: the alert still offers "create work order".
-    wo = rel.ok("post", f"/pdm/alerts/{r['alert_id']}/work-order")
-    assert wo
+    assert rel.ok("post", f"/pdm/alerts/{r['alert_id']}/work-order")
+
+    # "wr": a work request for supervisors to triage, once per alert.
+    rel.ok("put", dept, {"pdm_alert_action": "wr"})
+    r = tech.ok("post", f"/pdm/points/{pts[1]['id']}/readings", {"value": 9.5}, status=201)
+    assert r["work_order_id"] is None
+    tech.ok("post", f"/pdm/points/{pts[1]['id']}/readings", {"value": 9.9}, status=201)
+    with SessionLocal() as db:
+        wrs = list(db.execute(select(WorkRequest).where(WorkRequest.title == "Condition alert: Vib")).scalars())
+        assert len(wrs) == 1 and wrs[0].suggested_priority.value == "P2"
+    reqs = world.api("mech_sup").ok("get", "/work-requests", params={"status": "submitted"})["items"]
+    assert any(x["title"] == "Condition alert: Vib" for x in reqs)
+
+    # "wo": work order as before.
+    rel.ok("put", dept, {"pdm_alert_action": "wo"})
+    r = tech.ok("post", f"/pdm/points/{pts[2]['id']}/readings", {"value": 9.0}, status=201)
+    assert r["work_order_id"]
+
+
+def test_manual_lubrication_routes(world):
+    from app.services.lubrication import run_routes
+    from tests.test_lube_shifts import _lube_setup
+
+    _, _, _, _, route, _, _ = _lube_setup(world)
+    rel = world.api("reliability")
+    assert world.api("tech").put(f"/pm/generation-modes/{world.depts['PM'].id}", {"lube_auto_wo": False}).status_code == 403
+    m = rel.ok("put", f"/pm/generation-modes/{world.depts['PM'].id}", {"lube_auto_wo": False})
+    assert m["lube_auto_wo"] is False
+    with SessionLocal() as db, db.begin():
+        assert run_routes(db, db.get(Plant, world.plant.id)) == []  # held
+    g = rel.ok("post", f"/lubrication/routes/{route['id']}/generate", {})  # the team generates it itself
+    assert g["work_order_id"]
+    rel.ok("put", f"/pm/generation-modes/{world.depts['PM'].id}", {"lube_auto_wo": True})
+    with SessionLocal() as db, db.begin():
+        assert run_routes(db, db.get(Plant, world.plant.id)) == []  # nothing more due: no duplicate
 
 
 # ---------------------------------------------------------------- work-order plan import

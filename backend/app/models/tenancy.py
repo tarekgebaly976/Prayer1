@@ -2,7 +2,21 @@ import uuid
 from datetime import date as date_
 from datetime import datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time, UniqueConstraint, false, text, true
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    false,
+    text,
+    true,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,7 +68,10 @@ class Holiday(Base, PlantScoped):
 
 class Department(Base, PlantScoped, Timestamped):
     __tablename__ = "departments"
-    __table_args__ = (UniqueConstraint("plant_id", "code"),)
+    __table_args__ = (
+        UniqueConstraint("plant_id", "code"),
+        CheckConstraint("pdm_alert_action IN ('wo', 'wr', 'none')", name="pdm_alert_action"),
+    )
     id: Mapped[uuid.UUID] = uuid_pk()
     code: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(200))
@@ -64,7 +81,10 @@ class Department(Base, PlantScoped, Timestamped):
     # Work-order generation: True = the scheduler / critical alerts create work orders automatically; False = they are
     # held and the planning team releases them (or imports its own plan). PdM covers predictive rounds and alerts.
     pm_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    pdm_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    pdm_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())  # PdM rounds
+    lube_auto_wo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())  # lubrication routes
+    # Critical condition alert on a point set to auto-create: "wo" work order, "wr" work request for triage, "none" alert only.
+    pdm_alert_action: Mapped[str] = mapped_column(String(8), default="wo", server_default="wo")
 
 
 class NumberSequence(Base, PlantScoped):

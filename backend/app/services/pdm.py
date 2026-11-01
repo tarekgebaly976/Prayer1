@@ -118,8 +118,12 @@ def record_reading(
         elif _RANK[status] > _RANK[alert.severity]:
             alert.severity, alert.message, alert.reading_id = status, f"Escalated: {msg}", rid
             _notify_alert(db, plant, alert, label)
-        if status == ConditionStatus.CRITICAL and p.auto_create_wo and alert.work_order_id is None and _dept_auto(db, p.asset_id):
-            wo = create_wo_from_alert(db, plant, alert, None)
+        if status == ConditionStatus.CRITICAL and p.auto_create_wo and alert.work_order_id is None and alert.work_request_id is None:
+            action = _alert_action(db, p.asset_id)
+            if action == "wo":
+                wo = create_wo_from_alert(db, plant, alert, None)
+            elif action == "wr":
+                create_wr_from_alert(db, plant, alert)
     return {
         "duplicate": False,
         "status": status,
@@ -130,13 +134,46 @@ def record_reading(
     }
 
 
-def _dept_auto(db: Session, asset_id: uuid.UUID) -> bool:
-    """False when the asset's department holds PdM work orders for manual release (Manual mode)."""
+def _alert_action(db: Session, asset_id: uuid.UUID) -> str:
+    """What a critical alert creates for this asset's department: "wo", "wr" (request for triage) or "none"."""
     from app.models.tenancy import Department
 
     dept_id = _asset_dept(db, asset_id)
     d = db.get(Department, dept_id) if dept_id else None
-    return d is None or d.pdm_auto_wo
+    return d.pdm_alert_action if d is not None else "wo"
+
+
+def create_wr_from_alert(db: Session, plant: Plant, alert: ConditionAlert) -> None:
+    """Department set to "work request": the alert raises a request that supervisors triage like any other."""
+    from app.models.workorders import WorkRequest
+    from app.services.common import next_number
+
+    p = db.get(MeasurementPoint, alert.point_id)
+    assert p is not None
+    wr = WorkRequest(
+        plant_id=plant.id,
+        number=next_number(db, plant, "WR"),
+        asset_id=alert.asset_id,
+        title=f"Condition alert: {p.name}"[:200],
+        description=alert.recommended_action or p.recommended_action,
+        symptoms=alert.message,
+        suggested_priority=p.wo_priority_on_critical,
+    )
+    db.add(wr)
+    db.flush()
+    alert.work_request_id = wr.id
+    notify_permission(
+        db,
+        plant.id,
+        "request.triage",
+        department_id=_asset_dept(db, alert.asset_id),
+        kind="request",
+        severity="critical",
+        title=f"New request {wr.number}: {wr.title}",
+        body=alert.message,
+        link=f"/requests/{wr.id}",
+        dedupe_key=f"wr:{wr.id}",
+    )
 
 
 def _asset_dept(db: Session, asset_id: uuid.UUID) -> uuid.UUID | None:

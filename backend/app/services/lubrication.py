@@ -232,7 +232,12 @@ def flag_missed(db: Session, plant: Plant, today: date | None = None) -> int:
 
 def run_routes(db: Session, plant: Plant, today: date | None = None) -> list[str]:
     out = []
+    from app.models.tenancy import Department
+
+    manual = set(db.execute(select(Department.id).where(Department.plant_id == plant.id, Department.lube_auto_wo.is_(False))).scalars())
     for r in db.execute(select(LubeRoute).where(LubeRoute.plant_id == plant.id, LubeRoute.is_active.is_(True))).scalars().all():
+        if r.department_id in manual:
+            continue  # Manual: the team generates the route itself (Lubrication > Generate)
         wo = generate_route(db, plant, r, today)
         if wo:
             out.append(wo.number)
