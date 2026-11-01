@@ -4,6 +4,10 @@
 # copy reaches the real system. The real system is only read (pg_dump), never stopped or changed.
 #
 #   sudo bash scripts/test-copy.sh start     create it from the real data (or start it again if it exists)
+#   sudo bash scripts/test-copy.sh update    try a NEW VERSION in the test copy only: builds the code now in this
+#                                            folder (after `sudo git pull`) for the test copy; the real system keeps
+#                                            running its version until deploy/install-server.sh is run
+#   sudo bash scripts/test-copy.sh same-as-real   put the test copy back on the real system's version
 #   sudo bash scripts/test-copy.sh refresh   throw the test data away and copy the real data again
 #   sudo bash scripts/test-copy.sh stop      stop it (keeps its data; start brings it back)
 #   sudo bash scripts/test-copy.sh remove    stop it and delete its data
@@ -41,12 +45,40 @@ copy_real_data() {
     -c 'cp -a /from/. /to/ 2>/dev/null || true'
 }
 
+# The test copy runs its own images. Until `update` builds a newer version they are the real system's images.
+same_as_real_images() {
+  docker tag papermill-cmms-api papermill-cmms-test-api
+  docker tag papermill-cmms-web papermill-cmms-test-web
+}
+
+ensure_images() {
+  docker image inspect papermill-cmms-test-api >/dev/null 2>&1 && docker image inspect papermill-cmms-test-web >/dev/null 2>&1 \
+    || same_as_real_images
+}
+
+build_test_images() {
+  local rev; rev="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  log "Building version ${rev} for the test copy only (the real system keeps running its version; takes 5-15 minutes)"
+  docker build --label "cmms.version=${rev}" -t papermill-cmms-test-api backend
+  docker build --label "cmms.version=${rev}" -t papermill-cmms-test-web frontend
+  docker image prune -f >/dev/null 2>&1 || true
+}
+
+versions() {
+  local real test
+  real="$(docker image inspect -f '{{index .Config.Labels "cmms.version"}} {{.Created}}' papermill-cmms-api 2>/dev/null || echo '-')"
+  test="$(docker image inspect -f '{{index .Config.Labels "cmms.version"}} {{.Created}}' papermill-cmms-test-api 2>/dev/null || echo '-')"
+  echo "Real system version: ${real:0:40}"
+  echo "Test copy version:   ${test:0:40}"
+}
+
 start() {
   "${REAL[@]}" ps --status running db | grep -q db || { echo "The real system is not running; start it first."; exit 1; }
   docker network inspect papermill-cmms-edge >/dev/null 2>&1 || {
     echo "Update the real system first (it adds the connection the test copy needs):"
     echo "  cd /opt/cmms && sudo git pull && sudo bash deploy/install-server.sh"; exit 1; }
   ensure_env
+  ensure_images
   if ! docker volume inspect papermill-cmms-test_pgdata >/dev/null 2>&1; then
     copy_real_data
   fi
@@ -57,18 +89,22 @@ start() {
     sleep 5
   done
   log "Ready"
+  versions
   echo "Test copy:  https://test.${DOMAIN}   (same users and passwords as the real system on the day it was copied)"
   echo "Real system unchanged:  https://${DOMAIN}"
 }
 
 case "${1:-start}" in
   start) start ;;
+  update) build_test_images; start
+    echo "When the new version is good: cd /opt/cmms && sudo bash deploy/install-server.sh  (updates the real system)" ;;
+  same-as-real) same_as_real_images; start ;;
   refresh)
     log "Deleting the test copy's data"
     "${TEST[@]}" down -v 2>/dev/null || true
     start ;;
   stop) "${TEST[@]}" stop; echo "Test copy stopped (data kept)." ;;
   remove) "${TEST[@]}" down -v; echo "Test copy and its data removed. The real system is untouched." ;;
-  status) "${TEST[@]}" ps ;;
-  *) echo "Usage: sudo bash scripts/test-copy.sh start|refresh|stop|remove|status"; exit 2 ;;
+  status) "${TEST[@]}" ps; versions ;;
+  *) echo "Usage: sudo bash scripts/test-copy.sh start|update|same-as-real|refresh|stop|remove|status"; exit 2 ;;
 esac

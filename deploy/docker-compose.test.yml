@@ -1,6 +1,7 @@
 # Test copy of the CMMS on the same server: its own database and attachments, reached at https://test.<domain>
-# through the main Caddy. Uses the images built for the real system, so it runs the same version.
-# Managed by scripts/test-copy.sh (start | refresh | stop | remove | status); do not start it by hand.
+# through the main Caddy. It runs its own images (papermill-cmms-test-api / -web): the same version as the real system
+# until `scripts/test-copy.sh update` builds a newer one for testing first; the real system is not changed by that.
+# Managed by scripts/test-copy.sh (start | update | same-as-real | refresh | stop | remove | status); do not start it by hand.
 name: papermill-cmms-test
 
 x-test-env: &test-env
@@ -34,7 +35,7 @@ services:
       retries: 20
 
   test-migrate:
-    image: papermill-cmms-api
+    image: papermill-cmms-test-api
     command: ["alembic", "upgrade", "head"]
     environment: *test-env
     depends_on:
@@ -42,7 +43,7 @@ services:
     restart: "no"
 
   test-api:
-    image: papermill-cmms-api
+    image: papermill-cmms-test-api
     restart: unless-stopped
     environment: *test-env
     volumes:
@@ -54,7 +55,7 @@ services:
       edge: { aliases: [cmms-test-api] }
 
   test-worker:
-    image: papermill-cmms-api
+    image: papermill-cmms-test-api
     command: ["python", "-m", "app.worker"]
     healthcheck: { disable: true }  # background jobs only; the image's check probes the web API
     restart: unless-stopped
@@ -65,10 +66,11 @@ services:
       test-migrate: { condition: service_completed_successfully }
 
   test-web:
-    image: papermill-cmms-web
+    image: papermill-cmms-test-web
     restart: unless-stopped
     environment:
       BACKEND_URL: http://test-api:8000
+      CMMS_INSTANCE_LABEL: ${CMMS_INSTANCE_LABEL:-TEST}  # red TEST icon and app name
     depends_on: [test-api]
     networks:
       default: {}

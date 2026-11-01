@@ -1,7 +1,7 @@
 // Service worker: caches the static app shell for fast start-up and installability.
 // Deliberately does NOT cache /api responses and does NOT queue writes: maintenance records are
 // only saved online, so there is no risk of silently overwriting conflicting records.
-const CACHE = "cmms-shell-v2"; // bump to make every phone drop the old shell
+const CACHE = "cmms-shell-v3"; // bump to make every phone drop the old shell
 const SHELL = ["/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/offline.html"];
 
 self.addEventListener("install", (e) => {

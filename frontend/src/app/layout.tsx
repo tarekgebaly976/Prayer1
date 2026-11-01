@@ -9,7 +9,6 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "PlantPulse",
   description: "PlantPulse: computerized maintenance management for industrial plants",
-  manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon.svg", apple: "/icons/icon-192.png" },
   appleWebApp: { capable: true, title: "PlantPulse", statusBarStyle: "default" },
 };
