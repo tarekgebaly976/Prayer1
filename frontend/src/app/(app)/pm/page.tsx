@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
 import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
-import { post, put } from "@/lib/api";
+import { download, post, put } from "@/lib/api";
 import { fmtDate, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
 import type { Page } from "@/lib/types";
@@ -220,6 +220,7 @@ function PM() {
         {can("pm.manage") && <Button variant="light" onClick={() => setJp(true)}>{t("pm.newJobPlan")}</Button>}
         {can("pm.manage") && <Button variant="light" onClick={() => setImp(true)}>{t("planImport.button")}</Button>}
         {can("wo.create") && <Button variant="light" onClick={() => setWoImp(true)}>{t("planning.importWo")}</Button>}
+        <Button variant="default" onClick={() => void download("/pm/plans/export.xlsx")}>{t("planning.exportPlans")}</Button>
         {can("pm.run_scheduler") && <Button variant="default" loading={run.isPending} onClick={() => run.mutate(undefined)}>{t("pm.runScheduler")}</Button>}
       </>} />
       <PlanImport kind="pm_plans" title={t("planImport.pm")} opened={imp} onClose={() => setImp(false)} />

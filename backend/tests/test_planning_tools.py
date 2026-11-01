@@ -243,3 +243,30 @@ def test_shutdown_plan_import(world):
     unknown = [SD_HEADER, ["SD-99", None, None, None, "P01", "x", None, 1, None, None, None, None, None, None, None, None]]
     p = eng.ok("post", "/imports/shutdown_plan/preview", files=_xlsx(unknown))
     assert "does not exist" in p["errors"][0]["errors"][0]
+
+
+def test_export_plans_and_reimport_work_plan(world):
+    from openpyxl import load_workbook
+
+    planner = world.api("planner")
+    today = plant_today(world.plant)
+    _, _, plan = _plan(world, planner, start=today.isoformat())
+    planner.ok("put", f"/pm/generation-modes/{world.depts['PM'].id}", {"pm_auto_wo": False})
+    _sched(world)
+    r = planner.get("/pm/plans/export.xlsx")
+    assert r.status_code == 200
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["work_plan", "pm_plans", "instructions"]
+    plans = list(wb["pm_plans"].values)
+    assert plans[0][0] == "code" and plans[1][0] == "PM-W" and plans[1][3] == "PM1" and plans[1][11] > 0
+    wp = list(wb["work_plan"].values)
+    assert wp[0][:2] == ("asset_code", "title") and all(row[8] == "PM-W" for row in wp[1:])
+    n = len(wp) - 1
+    assert n > 0
+    # The same file imports straight back: every waiting occurrence becomes a work order.
+    files = {"file": ("pm_plans.xlsx", r.content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    assert planner.ok("post", "/imports/work_orders/commit", files=files)["created"] == n
+    assert planner.ok("get", "/pm/occurrences", params={"plan_id": plan["id"], "waiting": True})["total"] == 0
+    # Department scope: an SP-only user sees no PM plans.
+    r = world.api("sp_sup").get("/pm/plans/export.xlsx")
+    assert len(list(load_workbook(io.BytesIO(r.content))["pm_plans"].values)) == 1

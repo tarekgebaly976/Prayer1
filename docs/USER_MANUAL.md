@@ -90,6 +90,10 @@ Print at 100% / actual size. At most 2,400 labels (100 sheets) per PDF.
   per work order (equipment, type, priority, due date, planned start, hours, technicians). Put `pm_plan_code` on a
   row to release that plan's next waiting occurrence, so it still counts in PM compliance. Only equipment in your
   departments; assigning technicians needs the assign right. Preview first; nothing is saved if a row has an error.
+* **Export plans (Excel)** – Preventive maintenance → **Export plans (Excel)**: sheet *pm_plans* lists every plan
+  with its code (asset-frequency-trade, e.g. `PM1-DRYER-03-Q-MECH`; PdM rounds `...-CMM-RELI`); sheet *work_plan*
+  (first) already holds the waiting occurrences of the next 60 days in the Import work plan layout. Delete the rows
+  you do not want, add technicians, and import the same file.
 * **Import shutdown plan** – Shutdowns → **Import shutdown plan**: one row per work package. A new `shutdown_code`
   creates the shutdown (name, start, end); existing package codes are updated; `predecessors` set the order and the
   critical path is recalculated; `create_wo = yes` makes a shutdown work order for the equipment.

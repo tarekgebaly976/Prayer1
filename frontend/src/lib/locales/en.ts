@@ -134,6 +134,7 @@ export const en = {
     under: "Asset and everything below it (blank = all)", allLevels: "All levels", skip: "Labels already used on the first sheet",
     skipHint: "Start further down a partly used sheet (0–23)", download: "Download PDF" },
   planning: {
+    exportPlans: "Export plans (Excel)",
     bulkFinish: "Close / cancel selected", bulkTitle: "Close or cancel work orders", close: "Close (work done)", cancel: "Cancel (not done)",
     bulkHint: "For clearing old or already-done work in one step. Closed PMs count as done; cancelled PMs are cancelled. Each one is recorded in the history with your reason.",
     comment: "Reason (kept in the history)", apply: "Apply to {{n}}", result: "{{d}} done · {{s}} skipped",

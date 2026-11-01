@@ -2,6 +2,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import Field, model_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -193,6 +194,18 @@ class PlanOut(ORM):
     last_completed_date: date | None
     next_due_date: date | None
     is_active: bool
+
+
+@router.get("/plans/export.xlsx")
+def export_plans(ctx: Ctx = Depends(require("pm.view")), db: Session = Depends(get_db, scope="function")) -> Response:
+    """Plans with their codes, plus a ready-to-import work plan of the waiting occurrences."""
+    from app.services.pm_export import plans_xlsx
+
+    return Response(
+        plans_xlsx(db, ctx.plant, ctx.dept_where),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="pm_plans.xlsx"'},
+    )
 
 
 @router.get("/plans")
