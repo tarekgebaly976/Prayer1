@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Checkbox, Code, FileInput, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Autocomplete, Button, Checkbox, Code, FileInput, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
@@ -104,6 +104,17 @@ function UserImport({ opened, onClose }: { opened: boolean; onClose: () => void 
   );
 }
 
+/** Trade straight in the users table: pick from the list (Machinist, Welder …) or type one; saved when you leave the box. */
+function TradeCell({ m }: { m: Member }) {
+  const { t } = useTranslation();
+  const trades = useQ<string[]>("/trades");
+  const [v, setV] = useState(m.user.trade ?? "");
+  const save = useMut((trade: string) => patch(`/users/${m.user.id}`, { trade: trade.trim() || null }), { success: false });
+  const commit = (x: string) => { if (x.trim() !== (m.user.trade ?? "")) save.mutate(x); };
+  return <Autocomplete size="xs" w={140} placeholder={t("trade.placeholder")} data={trades.data ?? []} value={v} limit={30}
+    onChange={setV} onOptionSubmit={(x) => { setV(x); commit(x); }} onBlur={() => commit(v)} aria-label="trade" />;
+}
+
 function Users() {
   const { t } = useTranslation();
   const users = useQ<Member[]>("/users");
@@ -124,13 +135,15 @@ function Users() {
       <Group mb="sm" align="start"><Button onClick={() => setOpen(true)} style={{ flexShrink: 0 }}>{t("admin.newUser")}</Button>
         <Button variant="light" onClick={() => setImp(true)} style={{ flexShrink: 0 }}>{t("admin.importUsers")}</Button><Text size="xs" c="dimmed" maw={760}>{t("admin.deptHint")}</Text></Group>
       <DataTable rows={users.data} rowKey={(m) => m.user.id} columns={[
-        { key: "n", label: t("common.name"), render: (m) => m.user.full_name }, { key: "e", label: t("common.email"), render: (m) => m.user.email },
-        { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
-        { key: "d", label: t("admin.departments"), render: (m) => <div style={{ width: 210 }}><DeptMultiSelect label="" compact value={deptIds(m)}
+        { key: "n", label: t("common.name"), render: (m) => <div style={{ minWidth: 170 }}>
+          <Text size="sm" fw={500}>{m.user.full_name}</Text><Text size="xs" c="dimmed">{m.user.email}</Text>
+          <Button size="compact-xs" variant="light" mt={4} onClick={() => setEdit(m)}>{t("common.edit")}</Button></div> },
+        { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={190} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
+        { key: "d", label: t("admin.departments"), render: (m) => <div style={{ width: 190 }}><DeptMultiSelect label="" compact value={deptIds(m)}
           onChange={(v) => setDept.mutate({ id: m.user.id, depts: v })} placeholder={t("admin.allDepts")} /></div> },
-        { key: "t", label: t("trade.label"), render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
-        { key: "s", label: t("admin.dsColumn"), render: (m) => <Switch checked={!!m.daily_summary} onChange={() => setSummary.mutate(m)} aria-label="daily summary" /> },
-        { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
+        { key: "t", label: t("trade.label"), render: (m) => <TradeCell key={`${m.user.id}:${m.user.trade ?? ""}`} m={m} /> },
+        { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
+        { key: "s", label: t("admin.dsColumn"), render: (m) => <Switch checked={!!m.daily_summary} onChange={() => setSummary.mutate(m)} aria-label="daily summary" /> }]} />
       {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}
       <Modal opened={open} onClose={() => setOpen(false)} title={t("admin.newUser")}>
         <Stack>
