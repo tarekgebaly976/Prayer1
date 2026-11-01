@@ -173,27 +173,44 @@ function EditDept({ d, onClose }: { d: Department; onClose: () => void }) {
   );
 }
 
-interface MoveRes { lines: string[]; to: string; assets: number; work_orders: number; pm_plans: number; applied: boolean }
+interface MoveRes { lines: string[]; moves: { code: string; name: string; becomes: string }[]; to: string; assets: number; work_orders: number; pm_plans: number; applied: boolean }
+interface TopAsset { id: string; code: string; name: string; department_id: string; parent_id: string | null; level: string }
 
-/** Move production lines (whole tree + work orders) to another department, e.g. WTP from Utilities to the water section. */
+/** Move production lines or units (whole tree + work orders) to another department, e.g. WTP out of Utilities. */
 function MoveAssets({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const lines = useQ<Page<{ id: string; code: string; name: string; department_id: string }>>("/assets", { level: "production_line", limit: 200 });
+  const top = useQ<Page<TopAsset>>("/assets", { levels: "production_line,unit", limit: 500 });
   const depts = useQ<Department[]>("/departments");
   const code = new Map((depts.data ?? []).map((d) => [d.id, d.code]));
+  const items = top.data?.items ?? [];
+  const byId = new Map(items.map((a) => [a.id, a]));
   const [ids, setIds] = useState<string[]>([]);
   const [to, setTo] = useState<string | null>(null);
+  const [parent, setParent] = useState<string | null>(null);
   const [res, setRes] = useState<MoveRes | null>(null);
-  const run = useMut((apply: boolean) => post<MoveRes>("/departments/move-assets", { asset_ids: ids, to_department_id: to, apply }),
+  const label = (a: TopAsset) => {
+    const up = a.parent_id ? byId.get(a.parent_id) : undefined;
+    return `${code.get(a.department_id) ?? "?"} · ${up ? `${up.code} › ` : ""}${a.code} — ${a.name}`;
+  };
+  const sorted = [...items].sort((a, b) => label(a).localeCompare(label(b)));
+  const hasUnit = ids.some((i) => byId.get(i)?.level === "unit");
+  const targetLines = items.filter((a) => a.level === "production_line" && a.department_id === to && !ids.includes(a.id));
+  const run = useMut((apply: boolean) => post<MoveRes>("/departments/move-assets", { asset_ids: ids, to_department_id: to, parent_id: hasUnit ? parent : null, apply }),
     { success: false, onDone: (r) => setRes(r) });
+  const reset = () => setRes(null);
   return (
     <Modal opened onClose={onClose} title={t("reorg.moveTitle")} size="lg">
       <Stack>
         <Text size="sm" c="dimmed">{t("reorg.moveHint")}</Text>
-        <MultiSelect label={t("reorg.lines")} searchable value={ids} onChange={(v) => { setIds(v); setRes(null); }}
-          data={(lines.data?.items ?? []).map((a) => ({ value: a.id, label: `${code.get(a.department_id) ?? "?"} · ${a.code} — ${a.name}` }))} />
-        <DeptSelect label={t("reorg.to")} value={to} onChange={(v) => { setTo(v); setRes(null); }} />
-        {res && <Alert color={res.applied ? "teal" : "blue"}>{t("reorg.result", { a: res.assets, w: res.work_orders, p: res.pm_plans, to: res.to })}{res.applied && ` ${t("reorg.done")}`}</Alert>}
+        <MultiSelect label={t("reorg.lines")} searchable value={ids} onChange={(v) => { setIds(v); reset(); }}
+          data={sorted.map((a) => ({ value: a.id, label: label(a) }))} />
+        <DeptSelect label={t("reorg.to")} value={to} onChange={(v) => { setTo(v); setParent(null); reset(); }} />
+        {hasUnit && <Select label={t("reorg.parent")} description={t("reorg.parentHint")} clearable placeholder={t("reorg.ownLine")} value={parent}
+          onChange={(v) => { setParent(v); reset(); }} data={targetLines.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))} />}
+        {res && <Alert color={res.applied ? "teal" : "blue"}>
+          {t("reorg.result", { a: res.assets, w: res.work_orders, p: res.pm_plans, to: res.to })}{res.applied && ` ${t("reorg.done")}`}
+          {res.moves.map((m) => <div key={m.code}>{m.code}: {m.becomes === "line" ? t("reorg.becomesLine") : m.becomes}</div>)}
+        </Alert>}
         <Group>
           <Button variant="light" disabled={!ids.length || !to} loading={run.isPending} onClick={() => run.mutate(false)}>{t("reorg.preview")}</Button>
           <Button color="orange" disabled={!res || res.applied} loading={run.isPending} onClick={() => run.mutate(true)}>{t("reorg.apply")}</Button>

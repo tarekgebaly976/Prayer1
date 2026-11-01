@@ -210,40 +210,66 @@ def update_department(
 
 
 class MoveAssetsIn(In):
-    asset_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)  # production lines; their whole tree moves
+    # Production lines or units; everything below them moves too.
+    asset_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
     to_department_id: uuid.UUID
+    # For units: put them under this production line of the target department. Blank = each unit becomes a line.
+    parent_id: uuid.UUID | None = None
     apply: bool = False
 
 
 @router.post("/departments/move-assets")
 def move_assets(body: MoveAssetsIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
-    """Move production lines (with every unit and component below them) to another department, together with their
-    work orders, so lists, KPIs and department access follow the equipment. apply=false only counts."""
+    """Move production lines or units (with every level below them) to another department, together with their work
+    orders, so lists, KPIs and department access follow the equipment. A unit either becomes a production line of the
+    target department or goes under a chosen line there. apply=false only counts."""
     from sqlalchemy import update
 
     from app.models.assets import Asset
     from app.models.enums import AssetLevel
     from app.models.pm import PMPlan
     from app.models.workorders import WorkOrder
+    from app.services.assets import move_asset
 
     target = db.get(Department, body.to_department_id)
     if target is None or target.plant_id != ctx.plant_id:
         raise HTTPException(404, "Department not found")
-    lines = []
+    parent = None
+    if body.parent_id:
+        parent = db.get(Asset, body.parent_id)
+        if (
+            parent is None
+            or parent.plant_id != ctx.plant_id
+            or parent.department_id != target.id
+            or parent.level != AssetLevel.PRODUCTION_LINE
+        ):
+            raise HTTPException(422, f"The new parent must be a production line of {target.code}")
+    picked = []
     for aid in dict.fromkeys(body.asset_ids):
         a = db.get(Asset, aid)
         if a is None or a.plant_id != ctx.plant_id:
             raise HTTPException(404, "Asset not found")
-        if a.level != AssetLevel.PRODUCTION_LINE:
-            raise HTTPException(422, f"{a.code} is not a production line: move its line, or re-parent it in Assets")
-        lines.append(a)
+        if a.level not in (AssetLevel.PRODUCTION_LINE, AssetLevel.UNIT):
+            raise HTTPException(422, f"{a.code} is a {a.level.value.replace('_', ' ')}: pick its unit or production line")
+        if parent is not None and parent.path.startswith(a.path):
+            raise HTTPException(422, f"{a.code} cannot go under its own child {parent.code}")
+        picked.append(a)
+    # A unit picked together with its own line moves with the line.
+    picked = [a for a in picked if not any(o is not a and a.path.startswith(o.path) for o in picked)]
     ids: list[uuid.UUID] = []
-    for a in lines:
+    plan: list[dict] = []
+    for a in picked:
         ids += svc_subtree(db, a)
+        if a.level == AssetLevel.PRODUCTION_LINE:
+            becomes = "line"
+        else:
+            becomes = f"under {parent.code}" if parent is not None else "line"
+        plan.append({"code": a.code, "name": a.name, "becomes": becomes})
     wos = db.execute(select(func.count()).select_from(WorkOrder).where(WorkOrder.asset_id.in_(ids))).scalar_one() if ids else 0
     plans = db.execute(select(func.count()).select_from(PMPlan).where(PMPlan.asset_id.in_(ids))).scalar_one() if ids else 0
     out = {
-        "lines": [a.code for a in lines],
+        "lines": [a.code for a in picked],
+        "moves": plan,
         "to": target.code,
         "assets": len(ids),
         "work_orders": wos,
@@ -258,8 +284,17 @@ def move_assets(body: MoveAssetsIn, ctx: Ctx = Depends(require("plant.admin")), 
             .values(department_id=target.id)
             .execution_options(synchronize_session=False)
         )
+        for a in picked:
+            a.department_id = target.id
+            if a.level == AssetLevel.UNIT:
+                if parent is None:
+                    a.level = AssetLevel.PRODUCTION_LINE
+                    move_asset(db, a, None)
+                else:
+                    move_asset(db, a, parent.id)
         if not target.is_active:
             target.is_active = True
+        db.flush()
         out["applied"] = True
         audit(
             db,

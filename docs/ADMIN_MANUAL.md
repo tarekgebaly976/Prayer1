@@ -41,11 +41,13 @@ A user may hold one role per plant. System administrators see all plants of thei
 ## Re-organising departments
 Administration → **Departments / Failure codes**:
 * **Edit** a department: change code, name, Arabic name, type, or untick *Active* to retire an empty one.
-* **Move equipment**: pick production lines and a target department. Every unit and component below them moves, with
+* **Move equipment**: pick production lines or units and a target department. Everything below them moves, with
   all their work orders (open and history); PM plans follow their equipment. **Check** shows the counts, **Move now**
-  applies. Afterwards give users of the old area the new department in Users.
-* Example – water and power house: move the WTP line(s) from UTIL to WWTP, rename WWTP to "Water & Wastewater
-  Treatment (WTP + WWTP)", rename UTIL to "PH – Power House".
+  applies. A unit either becomes a production line of its own (default) or goes under a chosen line of the target
+  department. Afterwards give users of the old area the new department in Users.
+* Example – one UTIL line "UT – Utilities & Power House" with units WTP and PH: move unit WTP to WWTP (own line),
+  move unit PH to UTIL (own line), rename WWTP to "Water & Wastewater Treatment (WTP + WWTP)" and UTIL to
+  "PH – Power House", then retire the empty UT line.
 
 ## Daily summary e-mail
 Administration → **Daily summary** (permission `plant.admin`):
