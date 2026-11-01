@@ -177,6 +177,30 @@ def skip_task(db: Session, task: LubeTask, user_id: uuid.UUID, reason: str) -> N
     task.done_at = utcnow()
 
 
+def finish_pending_tasks(db: Session, plant: Plant, wo: WorkOrder, user_id: uuid.UUID, done: bool, note: str) -> int:
+    """Bulk close / cancel of a lubrication work order: close = its pending points count as done today (the next due
+    date moves on, no stock is issued); cancel = they are skipped (counted as not done) and move to their next cycle,
+    so the point is not stuck on a due date that already has a task."""
+    n = 0
+    today = plant_today(plant)
+    for task in db.execute(select(LubeTask).where(LubeTask.work_order_id == wo.id, LubeTask.status == LubeTaskStatus.PENDING)).scalars():
+        point = db.get(LubricationPoint, task.point_id)
+        assert point is not None
+        if not done:
+            skip_task(db, task, user_id, note)
+            if point.frequency_days:
+                point.next_due_date = task.due_date + timedelta(days=point.frequency_days)
+        else:
+            task.status, task.done_at, task.done_date, task.done_by_id = LubeTaskStatus.DONE, utcnow(), today, user_id
+            task.lubricant_used_id, task.condition_note = point.lubricant_id, note
+            point.last_done_date = today
+            asset = db.get(Asset, point.asset_id)
+            point.last_done_hours = asset.operating_hours if asset else None
+            point.next_due_date = today + timedelta(days=point.frequency_days) if point.frequency_days else None
+        n += 1
+    return n
+
+
 def pending_count(db: Session, wo_id: uuid.UUID) -> int:
     return db.execute(
         select(func.count()).select_from(LubeTask).where(LubeTask.work_order_id == wo_id, LubeTask.status == LubeTaskStatus.PENDING)

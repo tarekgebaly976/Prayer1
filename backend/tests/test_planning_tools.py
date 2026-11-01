@@ -310,3 +310,28 @@ def test_export_plans_and_reimport_work_plan(world):
     # Department scope: an SP-only user sees no PM plans.
     r = world.api("sp_sup").get("/pm/plans/export.xlsx")
     assert len(list(load_workbook(io.BytesIO(r.content))["pm_plans"].values)) == 1
+
+
+def test_bulk_close_lubrication_work_orders_finish_their_points(world):
+    from app.models.lubrication import LubeTask, LubricationPoint
+    from tests.test_lube_shifts import _lube_setup
+
+    _, _, _, _, route, pts, today = _lube_setup(world)
+    rel, planner = world.api("reliability"), world.api("planner")
+    wo = rel.ok("post", f"/lubrication/routes/{route['id']}/generate", {})["work_order_id"]
+    res = planner.ok("post", "/work-orders/bulk-finish", {"work_order_ids": [wo], "action": "close", "comment": "done on paper"})
+    assert len(res["done"]) == 1
+    with SessionLocal() as db:
+        assert {t.status.value for t in db.execute(select(LubeTask)).scalars()} == {"done"}
+        nxt = {p.next_due_date for p in db.execute(select(LubricationPoint)).scalars()}
+        assert nxt == {today + timedelta(days=14)}
+    # Cancel: the points are skipped and move to their next cycle.
+    with SessionLocal() as db, db.begin():
+        for p in db.execute(select(LubricationPoint)).scalars():
+            p.next_due_date = today + timedelta(days=1)  # a new due date (inside the route lead time)
+    wo2 = rel.ok("post", f"/lubrication/routes/{route['id']}/generate", {})["work_order_id"]
+    planner.ok("post", "/work-orders/bulk-finish", {"work_order_ids": [wo2], "action": "cancel", "comment": "route merged"})
+    with SessionLocal() as db:
+        tasks = list(db.execute(select(LubeTask).where(LubeTask.work_order_id == wo2)).scalars())
+        assert {t.status.value for t in tasks} == {"skipped"}
+        assert {p.next_due_date for p in db.execute(select(LubricationPoint)).scalars()} == {today + timedelta(days=15)}

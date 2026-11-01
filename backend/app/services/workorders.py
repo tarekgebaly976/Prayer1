@@ -304,6 +304,10 @@ def bulk_finish(db: Session, ctx: Ctx, wo: WorkOrder, action: str, comment: str)
         raise DomainError("already completed: close it instead", "invalid_state", 409)
     frm, now = wo.status, utcnow()
     note = f"Bulk {action}: {comment}"
+    if wo.type == WOType.LUBRICATION:
+        from app.services.lubrication import finish_pending_tasks
+
+        finish_pending_tasks(db, ctx.plant, wo, ctx.user.id, action == "close", note)
     if action == "close":
         if wo.status != WOStatus.COMPLETED:
             wo.status = WOStatus.COMPLETED
