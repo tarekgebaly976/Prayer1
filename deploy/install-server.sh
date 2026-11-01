@@ -7,14 +7,14 @@
 #
 # Optional environment variables:
 #   GITHUB_TOKEN   read-only token if the repository is private
-#   REPO           default: tarekgebaly976/Prayer1        BRANCH  default: ccr-82ee8296-9m776u
+#   REPO           default: tarekgebaly976/Prayer1        BRANCH  default: ccr-8f177934-w5game
 #   CMMS_DOMAIN    your domain; default: <public-ip>.sslip.io (free hostname -> real Let's Encrypt certificate)
 #   ADMIN_EMAIL    first administrator e-mail (prompted if missing)
 #   SEED_DEMO=1    also load the separate DEMO organisation with sample data
 set -euo pipefail
 
 REPO="${REPO:-tarekgebaly976/Prayer1}"
-BRANCH="${BRANCH:-ccr-82ee8296-9m776u}"
+BRANCH="${BRANCH:-ccr-8f177934-w5game}"
 DIR=/opt/cmms
 
 [[ $EUID -eq 0 ]] || { echo "Run with sudo: sudo bash install.sh"; exit 1; }
