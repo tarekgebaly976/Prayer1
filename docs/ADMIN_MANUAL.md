@@ -38,6 +38,15 @@ A user may hold one role per plant. System administrators see all plants of thei
 * **E-mail:** set `CMMS_SMTP_HOST/PORT/USER/PASSWORD/FROM`. Until set, e-mails are recorded with status `disabled`.
 * **ERP/Infor:** not integrated. PO numbers can be typed as external references.
 
+## Re-organising departments
+Administration → **Departments / Failure codes**:
+* **Edit** a department: change code, name, Arabic name, type, or untick *Active* to retire an empty one.
+* **Move equipment**: pick production lines and a target department. Every unit and component below them moves, with
+  all their work orders (open and history); PM plans follow their equipment. **Check** shows the counts, **Move now**
+  applies. Afterwards give users of the old area the new department in Users.
+* Example – water and power house: move the WTP line(s) from UTIL to WWTP, rename WWTP to "Water & Wastewater
+  Treatment (WTP + WWTP)", rename UTIL to "PH – Power House".
+
 ## Daily summary e-mail
 Administration → **Daily summary** (permission `plant.admin`):
 * **Send the summary e-mail** – plant on/off switch (off by default).

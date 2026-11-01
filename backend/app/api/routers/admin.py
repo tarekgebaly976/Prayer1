@@ -4,7 +4,7 @@ from datetime import datetime, time
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -172,6 +172,111 @@ def create_department(
         raise HTTPException(409, "Department code already exists") from e
     audit(db, "department.create", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="department", entity_id=d.id)
     return d
+
+
+class DepartmentUpdate(In):
+    code: str | None = Field(None, min_length=1, max_length=32)
+    name: str | None = Field(None, min_length=1, max_length=200)
+    name_ar: str | None = None
+    type: DepartmentType | None = None
+    is_active: bool | None = None
+
+
+@router.patch("/departments/{dept_id}", response_model=DepartmentOut)
+def update_department(
+    dept_id: uuid.UUID, body: DepartmentUpdate, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")
+) -> Department:
+    """Rename a department (code, name) or retire it. Equipment and history keep pointing to it."""
+    from app.models.assets import Asset
+
+    d = db.get(Department, dept_id)
+    if d is None or d.plant_id != ctx.plant_id:
+        raise HTTPException(404, "Department not found")
+    data = body.model_dump(exclude_unset=True)
+    if data.get("is_active") is False:
+        left = db.execute(
+            select(func.count()).select_from(Asset).where(Asset.department_id == d.id, Asset.is_active.is_(True))
+        ).scalar_one()
+        if left:
+            raise HTTPException(409, f"{left} active equipment still belong to {d.code}: move them first")
+    for k, v in data.items():
+        setattr(d, k, v)
+    try:
+        db.flush()
+    except IntegrityError as e:
+        raise HTTPException(409, "Department code already exists") from e
+    audit(db, "department.update", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="department", entity_id=d.id, data=data)
+    return d
+
+
+class MoveAssetsIn(In):
+    asset_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)  # production lines; their whole tree moves
+    to_department_id: uuid.UUID
+    apply: bool = False
+
+
+@router.post("/departments/move-assets")
+def move_assets(body: MoveAssetsIn, ctx: Ctx = Depends(require("plant.admin")), db: Session = Depends(get_db, scope="function")) -> dict:
+    """Move production lines (with every unit and component below them) to another department, together with their
+    work orders, so lists, KPIs and department access follow the equipment. apply=false only counts."""
+    from sqlalchemy import update
+
+    from app.models.assets import Asset
+    from app.models.enums import AssetLevel
+    from app.models.pm import PMPlan
+    from app.models.workorders import WorkOrder
+
+    target = db.get(Department, body.to_department_id)
+    if target is None or target.plant_id != ctx.plant_id:
+        raise HTTPException(404, "Department not found")
+    lines = []
+    for aid in dict.fromkeys(body.asset_ids):
+        a = db.get(Asset, aid)
+        if a is None or a.plant_id != ctx.plant_id:
+            raise HTTPException(404, "Asset not found")
+        if a.level != AssetLevel.PRODUCTION_LINE:
+            raise HTTPException(422, f"{a.code} is not a production line: move its line, or re-parent it in Assets")
+        lines.append(a)
+    ids: list[uuid.UUID] = []
+    for a in lines:
+        ids += svc_subtree(db, a)
+    wos = db.execute(select(func.count()).select_from(WorkOrder).where(WorkOrder.asset_id.in_(ids))).scalar_one() if ids else 0
+    plans = db.execute(select(func.count()).select_from(PMPlan).where(PMPlan.asset_id.in_(ids))).scalar_one() if ids else 0
+    out = {
+        "lines": [a.code for a in lines],
+        "to": target.code,
+        "assets": len(ids),
+        "work_orders": wos,
+        "pm_plans": plans,
+        "applied": False,
+    }
+    if body.apply and ids:
+        db.execute(update(Asset).where(Asset.id.in_(ids)).values(department_id=target.id).execution_options(synchronize_session=False))
+        db.execute(
+            update(WorkOrder)
+            .where(WorkOrder.asset_id.in_(ids))
+            .values(department_id=target.id)
+            .execution_options(synchronize_session=False)
+        )
+        if not target.is_active:
+            target.is_active = True
+        out["applied"] = True
+        audit(
+            db,
+            "department.move_assets",
+            user_id=ctx.user.id,
+            plant_id=ctx.plant_id,
+            entity_type="department",
+            entity_id=target.id,
+            data=out,
+        )
+    return out
+
+
+def svc_subtree(db: Session, asset) -> list[uuid.UUID]:
+    from app.services.assets import subtree_ids
+
+    return subtree_ids(db, asset)
 
 
 # ---------- users & memberships ----------

@@ -133,6 +133,7 @@ export const en = {
     hint: "A4 label sheets with 3 × 8 labels of 70 × 37 mm. Print at 100% (actual size), not “fit to page”. Scan the labels with Scan QR in the app.",
     under: "Asset and everything below it (blank = all)", allLevels: "All levels", skip: "Labels already used on the first sheet",
     skipHint: "Start further down a partly used sheet (0–23)", download: "Download PDF" },
+  reorg: { edit: "Edit", editTitle: "Edit department", active: "Active (untick to retire an empty department)", move: "Move equipment", moveTitle: "Move equipment to another department", moveHint: "Pick production lines: every unit and component below them moves too, with all their work orders (open and history), so lists, KPIs and department access follow the equipment. PM plans follow their equipment. Then give users of the old area the new department in Users.", lines: "Production lines", to: "To department", preview: "Check", apply: "Move now", result: "{{a}} equipment · {{w}} work orders · {{p}} PM plans → {{to}}", done: "Moved." },
   planning: {
     exportPlans: "Export plans (Excel)",
     bulkFinish: "Close / cancel selected", bulkTitle: "Close or cancel work orders", close: "Close (work done)", cancel: "Cancel (not done)",

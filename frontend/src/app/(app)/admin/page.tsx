@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Checkbox, Code, FileInput, Group, Modal, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Code, FileInput, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Tabs, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
@@ -155,6 +155,54 @@ const DEPT_TYPES = [
   { group: "Paper mill", items: ["PM", "SP", "FH", "WWTP", "EAI", "UTIL"] },
 ];
 
+function EditDept({ d, onClose }: { d: Department; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [f, setF] = useState({ code: d.code, name: d.name, name_ar: d.name_ar ?? "", type: d.type, is_active: d.is_active });
+  const save = useMut(() => patch(`/departments/${d.id}`, { ...f, name_ar: f.name_ar || null }), { onDone: onClose });
+  return (
+    <Modal opened onClose={onClose} title={`${t("reorg.editTitle")}: ${d.code}`}>
+      <Stack>
+        <TextInput label={t("common.code")} value={f.code} onChange={(e) => setF({ ...f, code: e.currentTarget.value })} />
+        <TextInput label={t("common.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
+        <TextInput label="Arabic name" dir="rtl" value={f.name_ar} onChange={(e) => setF({ ...f, name_ar: e.currentTarget.value })} />
+        <Select label={t("common.type")} data={DEPT_TYPES} value={f.type} onChange={(v) => setF({ ...f, type: v ?? f.type })} allowDeselect={false} />
+        <Switch label={t("reorg.active")} checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.currentTarget.checked })} />
+        <Button disabled={!f.code || !f.name} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button>
+      </Stack>
+    </Modal>
+  );
+}
+
+interface MoveRes { lines: string[]; to: string; assets: number; work_orders: number; pm_plans: number; applied: boolean }
+
+/** Move production lines (whole tree + work orders) to another department, e.g. WTP from Utilities to the water section. */
+function MoveAssets({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  const lines = useQ<Page<{ id: string; code: string; name: string; department_id: string }>>("/assets", { level: "production_line", limit: 200 });
+  const depts = useQ<Department[]>("/departments");
+  const code = new Map((depts.data ?? []).map((d) => [d.id, d.code]));
+  const [ids, setIds] = useState<string[]>([]);
+  const [to, setTo] = useState<string | null>(null);
+  const [res, setRes] = useState<MoveRes | null>(null);
+  const run = useMut((apply: boolean) => post<MoveRes>("/departments/move-assets", { asset_ids: ids, to_department_id: to, apply }),
+    { success: false, onDone: (r) => setRes(r) });
+  return (
+    <Modal opened onClose={onClose} title={t("reorg.moveTitle")} size="lg">
+      <Stack>
+        <Text size="sm" c="dimmed">{t("reorg.moveHint")}</Text>
+        <MultiSelect label={t("reorg.lines")} searchable value={ids} onChange={(v) => { setIds(v); setRes(null); }}
+          data={(lines.data?.items ?? []).map((a) => ({ value: a.id, label: `${code.get(a.department_id) ?? "?"} · ${a.code} — ${a.name}` }))} />
+        <DeptSelect label={t("reorg.to")} value={to} onChange={(v) => { setTo(v); setRes(null); }} />
+        {res && <Alert color={res.applied ? "teal" : "blue"}>{t("reorg.result", { a: res.assets, w: res.work_orders, p: res.pm_plans, to: res.to })}{res.applied && ` ${t("reorg.done")}`}</Alert>}
+        <Group>
+          <Button variant="light" disabled={!ids.length || !to} loading={run.isPending} onClick={() => run.mutate(false)}>{t("reorg.preview")}</Button>
+          <Button color="orange" disabled={!res || res.applied} loading={run.isPending} onClick={() => run.mutate(true)}>{t("reorg.apply")}</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 function Basics() {
   const { t } = useTranslation();
   const depts = useQ<Department[]>("/departments");
@@ -164,6 +212,8 @@ function Basics() {
   const addD = useMut(() => post("/departments", { ...d, name_ar: d.name_ar || null }));
   const addC = useMut(() => post("/failure-codes", c), { onDone: () => setC({ ...c, code: "", description: "" }) });
   const [fcImp, setFcImp] = useState(false);
+  const [editD, setEditD] = useState<Department | null>(null);
+  const [moving, setMoving] = useState(false);
   const [fcq, setFcq] = useState("");
   const shownCodes = (codes.data ?? []).filter((x) => !fcq || `${x.code} ${x.description} ${x.equipment_type ?? ""}`.toLowerCase().includes(fcq.toLowerCase()));
   return (
@@ -174,7 +224,12 @@ function Basics() {
           <TextInput label={t("common.name")} value={d.name} onChange={(e) => setD({ ...d, name: e.currentTarget.value })} />
           <Select label={t("common.type")} w={170} data={DEPT_TYPES} value={d.type} onChange={(v) => setD({ ...d, type: v ?? "OTHER" })} />
           <Button disabled={!d.code || !d.name} onClick={() => addD.mutate(undefined)}>{t("common.add")}</Button></Group>
-        <DataTable rows={depts.data} columns={[{ key: "c", label: t("common.code"), render: (x) => x.code }, { key: "n", label: t("common.name"), render: (x) => `${x.name}${x.name_ar ? ` / ${x.name_ar}` : ""}` }, { key: "t", label: t("common.type"), render: (x) => x.type }]} />
+        <Group><Button size="xs" variant="light" color="orange" onClick={() => setMoving(true)}>{t("reorg.move")}</Button></Group>
+        <DataTable rows={depts.data} columns={[{ key: "c", label: t("common.code"), render: (x) => x.code }, { key: "n", label: t("common.name"), render: (x) => `${x.name}${x.name_ar ? ` / ${x.name_ar}` : ""}` },
+          { key: "t", label: t("common.type"), render: (x) => x.type }, { key: "a", label: t("common.active"), render: (x) => (x.is_active ? "✓" : "—") },
+          { key: "e", label: "", render: (x) => <Button size="xs" variant="light" onClick={() => setEditD(x)}>{t("reorg.edit")}</Button> }]} />
+        {editD && <EditDept key={editD.id} d={editD} onClose={() => setEditD(null)} />}
+        {moving && <MoveAssets onClose={() => setMoving(false)} />}
       </Stack>
       <Stack>
         <Group justify="space-between"><Text fw={600}>{t("admin.failureCodes")}</Text>
