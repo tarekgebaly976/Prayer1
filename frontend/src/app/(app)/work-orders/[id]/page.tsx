@@ -289,7 +289,7 @@ export default function WODetailPage() {
                   {can("wo.assign") && !finished && <Button size="compact-xs" variant="subtle" color="red" onClick={() => unassign.mutate(a.user_id)}>×</Button>}</Group>))}</Stack>
               {can("wo.assign") && !finished && (
                 <Group align="end">
-                  <UserPicker label={t("wo.assign")} value={assignee} onChange={setAssignee} />
+                  <UserPicker label={t("wo.assign")} value={assignee} onChange={setAssignee} tradeFilter />
                   <Checkbox label={t("wo.force")} checked={force} onChange={(e) => setForce(e.currentTarget.checked)} />
                   <Button disabled={!assignee} loading={assign.isPending} onClick={() => assign.mutate(undefined)}>{t("wo.assign")}</Button>
                 </Group>

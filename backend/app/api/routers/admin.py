@@ -575,6 +575,29 @@ def remove_user(user_id: uuid.UUID, ctx: Ctx = Depends(require("user.manage")), 
     audit(db, "user.remove", user_id=ctx.user.id, plant_id=ctx.plant_id, entity_type="user", entity_id=user.id, data={"email": user.email})
 
 
+@router.get("/trades")
+def list_trades(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[str]:
+    """Trades to offer: the default list plus any trade already used in this plant (people or job plans)."""
+    from app.core.trades import DEFAULT_TRADES
+    from app.models.pm import JobPlan
+
+    used = set(
+        db.execute(
+            select(User.trade)
+            .join(Membership, Membership.user_id == User.id)
+            .where(Membership.plant_id == ctx.plant_id, User.trade.is_not(None))
+        ).scalars()
+    )
+    used |= set(db.execute(select(JobPlan.trade).where(JobPlan.plant_id == ctx.plant_id, JobPlan.trade.is_not(None))).scalars())
+    out = list(DEFAULT_TRADES)
+    seen = {t.casefold() for t in out}
+    for t in sorted(x.strip() for x in used if x and x.strip()):
+        if t.casefold() not in seen:
+            seen.add(t.casefold())
+            out.append(t)
+    return out
+
+
 @router.get("/roles")
 def list_roles(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="function")) -> list[dict]:
     return [{"code": r.code, "name": r.name} for r in db.execute(select(Role).order_by(Role.name)).scalars()]

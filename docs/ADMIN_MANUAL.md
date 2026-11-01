@@ -38,6 +38,14 @@ A user may hold one role per plant. System administrators see all plants of thei
 * **E-mail:** set `CMMS_SMTP_HOST/PORT/USER/PASSWORD/FROM`. Until set, e-mails are recorded with status `disabled`.
 * **ERP/Infor:** not integrated. PO numbers can be typed as external references.
 
+## Roles and trades
+* **Role** = what someone may do in the system (Technician, Supervisor, Planner …).
+* **Trade** = the work they do: Mechanical, Electrical, Instrumentation, Machinist, Welder, Fitter, Pipe fitter,
+  Rigger, Hydraulic, Lubrication, HVAC, Crane operator, Painter, Civil, Operations, General – or type any other trade
+  (it then appears in the list). A welder or a machinist is a **Technician** with trade *Welder* / *Machinist*.
+* When assigning work, the **Trade** filter next to the technician list shows only that trade. Job plans carry a
+  trade too; PM plan codes use its short code (MACH, WELD, FIT, PIPE, RIG …).
+
 ## Re-organising departments
 Administration → **Departments / Failure codes**:
 * **Edit** a department: change code, name, Arabic name, type, or untick *Active* to retire an empty one.

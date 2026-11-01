@@ -61,7 +61,23 @@ DAYS_TO_NAMED = {
     365: "yearly",
     730: "biennial",
 }
-TRADE_CODES = {"mechanical": "MECH", "electrical": "ELEC", "instrumentation": "INST", "operations": "OPS", "lubrication": "LUBE"}
+TRADE_CODES = {
+    "mechanical": "MECH",
+    "electrical": "ELEC",
+    "instrumentation": "INST",
+    "operations": "OPS",
+    "lubrication": "LUBE",
+    "machinist": "MACH",
+    "welder": "WELD",
+    "fitter": "FIT",
+    "pipe fitter": "PIPE",
+    "rigger": "RIG",
+    "hydraulic": "HYD",
+    "crane operator": "CRANE",
+    "painter": "PAINT",
+    "civil": "CIVIL",
+    "general": "GEN",
+}
 STEP_SPLIT = re.compile(r"(?:^|\s)\d{1,2}\s*[.)-]\s*(?=\S)")
 YES = {"yes", "y", "true", "1", "offline", "shutdown"}
 MAX_STEPS = 60  # above this a plan lists one checklist line per task; full procedures go to the job plan description

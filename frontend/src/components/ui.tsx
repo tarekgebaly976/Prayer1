@@ -1,6 +1,6 @@
 "use client";
 
-import { ActionIcon, Badge, Button, Center, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
+import { ActionIcon, Autocomplete, Badge, Button, Center, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
 import Link from "next/link";
@@ -143,11 +143,32 @@ export function AssetPicker({ value, onChange, label, required, clearable }: {
   );
 }
 
-export function UserPicker({ value, onChange, label, roles, multiple }: { value: string | null; onChange: (v: string | null) => void; label: string; roles?: string[]; multiple?: false }) {
+export function UserPicker({ value, onChange, label, roles, multiple, tradeFilter }: {
+  value: string | null; onChange: (v: string | null) => void; label: string; roles?: string[]; multiple?: false; tradeFilter?: boolean;
+}) {
+  const { t } = useTranslation();
   const q = useQ<Member[]>("/users");
-  const data = (q.data ?? []).filter((m) => m.is_active && (!roles || roles.includes(m.role_code))).map((m) => ({ value: m.user.id, label: `${m.user.full_name}${m.user.trade ? ` (${m.user.trade})` : ""}` }));
+  const [trade, setTrade] = useState<string | null>(null);
+  const people = (q.data ?? []).filter((m) => m.is_active && (!roles || roles.includes(m.role_code)));
+  const trades = [...new Set(people.map((m) => m.user.trade).filter((x): x is string => !!x))].sort();
+  const data = people.filter((m) => !trade || m.user.trade === trade)
+    .map((m) => ({ value: m.user.id, label: `${m.user.full_name}${m.user.trade ? ` (${m.user.trade})` : ""}` }));
   void multiple;
-  return <Select label={label} searchable clearable value={value} onChange={onChange} data={data} />;
+  const pick = <Select label={label} searchable clearable value={value} onChange={onChange} data={data} style={{ flex: 1 }} />;
+  if (!tradeFilter || trades.length === 0) return pick;
+  return (
+    <Group align="end" gap="xs" wrap="nowrap">
+      <Select label={t("trade.filter")} w={150} clearable placeholder={t("trade.all")} value={trade} onChange={setTrade} data={trades} />
+      {pick}
+    </Group>
+  );
+}
+
+/** Trade (craft) of a person or job plan: pick from the list or type a new one. */
+export function TradeInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+  const { t } = useTranslation();
+  const q = useQ<string[]>("/trades");
+  return <Autocomplete label={label ?? t("trade.label")} value={value} onChange={onChange} data={q.data ?? []} placeholder={t("trade.placeholder")} limit={30} />;
 }
 
 export function DeptSelect({ value, onChange, label, clearable, placeholder }: {

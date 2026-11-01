@@ -89,7 +89,7 @@ function List() {
         </Stack>}
       </Modal>
       <Modal opened={bulk} onClose={() => setBulk(false)} title={t("wo.bulkAssign")}>
-        <UserPicker label={t("wo.assignees")} value={tech} onChange={setTech} />
+        <UserPicker label={t("wo.assignees")} value={tech} onChange={setTech} tradeFilter />
         <Button mt="md" disabled={!tech} loading={bulkAssign.isPending} onClick={() => bulkAssign.mutate(undefined)}>{t("wo.assign")}</Button>
       </Modal>
     </>

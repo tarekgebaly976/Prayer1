@@ -7,7 +7,7 @@ import { Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { PlanImport } from "@/components/PlanImport";
-import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
+import { AssetPicker, DataTable, PageHeader, Pager, StatusBadge, TradeInput } from "@/components/ui";
 import { download, post, put } from "@/lib/api";
 import { fmtDate, useAssetCodes, useMut, useQ } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
@@ -20,7 +20,7 @@ interface Occ { id: string; pm_plan_id: string; plan_code: string | null; asset_
 
 function NewJobPlan({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ code: "", name: "", description: "", trade: "mechanical", estimated_hours: 1 as number | string, safety_precautions: "", tools: "",
+  const [f, setF] = useState({ code: "", name: "", description: "", trade: "Mechanical", estimated_hours: 1 as number | string, safety_precautions: "", tools: "",
     requires_loto: false, requires_permit: false, requires_testing: false });
   const [tasks, setTasks] = useState<{ description: string; kind: string; unit: string; max_value: string }[]>([{ description: "", kind: "check", unit: "", max_value: "" }]);
   const m = useMut(() => post("/pm/job-plans", { ...f, estimated_hours: Number(f.estimated_hours), description: f.description || null, tools: f.tools || null,
@@ -33,7 +33,7 @@ function NewJobPlan({ opened, onClose }: { opened: boolean; onClose: () => void 
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <TextInput label={t("common.code")} value={f.code} onChange={(e) => setF({ ...f, code: e.currentTarget.value })} />
           <TextInput label={t("common.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
-          <Select label={t("pm.trade")} value={f.trade} onChange={(v) => setF({ ...f, trade: v ?? "mechanical" })} data={["mechanical", "electrical", "instrumentation", "general"]} />
+          <TradeInput label={t("pm.trade")} value={f.trade} onChange={(v) => setF({ ...f, trade: v })} />
           <NumberInput label={t("wo.estHours")} min={0.25} value={f.estimated_hours} onChange={(v) => setF({ ...f, estimated_hours: v })} />
         </SimpleGrid>
         <Textarea label={t("pm.safetyNotes")} value={f.safety_precautions} onChange={(e) => setF({ ...f, safety_precautions: e.currentTarget.value })} />

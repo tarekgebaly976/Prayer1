@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { FailureCodeImport } from "@/components/FailureModes";
 import { PlanImport } from "@/components/PlanImport";
-import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge } from "@/components/ui";
+import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge, TradeInput } from "@/components/ui";
 import { api, del, download, patch, post, put } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
 import type { Department, FailureCode, Member, Page } from "@/lib/types";
@@ -35,7 +35,7 @@ function EditUser({ m, roleOpts, onClose }: { m: Member; roleOpts: { value: stri
         <TextInput label={t("common.name")} value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.currentTarget.value })} />
         <Select label={t("common.role")} data={roleOpts} value={f.role} onChange={(v) => setF({ ...f, role: v ?? f.role })} allowDeselect={false} />
         <DeptMultiSelect value={f.department_ids} onChange={(v) => setF({ ...f, department_ids: v })} label={t("admin.departments")} placeholder={t("admin.allDepts")} />
-        <SimpleGrid cols={3}><TextInput label="Trade" value={f.trade} onChange={(e) => setF({ ...f, trade: e.currentTarget.value })} />
+        <SimpleGrid cols={3}><TradeInput value={f.trade} onChange={(v) => setF({ ...f, trade: v })} />
           <TextInput label="Employee #" value={f.employee_no} onChange={(e) => setF({ ...f, employee_no: e.currentTarget.value })} />
           <NumberInput label="Rate/h" min={0} value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} /></SimpleGrid>
         <Button disabled={!f.email || f.full_name.length < 2} loading={save.isPending} onClick={() => save.mutate(undefined)}>{t("common.save")}</Button>
@@ -128,7 +128,7 @@ function Users() {
         { key: "r", label: t("common.role"), render: (m) => <Select size="xs" w={220} data={roleOpts} value={m.role_code} onChange={(v) => v && setRole.mutate({ id: m.user.id, role: v })} /> },
         { key: "d", label: t("admin.departments"), render: (m) => <div style={{ width: 210 }}><DeptMultiSelect label="" compact value={deptIds(m)}
           onChange={(v) => setDept.mutate({ id: m.user.id, depts: v })} placeholder={t("admin.allDepts")} /></div> },
-        { key: "t", label: "Trade", render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
+        { key: "t", label: t("trade.label"), render: (m) => m.user.trade }, { key: "a", label: t("common.active"), render: (m) => <Switch checked={m.is_active} onChange={() => toggle.mutate(m)} aria-label="active" /> },
         { key: "s", label: t("admin.dsColumn"), render: (m) => <Switch checked={!!m.daily_summary} onChange={() => setSummary.mutate(m)} aria-label="daily summary" /> },
         { key: "x", label: "", render: (m) => <Button size="xs" variant="light" onClick={() => setEdit(m)}>{t("common.edit")}</Button> }]} />
       {edit && <EditUser key={edit.user.id} m={edit} roleOpts={roleOpts} onClose={() => setEdit(null)} />}
@@ -139,7 +139,7 @@ function Users() {
           <TextInput label={t("common.password")} type="password" description="≥ 12 characters, 3 of: lower, upper, digit, symbol" value={f.password} onChange={(e) => setF({ ...f, password: e.currentTarget.value })} />
           <Select label={t("common.role")} data={roleOpts} value={f.role} onChange={(v) => setF({ ...f, role: v ?? "technician" })} />
           <DeptMultiSelect value={f.department_ids} onChange={(v) => setF({ ...f, department_ids: v })} label={t("admin.departments")} placeholder={t("admin.allDepts")} />
-          <SimpleGrid cols={3}><TextInput label="Trade" value={f.trade} onChange={(e) => setF({ ...f, trade: e.currentTarget.value })} />
+          <SimpleGrid cols={3}><TradeInput value={f.trade} onChange={(v) => setF({ ...f, trade: v })} />
             <TextInput label="Employee #" value={f.employee_no} onChange={(e) => setF({ ...f, employee_no: e.currentTarget.value })} />
             <NumberInput label="Rate/h" min={0} value={f.hourly_rate} onChange={(v) => setF({ ...f, hourly_rate: v })} /></SimpleGrid>
           <Button disabled={!f.email || !f.full_name || f.password.length < 12} loading={create.isPending} onClick={() => create.mutate(undefined)}>{t("common.create")}</Button>
