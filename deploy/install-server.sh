@@ -7,13 +7,13 @@
 #
 # Optional environment variables:
 #   GITHUB_TOKEN   read-only token if the repository is private
-#   REPO           default: tarekgebaly976/Prayer1        BRANCH  default: ccr-8f177934-w5game
+#   REPO           default: tarekgebaly976/PlantPulse        BRANCH  default: ccr-8f177934-w5game
 #   CMMS_DOMAIN    your domain; default: <public-ip>.sslip.io (free hostname -> real Let's Encrypt certificate)
 #   ADMIN_EMAIL    first administrator e-mail (prompted if missing)
 #   SEED_DEMO=1    also load the separate DEMO organisation with sample data
 set -euo pipefail
 
-REPO="${REPO:-tarekgebaly976/Prayer1}"
+REPO="${REPO:-tarekgebaly976/PlantPulse}"
 BRANCH="${BRANCH:-ccr-8f177934-w5game}"
 DIR=/opt/cmms
 

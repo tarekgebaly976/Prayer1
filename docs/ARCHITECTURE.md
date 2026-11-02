@@ -4,7 +4,7 @@
 
 | Capability | Finding (2026-10-25) | Consequence |
 |---|---|---|
-| Files, terminal, git | Available; repository `Prayer1` was empty | Project created from scratch in this repository |
+| Files, terminal, git | Available; repository `PlantPulse` (formerly `Prayer1`) was empty | Project created from scratch in this repository |
 | Package managers | PyPI and npm reachable through an egress proxy | Dependencies pinned; npm versions ≥ 2 weeks old except a critical Next.js security patch |
 | PostgreSQL | PostgreSQL 16 installed locally | Real database used for all tests (no SQLite / mocks) |
 | Docker | Docker Engine available (daemon started manually) | Images built and Compose stack run with HTTPS |
