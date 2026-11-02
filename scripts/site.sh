@@ -9,9 +9,9 @@
 #   sudo bash scripts/site.sh requests    list the demo requests received (default: last 20; `requests 100`)
 #   sudo bash scripts/site.sh test-mail   send a test e-mail to the address that receives demo requests
 #   sudo bash scripts/site.sh mail        change that address / the mail server (then restarts the form)
-#   echo APP-PASSWORD | sudo bash scripts/site.sh gmail sender@gmail.com [receiver@example.com]
-#                                         same without questions, for a Gmail sender (handy from a phone); the
-#                                         password comes on stdin so it is not in the command line or the logs
+#   sudo bash scripts/site.sh gmail sender@gmail.com [receiver@example.com]
+#                                         the same for a Gmail sender with one question only (the App password;
+#                                         or give it on stdin), then sends a test e-mail; handy from a phone
 #   sudo bash scripts/site.sh stop | status | logs
 #
 # Optional: PRODUCT_DOMAIN=other-domain.com sudo bash scripts/site.sh start   (first start only; stored in deploy/.env)
@@ -171,10 +171,14 @@ case "${1:-start}" in
     echo "Saved. Check it with: sudo bash scripts/site.sh test-mail" ;;
   gmail)
     sender="${2:-}"; receiver="${3:-${2:-}}"
-    [[ "$sender" == *@* && "$receiver" == *@* ]] || { echo "Usage: echo APP-PASSWORD | sudo bash scripts/site.sh gmail sender@gmail.com [receiver]"; exit 2; }
-    [[ -t 0 ]] && { echo "Give the App password on stdin, e.g.: echo abcdefghijklmnop | ... gmail $sender"; exit 2; }
-    pass="$(head -c 200 | tr -d ' \t\r\n')"
-    [[ ${#pass} -ge 8 ]] || { echo "No App password received."; exit 2; }
+    [[ "$sender" == *@* && "$receiver" == *@* ]] || { echo "Usage: sudo bash scripts/site.sh gmail sender@gmail.com [receiver]"; exit 2; }
+    if [[ -t 0 ]]; then
+      read -rsp "Paste the Gmail App password (16 letters; nothing shows while you paste), then Enter: " pass || true; echo
+    else
+      pass="$(head -c 200)"
+    fi
+    pass="$(printf '%s' "$pass" | tr -d ' \t\r\n' | tr 'A-Z' 'a-z')"
+    [[ "$pass" =~ ^[a-z]{16}$ ]] || { echo "That is not a Gmail App password (it has exactly 16 letters, e.g. abcd efgh ijkl mnop). Nothing changed."; exit 2; }
     ensure_domain; umask 077; touch "$SENV"
     setenv CONTACT_TO "$receiver" "$SENV"
     setenv SITE_SMTP_HOST smtp.gmail.com "$SENV"; setenv SITE_SMTP_PORT 587 "$SENV"
