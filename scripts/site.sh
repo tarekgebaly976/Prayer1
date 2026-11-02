@@ -9,6 +9,9 @@
 #   sudo bash scripts/site.sh requests    list the demo requests received (default: last 20; `requests 100`)
 #   sudo bash scripts/site.sh test-mail   send a test e-mail to the address that receives demo requests
 #   sudo bash scripts/site.sh mail        change that address / the mail server (then restarts the form)
+#   echo APP-PASSWORD | sudo bash scripts/site.sh gmail sender@gmail.com [receiver@example.com]
+#                                         same without questions, for a Gmail sender (handy from a phone); the
+#                                         password comes on stdin so it is not in the command line or the logs
 #   sudo bash scripts/site.sh stop | status | logs
 #
 # Optional: PRODUCT_DOMAIN=other-domain.com sudo bash scripts/site.sh start   (first start only; stored in deploy/.env)
@@ -166,8 +169,25 @@ case "${1:-start}" in
     ensure_domain; ask_mail change
     "${SITE[@]}" up -d --force-recreate; wait_site
     echo "Saved. Check it with: sudo bash scripts/site.sh test-mail" ;;
+  gmail)
+    sender="${2:-}"; receiver="${3:-${2:-}}"
+    [[ "$sender" == *@* && "$receiver" == *@* ]] || { echo "Usage: echo APP-PASSWORD | sudo bash scripts/site.sh gmail sender@gmail.com [receiver]"; exit 2; }
+    [[ -t 0 ]] && { echo "Give the App password on stdin, e.g.: echo abcdefghijklmnop | ... gmail $sender"; exit 2; }
+    pass="$(head -c 200 | tr -d ' \t\r\n')"
+    [[ ${#pass} -ge 8 ]] || { echo "No App password received."; exit 2; }
+    ensure_domain; umask 077; touch "$SENV"
+    setenv CONTACT_TO "$receiver" "$SENV"
+    setenv SITE_SMTP_HOST smtp.gmail.com "$SENV"; setenv SITE_SMTP_PORT 587 "$SENV"
+    setenv SITE_SMTP_USER "$sender" "$SENV"; setenv SITE_SMTP_PASSWORD "$pass" "$SENV"; setenv SITE_SMTP_FROM "$sender" "$SENV"
+    chmod 600 "$SENV"
+    log "Mail settings saved: demo requests go to $receiver, sent through $sender"
+    "${SITE[@]}" up -d --force-recreate; wait_site
+    log "Sending a test e-mail to $receiver"
+    "${SITE[@]}" exec -T site python /app/server.py test-mail \
+      && echo "Test e-mail sent. Look in $receiver (also Spam)." \
+      || { echo "Sending failed (details above): check the App password and try again."; exit 1; } ;;
   stop) "${SITE[@]}" stop; echo "Website stopped (https://$(getenv PRODUCT_DOMAIN deploy/.env) answers 502). Requests are kept." ;;
   status) "${SITE[@]}" ps; echo "Address: https://$(getenv PRODUCT_DOMAIN deploy/.env)" ;;
   logs) "${SITE[@]}" logs --tail 100 site ;;
-  *) echo "Usage: sudo bash scripts/site.sh start|update|requests [n]|test-mail|mail|stop|status|logs"; exit 2 ;;
+  *) echo "Usage: sudo bash scripts/site.sh start|update|requests [n]|test-mail|mail|gmail|stop|status|logs"; exit 2 ;;
 esac
