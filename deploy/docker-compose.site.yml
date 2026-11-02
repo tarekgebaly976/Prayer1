@@ -1,0 +1,41 @@
+# PlantPulse product website (https://<PRODUCT_DOMAIN>, e.g. plantpulse-cmms.com): the landing page in site/public and
+# the "Request a demo" form (site/server.py). A separate project from the CMMS: it has no access to any CMMS database,
+# and the main Caddy reaches it over the shared "edge" network as plantpulse-site:8080.
+# Managed by scripts/site.sh (start | update | stop | status | requests | test-mail | logs); do not start it by hand.
+name: plantpulse-site
+
+services:
+  site:
+    image: python:3.13-alpine
+    command: ["python", "-u", "/app/server.py"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      CONTACT_TO: ${CONTACT_TO:-}
+      SITE_SMTP_HOST: ${SITE_SMTP_HOST:-}
+      SITE_SMTP_PORT: ${SITE_SMTP_PORT:-587}
+      SITE_SMTP_USER: ${SITE_SMTP_USER:-}
+      SITE_SMTP_PASSWORD: ${SITE_SMTP_PASSWORD:-}
+      SITE_SMTP_FROM: ${SITE_SMTP_FROM:-}
+      SITE_DATA_DIR: /data
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ../site:/app:ro
+      - data:/data   # demo-requests.jsonl: every request, also when e-mail is not configured or fails
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      edge: { aliases: [plantpulse-site] }
+
+networks:
+  edge:
+    name: papermill-cmms-edge
+    external: true
+
+volumes:
+  data:

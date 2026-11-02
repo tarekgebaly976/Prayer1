@@ -49,3 +49,30 @@ test.{$CMMS_DOMAIN:localhost} {
 		reverse_proxy cmms-test-web:3000
 	}
 }
+
+# PlantPulse product website (scripts/site.sh, deploy/docker-compose.site.yml) at PRODUCT_DOMAIN, e.g.
+# plantpulse-cmms.com, with www.<domain> redirected to it. Until the site is started this answers 502; the CMMS
+# addresses above are not affected either way.
+{$PRODUCT_DOMAIN:plantpulse.localhost} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+	request_body {
+		max_size 64KB
+	}
+	reverse_proxy plantpulse-site:8080
+	log {
+		output stdout
+		format json
+	}
+}
+
+www.{$PRODUCT_DOMAIN:plantpulse.localhost} {
+	redir https://{$PRODUCT_DOMAIN:plantpulse.localhost}{uri} permanent
+}
