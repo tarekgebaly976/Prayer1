@@ -2,7 +2,7 @@
 
 import { BarChart } from "@mantine/charts";
 import { Alert, Button, Card, FileInput, Group, Modal, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { FailurePareto } from "@/components/FailureModes";
@@ -167,6 +167,15 @@ function KPIs() {
   const today = new Date().toISOString().slice(0, 10);
   const [start, setStart] = useState(`${today.slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
+  // Public demo (instance label DEMO): open on the last six months of sample history instead of this month only.
+  useEffect(() => {
+    fetch("/api/v1/meta").then((r) => (r.ok ? r.json() : null)).then((m: { instance_label?: string } | null) => {
+      if (!(m?.instance_label ?? "").trim().toUpperCase().startsWith("DEMO")) return;
+      const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
+      const sixMonths = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+      setStart((s) => (s === monthStart ? sixMonths : s));
+    }).catch(() => undefined);
+  }, []);
   const [dept, setDept] = useState<string | null>(null);
   const [drill, setDrill] = useState<string | null>(null);
   const q = useQ<{ kpis: KPI[]; currency: string }>("/kpis", { start, end, department_id: dept });

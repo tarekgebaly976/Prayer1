@@ -404,4 +404,12 @@ def seed_demo(password: str) -> None:
         db.flush()
         for k in ("tech1", "tech2", "tech3"):
             db.add(TeamMember(team_id=team.id, user_id=users[k].id))
+        db.flush()
+        from app.demo_activity import add_demo_activity
+
+        activity = add_demo_activity(db, plant)
+    print(
+        f"Demo activity: {activity['history']} past work orders, {activity['open']} open, {activity['requests']} new requests, "
+        f"{activity['lube_overdue']} overdue lubrication tasks"
+    )
     print("Demo data loaded: organization DEMO, plant DMO. Users: " + ", ".join(e for e, *_ in USERS))

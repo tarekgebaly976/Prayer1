@@ -8,6 +8,7 @@
 #   sudo bash scripts/demo.sh launch     the same, running on the server by itself (safe from a phone: closing the
 #                                         terminal does not stop it); then `progress` shows how far it is
 #   sudo bash scripts/demo.sh update     after `sudo git pull`: build the new version for the demo and restart it
+#   sudo bash scripts/demo.sh launch-update   the same plus fresh sample data, running on the server by itself
 #   sudo bash scripts/demo.sh reset      put the sample data back now (also runs every night by itself)
 #   sudo bash scripts/demo.sh accounts   show the demo address, accounts and password
 #   sudo bash scripts/demo.sh stop | remove | status | logs
@@ -168,10 +169,11 @@ reset() {
 case "${1:-start}" in
   start) start ;;
   update) ensure_env; build_images; "${DEMO[@]}" up -d; wait_api; guard; echo "Demo updated: https://$(domain)" ;;
+  update-reset) ensure_env; build_images; reset; echo "Demo updated and reloaded: https://$(domain)" ;;
   reset) reset ;;
   guard) [[ -f "$DENV" ]] && "${DEMO[@]}" ps --status running demo-api 2>/dev/null | grep -q demo-api && guard || true ;;
   launch|launch-update)
-    what=start; [[ "$1" == launch-update ]] && what=update
+    what=start; [[ "$1" == launch-update ]] && what=update-reset
     systemctl reset-failed plantpulse-demo-setup >/dev/null 2>&1 || true
     systemd-run --unit=plantpulse-demo-setup --collect --quiet bash "$PWD/scripts/demo.sh" "$what"
     echo "Started on the server ($what). It goes on even if you close this window (5-15 minutes)."
