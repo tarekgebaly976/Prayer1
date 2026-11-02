@@ -5,6 +5,8 @@
 # by e-mail from the website's "Try the demo" form (scripts/site.sh), so the website must be running first.
 #
 #   sudo bash scripts/demo.sh start      build it (first time 5-15 minutes), load the sample data, start it
+#   sudo bash scripts/demo.sh launch     the same, running on the server by itself (safe from a phone: closing the
+#                                         terminal does not stop it); then `progress` shows how far it is
 #   sudo bash scripts/demo.sh update     after `sudo git pull`: build the new version for the demo and restart it
 #   sudo bash scripts/demo.sh reset      put the sample data back now (also runs every night by itself)
 #   sudo bash scripts/demo.sh accounts   show the demo address, accounts and password
@@ -168,6 +170,15 @@ case "${1:-start}" in
   update) ensure_env; build_images; "${DEMO[@]}" up -d; wait_api; guard; echo "Demo updated: https://$(domain)" ;;
   reset) reset ;;
   guard) [[ -f "$DENV" ]] && "${DEMO[@]}" ps --status running demo-api 2>/dev/null | grep -q demo-api && guard || true ;;
+  launch|launch-update)
+    what=start; [[ "$1" == launch-update ]] && what=update
+    systemctl reset-failed plantpulse-demo-setup >/dev/null 2>&1 || true
+    systemd-run --unit=plantpulse-demo-setup --collect --quiet bash "$PWD/scripts/demo.sh" "$what"
+    echo "Started on the server ($what). It goes on even if you close this window (5-15 minutes)."
+    echo "See how far it is:  sudo bash $PWD/scripts/demo.sh progress" ;;
+  progress)
+    if systemctl is-active --quiet plantpulse-demo-setup; then echo "STILL RUNNING – last lines:"; else echo "FINISHED – last lines:"; fi
+    journalctl -u plantpulse-demo-setup --no-pager -n 25 -o cat 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' ;;
   accounts) accounts ;;
   stop) "${DEMO[@]}" stop; rm -f "$CRONFILE"; echo "Demo stopped (data kept; start brings it back)." ;;
   remove)
@@ -179,5 +190,5 @@ case "${1:-start}" in
     echo "Demo and its data removed. The website's \"Try the demo\" form now says the demo is not available." ;;
   status) "${DEMO[@]}" ps; docker image inspect -f 'Version: {{index .Config.Labels "cmms.version"}}  built {{.Created}}' plantpulse-demo-api 2>/dev/null || true ;;
   logs) "${DEMO[@]}" logs --tail 80 ;;
-  *) echo "Usage: sudo bash scripts/demo.sh start|update|reset|accounts|stop|remove|status|logs"; exit 2 ;;
+  *) echo "Usage: sudo bash scripts/demo.sh start|launch|progress|update|launch-update|reset|accounts|stop|remove|status|logs"; exit 2 ;;
 esac
