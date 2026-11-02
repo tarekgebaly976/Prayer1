@@ -53,27 +53,20 @@ ask_smtp() {
   setenv SITE_SMTP_FROM "${from:-$user}" "$SENV"
 }
 
-# ask_mail [change]: the address that receives demo requests and the mail server that sends them.
+# ask_mail [change]: the address that receives demo requests and the website's own mail server (never the CMMS's).
 ask_mail() {
   umask 077; touch "$SENV"
-  local to ans cmms yn
+  local to ans yn
   to="$(getenv CONTACT_TO "$SENV")"
   read -rp "E-mail that receives demo requests [${to:-none}]: " ans || true
   if [[ -n "${ans:-}" ]]; then to="$ans"; fi
   setenv CONTACT_TO "$to" "$SENV"
-  cmms="$(getenv CMMS_SMTP_HOST deploy/.env)"
   if [[ -n "$(getenv SITE_SMTP_HOST "$SENV")" && "${1:-}" == change ]]; then
     read -rp "Change the mail server ($(getenv SITE_SMTP_HOST "$SENV"))? [y/N] " yn || true
     if [[ "${yn:-n}" =~ ^[yY] ]]; then ask_smtp; fi
   elif [[ -z "$(getenv SITE_SMTP_HOST "$SENV")" ]]; then
-    yn=n
-    if [[ -n "$cmms" ]]; then read -rp "Send them with the CMMS mail server ($cmms)? [Y/n] " yn || true; fi
-    if [[ -n "$cmms" && ! "${yn:-y}" =~ ^[nN] ]]; then
-      for k in HOST PORT USER PASSWORD FROM; do setenv "SITE_SMTP_$k" "$(getenv "CMMS_SMTP_$k" deploy/.env)" "$SENV"; done
-    else
-      echo "Requests are always saved on the server (sudo bash scripts/site.sh requests); a mail server also e-mails them."
-      ask_smtp
-    fi
+    echo "Requests are always saved on the server (sudo bash scripts/site.sh requests); a mail server also e-mails them."
+    ask_smtp
   fi
   chmod 600 "$SENV"
 }
