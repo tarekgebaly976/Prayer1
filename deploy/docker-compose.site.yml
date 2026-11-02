@@ -20,6 +20,9 @@ services:
       SITE_SMTP_PASSWORD: ${SITE_SMTP_PASSWORD:-}
       SITE_SMTP_FROM: ${SITE_SMTP_FROM:-}
       SITE_DATA_DIR: /data
+      # Set by scripts/demo.sh: the "Try the demo" form e-mails these to the visitor.
+      DEMO_URL: ${DEMO_URL:-}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ../site:/app:ro

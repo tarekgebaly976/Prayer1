@@ -76,3 +76,25 @@ test.{$CMMS_DOMAIN:localhost} {
 www.{$PRODUCT_DOMAIN:plantpulse.localhost} {
 	redir https://{$PRODUCT_DOMAIN:plantpulse.localhost}{uri} permanent
 }
+
+# Public demo (scripts/demo.sh, deploy/docker-compose.demo.yml) at demo.<PRODUCT_DOMAIN>: sample data only. Until it is
+# started this answers 502; nothing else is affected.
+demo.{$PRODUCT_DOMAIN:plantpulse.localhost} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	request_body {
+		max_size 30MB
+	}
+	handle /api/* {
+		reverse_proxy plantpulse-demo-api:8000
+	}
+	handle {
+		reverse_proxy plantpulse-demo-web:3000
+	}
+}

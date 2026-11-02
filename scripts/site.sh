@@ -6,7 +6,7 @@
 #
 #   sudo bash scripts/site.sh start       start it (asks once for the e-mail that receives demo requests)
 #   sudo bash scripts/site.sh update      after `sudo git pull`: show the new page text/pictures, restart the form
-#   sudo bash scripts/site.sh requests    list the demo requests received (default: last 20; `requests 100`)
+#   sudo bash scripts/site.sh requests    list who asked for a demo or took the demo (default: last 20; `requests 100`)
 #   sudo bash scripts/site.sh test-mail   send a test e-mail to the address that receives demo requests
 #   sudo bash scripts/site.sh mail        change that address / the mail server (then restarts the form)
 #   sudo bash scripts/site.sh gmail sender@gmail.com [receiver@example.com]
@@ -142,9 +142,10 @@ import json, sys
 from pathlib import Path
 p = Path("/data/demo-requests.jsonl")
 rows = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()] if p.exists() else []
-print(f"{len(rows)} demo request(s) in total" + (f", last {int(sys.argv[1])}:" if rows else "."))
+print(f"{len(rows)} request(s) in total" + (f", last {int(sys.argv[1])}:" if rows else "."))
 for r in rows[-int(sys.argv[1]):]:
-    print(f"\n{r['received_at']}  {r['company']}  –  {r['name']} <{r['email']}>  {r.get('phone') or ''}")
+    tag = "TOOK THE DEMO" if r.get("kind") == "demo-access" else "DEMO REQUEST"
+    print(f"\n{r['received_at']}  [{tag}]  {r['company']}  –  {r['name']} <{r['email']}>  {r.get('phone') or ''}")
     extra = ", ".join(x for x in (r.get('industry'), r.get('team_size') and f"team {r['team_size']}", r.get('lang')) if x)
     if extra: print(f"  {extra}")
     if r.get("message"): print("  " + r["message"].replace("\n", "\n  "))
@@ -190,6 +191,7 @@ case "${1:-start}" in
     "${SITE[@]}" exec -T site python /app/server.py test-mail \
       && echo "Test e-mail sent. Look in $receiver (also Spam)." \
       || { echo "Sending failed (details above): check the App password and try again."; exit 1; } ;;
+  caddy) ensure_domain; update_caddy ;;  # used by scripts/demo.sh after it adds demo.<domain>
   stop) "${SITE[@]}" stop; echo "Website stopped (https://$(getenv PRODUCT_DOMAIN deploy/.env) answers 502). Requests are kept." ;;
   status) "${SITE[@]}" ps; echo "Address: https://$(getenv PRODUCT_DOMAIN deploy/.env)" ;;
   logs) "${SITE[@]}" logs --tail 100 site ;;

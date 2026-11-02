@@ -1,0 +1,88 @@
+# Public demo of PlantPulse at https://demo.<PRODUCT_DOMAIN> (e.g. demo.plantpulse-cmms.com): its own database and
+# attachments with SAMPLE data only (app.cli seed-demo), a blue DEMO label, no e-mail, put back to the sample data every
+# night. It has no access to any other installation; the main Caddy reaches it over the shared "edge" network.
+# It runs its own images (plantpulse-demo-api / -web), built from this folder by scripts/demo.sh.
+# Managed by scripts/demo.sh (start | update | reset | stop | remove | status | accounts); do not start it by hand.
+name: plantpulse-demo
+
+x-demo-env: &demo-env
+  CMMS_ENVIRONMENT: staging
+  CMMS_INSTANCE_LABEL: ${CMMS_INSTANCE_LABEL:-DEMO}
+  CMMS_DATABASE_URL: postgresql+psycopg://cmms_app:${DEMO_APP_DB_PASSWORD}@demo-db:5432/cmms
+  CMMS_MIGRATION_DATABASE_URL: postgresql+psycopg://cmms_owner:${DEMO_OWNER_DB_PASSWORD}@demo-db:5432/cmms
+  CMMS_COOKIE_SECURE: "true"
+  CMMS_STORAGE_BACKEND: local
+  CMMS_STORAGE_LOCAL_PATH: /app/var/storage
+  # No mail server: nothing is ever e-mailed from the demo.
+  CMMS_SMTP_HOST: ""
+  CMMS_SMTP_FROM: ""
+
+services:
+  demo-db:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cmms
+      POSTGRES_USER: cmms_owner
+      POSTGRES_PASSWORD: ${DEMO_OWNER_DB_PASSWORD:?run scripts/demo.sh}
+      CMMS_APP_DB_PASSWORD: ${DEMO_APP_DB_PASSWORD:?run scripts/demo.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmms_owner -d cmms"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  demo-migrate:
+    image: plantpulse-demo-api
+    command: ["alembic", "upgrade", "head"]
+    environment: *demo-env
+    depends_on:
+      demo-db: { condition: service_healthy }
+    restart: "no"
+
+  demo-api:
+    image: plantpulse-demo-api
+    restart: unless-stopped
+    environment: *demo-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      demo-migrate: { condition: service_completed_successfully }
+    networks:
+      default: {}
+      edge: { aliases: [plantpulse-demo-api] }
+
+  demo-worker:
+    image: plantpulse-demo-api
+    command: ["python", "-m", "app.worker"]
+    healthcheck: { disable: true }  # background jobs only; the image's check probes the web API
+    restart: unless-stopped
+    environment: *demo-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      demo-migrate: { condition: service_completed_successfully }
+
+  demo-web:
+    image: plantpulse-demo-web
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://demo-api:8000
+      CMMS_INSTANCE_LABEL: ${CMMS_INSTANCE_LABEL:-DEMO}  # blue DEMO label and app name
+    depends_on: [demo-api]
+    networks:
+      default: {}
+      edge: { aliases: [plantpulse-demo-web] }
+
+networks:
+  default: {}
+  edge:
+    name: papermill-cmms-edge
+    external: true
+
+volumes:
+  pgdata:
+  storage:

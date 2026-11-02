@@ -5,7 +5,8 @@ $SITE_DATA_DIR/demo-requests.jsonl first, then e-mailed to $CONTACT_TO if SMTP i
 lost when mail fails. Behind Caddy, which sets X-Forwarded-For.
 
 Environment: CONTACT_TO, SITE_SMTP_HOST, SITE_SMTP_PORT (587), SITE_SMTP_USER, SITE_SMTP_PASSWORD, SITE_SMTP_FROM,
-SITE_DATA_DIR (/data), SITE_PORT (8080).
+SITE_DATA_DIR (/data), SITE_PORT (8080), and from scripts/demo.sh DEMO_URL, DEMO_PASSWORD: POST /api/demo-access
+e-mails the visitor the demo sign-in details at once and tells CONTACT_TO who took the demo.
 """
 
 from __future__ import annotations
@@ -83,20 +84,44 @@ def clean(data: dict) -> dict | None:
     return out
 
 
+def smtp_send(msg: EmailMessage) -> None:
+    """Send one message with the website's own mail server (SITE_SMTP_*); raises on failure."""
+    host = os.environ.get("SITE_SMTP_HOST", "")
+    port = int(os.environ.get("SITE_SMTP_PORT", "587") or 587)
+    ctx = ssl.create_default_context()
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, context=ctx, timeout=20)
+    else:
+        server = smtplib.SMTP(host, port, timeout=20)
+        server.starttls(context=ctx)
+    with server:
+        user = os.environ.get("SITE_SMTP_USER", "")
+        if user:
+            server.login(user, os.environ.get("SITE_SMTP_PASSWORD", ""))
+        server.send_message(msg)
+
+
+def sender_address() -> str:
+    return os.environ.get("SITE_SMTP_FROM") or os.environ.get("SITE_SMTP_USER") or os.environ.get("CONTACT_TO", "")
+
+
 def send_mail(req: dict) -> bool:
+    """Tell the PlantPulse team about a submission (demo request, or someone who took the demo)."""
     host, to = os.environ.get("SITE_SMTP_HOST", ""), os.environ.get("CONTACT_TO", "")
     if not host or not to:
-        log("demo request saved; e-mail not sent (SITE_SMTP_HOST or CONTACT_TO not set)")
+        log("submission saved; e-mail not sent (SITE_SMTP_HOST or CONTACT_TO not set)")
         return False
-    sender = os.environ.get("SITE_SMTP_FROM") or os.environ.get("SITE_SMTP_USER") or to
+    access = req.get("kind") == "demo-access"
     msg = EmailMessage()
-    msg["Subject"] = f"PlantPulse demo request: {req['company']} ({req['name']})"
-    msg["From"] = formataddr(("PlantPulse website", sender))
+    what = "demo access" if access else "demo request"
+    msg["Subject"] = f"PlantPulse {what}: {req['company']} ({req['name']})"
+    msg["From"] = formataddr(("PlantPulse website", sender_address()))
     msg["To"] = to
     msg["Reply-To"] = formataddr((req["name"], req["email"]))
     msg["Message-ID"] = make_msgid(domain="plantpulse-cmms.com")
     lines = [
-        "New demo request from the PlantPulse website",
+        "Someone received the demo sign-in details from the PlantPulse website (Try the demo)."
+        if access else "New demo request from the PlantPulse website",
         "",
         f"Name:       {req['name']}",
         f"Company:    {req['company']}",
@@ -110,26 +135,95 @@ def send_mail(req: dict) -> bool:
         "Message:",
         req["message"] or "-",
         "",
-        "Reply to this e-mail to answer the requester directly.",
+        "Reply to this e-mail to answer them directly.",
     ]
     msg.set_content("\n".join(lines))
-    port = int(os.environ.get("SITE_SMTP_PORT", "587") or 587)
     try:
-        ctx = ssl.create_default_context()
-        if port == 465:
-            server = smtplib.SMTP_SSL(host, port, context=ctx, timeout=20)
-        else:
-            server = smtplib.SMTP(host, port, timeout=20)
-            server.starttls(context=ctx)
-        with server:
-            user = os.environ.get("SITE_SMTP_USER", "")
-            if user:
-                server.login(user, os.environ.get("SITE_SMTP_PASSWORD", ""))
-            server.send_message(msg)
-        log(f"demo request e-mailed to {to}")
+        smtp_send(msg)
+        log(f"{what} e-mailed to {to}")
         return True
-    except Exception as exc:  # the request is already saved; report and carry on
-        log(f"demo request saved; e-mail FAILED: {exc!r}")
+    except Exception as exc:  # the submission is already saved; report and carry on
+        log(f"{what} saved; e-mail FAILED: {exc!r}")
+        return False
+
+
+DEMO_ACCOUNTS = [  # the same password for all; scripts/demo.sh keeps it from being changed
+    ("Maintenance manager", "مدير الصيانة", "manager@demo.example.com"),
+    ("Planner", "مخطط الصيانة", "planner@demo.example.com"),
+    ("Technician (best on a phone)", "فني (الأفضل على الجوال)", "tech1@demo.example.com"),
+]
+
+
+def demo_available() -> bool:
+    return all(os.environ.get(k) for k in ("DEMO_URL", "DEMO_PASSWORD", "SITE_SMTP_HOST"))
+
+
+def send_demo_access(req: dict) -> None:
+    """E-mail the visitor the demo address and accounts (Arabic and English). Raises on failure."""
+    url, pw = os.environ["DEMO_URL"], os.environ["DEMO_PASSWORD"]
+    ar = req.get("lang") == "ar"
+    en_part = [
+        f"Hello {req['name']},",
+        "",
+        "Thank you for your interest in PlantPulse. Here is your access to the live demo:",
+        "",
+        f"  Address:   {url}",
+        f"  Password:  {pw}   (the same for every account below)",
+        "",
+        *[f"  {role}:  {email}" for role, _, email in DEMO_ACCOUNTS],
+        "",
+        "Sign in as the manager to see everything, as the technician to see the shop-floor app on your phone.",
+        "The demo uses SAMPLE data shared by all visitors, and goes back to the original data every night.",
+        "",
+        "Want to see it with your own plant and assets? Just reply to this e-mail.",
+        "",
+        "PlantPulse – maintenance management for industrial plants",
+    ]
+    ar_part = [
+        f"مرحباً {req['name']}،",
+        "",
+        "شكراً لاهتمامك بـ PlantPulse. هذه بيانات الدخول إلى النسخة التجريبية:",
+        "",
+        f"  العنوان:      {url}",
+        f"  كلمة المرور:  {pw}   (نفسها لكل الحسابات التالية)",
+        "",
+        *[f"  {role}:  {email}" for _, role, email in DEMO_ACCOUNTS],
+        "",
+        "ادخل بحساب مدير الصيانة لترى كل شيء، وبحساب الفني لترى تطبيق الموقع على جوالك.",
+        "البيانات تجريبية ومشتركة بين كل الزوار، وتعود لحالتها الأصلية كل ليلة.",
+        "",
+        "تريد أن ترى النظام بأصول ومعدات مصنعك؟ فقط رد على هذا الإيميل.",
+        "",
+        "PlantPulse – إدارة الصيانة للمنشآت الصناعية",
+    ]
+    sep = ["", "—" * 30, ""]
+    body = (ar_part + sep + en_part) if ar else (en_part + sep + ar_part)
+    msg = EmailMessage()
+    msg["Subject"] = "بيانات الدخول إلى تجربة PlantPulse – Your PlantPulse demo access" if ar \
+        else "Your PlantPulse demo access – بيانات الدخول إلى تجربة PlantPulse"
+    msg["From"] = formataddr(("PlantPulse", sender_address()))
+    msg["To"] = formataddr((req["name"], req["email"]))
+    contact = os.environ.get("CONTACT_TO", "")
+    if contact:
+        msg["Reply-To"] = contact
+    msg["Message-ID"] = make_msgid(domain="plantpulse-cmms.com")
+    msg.set_content("\n".join(body))
+    smtp_send(msg)
+
+
+_sent_to: dict[str, list[float]] = {}
+
+
+def recipient_limited(email: str) -> bool:
+    """At most 3 demo e-mails per address per day (the form must not become a way to flood someone's inbox)."""
+    now, key = time.time(), email.lower()
+    with _lock:
+        recent = [t for t in _sent_to.get(key, []) if now - t < 86400]
+        if len(recent) >= 3:
+            _sent_to[key] = recent
+            return True
+        recent.append(now)
+        _sent_to[key] = recent
         return False
 
 
@@ -177,8 +271,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, target.read_bytes(), ctype, {"Cache-Control": cache}, head=head)
 
     def do_POST(self):
-        if self.path.split("?", 1)[0] != "/api/demo-request":
+        route = self.path.split("?", 1)[0]
+        if route not in ("/api/demo-request", "/api/demo-access"):
             return self.json(404, {"error": "not found"})
+        access = route == "/api/demo-access"
+        if access and not demo_available():
+            return self.json(503, {"error": "demo not available"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -200,6 +298,9 @@ class Handler(BaseHTTPRequestHandler):
         req = clean(data)
         if req is None:
             return self.json(400, {"error": "name, company and a valid e-mail are required"})
+        if access and recipient_limited(req["email"]):
+            return self.json(429, {"error": "too many requests"})
+        req["kind"] = "demo-access" if access else "demo-request"
         req["received_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         req["ip"] = ip
         req["user_agent"] = (self.headers.get("User-Agent", "") or "")[:200]
@@ -210,7 +311,14 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as exc:
             log(f"could not save demo request: {exc!r}")
             return self.json(500, {"error": "could not save"})
-        log(f"demo request from {req['company']!r} <{req['email']}>")
+        log(f"{req['kind']} from {req['company']!r} <{req['email']}>")
+        if access:
+            try:  # sent while the visitor waits, so the page can say whether it worked
+                send_demo_access(req)
+                log(f"demo access e-mailed to {req['email']}")
+            except Exception as exc:
+                log(f"demo access e-mail to {req['email']} FAILED: {exc!r}")
+                return self.json(502, {"error": "could not send"})
         threading.Thread(target=send_mail, args=(req,), daemon=True).start()
         return self.json(200, {"ok": True})
 
@@ -219,7 +327,7 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "test-mail":
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         ok = send_mail({"name": "Test", "company": "PlantPulse test e-mail", "email": "test@example.com", "phone": "",
-                        "industry": "", "team_size": "", "message": "If you can read this, the website can send"
+                        "industry": "", "team_size": "", "kind": "demo-request", "message": "If you can read this, the website can send"
                         " demo requests by e-mail.", "lang": "en", "received_at": now})
         sys.exit(0 if ok else 1)
     httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)

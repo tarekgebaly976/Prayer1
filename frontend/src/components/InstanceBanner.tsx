@@ -3,16 +3,21 @@
 import { Badge } from "@mantine/core";
 import { useEffect, useState } from "react";
 
-const TEST_PREFIX = "TEST · ";
+/** A label starting with DEMO marks the public demo (blue); any other label a test copy (red). */
+const isDemo = (label: string) => label.trim().toUpperCase().startsWith("DEMO");
 
-/** In a test copy: the red TEST icon in the browser tab / iPhone home screen, and "TEST · " in front of the tab title. */
-function markTestCopy(): () => void {
+/** In a test copy: the red TEST icon in the browser tab / iPhone home screen, and "TEST · " in front of the tab title.
+ *  In the demo: "DEMO · " in front of the tab title, the normal icon. */
+function markTestCopy(demo: boolean): () => void {
+  const prefix = demo ? "DEMO · " : "TEST · ";
   const apply = () => {
-    for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]')) {
-      const path = new URL(link.href).pathname;
-      if (path.startsWith("/icons/") && !path.startsWith("/icons/test/")) link.href = path.replace("/icons/", "/icons/test/");
+    if (!demo) {
+      for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"], link[rel="apple-touch-icon"]')) {
+        const path = new URL(link.href).pathname;
+        if (path.startsWith("/icons/") && !path.startsWith("/icons/test/")) link.href = path.replace("/icons/", "/icons/test/");
+      }
     }
-    if (!document.title.startsWith(TEST_PREFIX)) document.title = TEST_PREFIX + document.title;
+    if (!document.title.startsWith(prefix)) document.title = prefix + document.title;
   };
   apply();
   // The app re-renders the head on navigation; put the TEST icon and title back each time.
@@ -21,7 +26,8 @@ function markTestCopy(): () => void {
   return () => obs.disconnect();
 }
 
-/** Red label on every page of a test installation (CMMS_INSTANCE_LABEL on the server); nothing on the real one. */
+/** Label on every page of a test installation (red) or the public demo (blue), from CMMS_INSTANCE_LABEL on the server;
+ *  nothing on a real one. */
 export function InstanceBanner() {
   const [label, setLabel] = useState("");
   useEffect(() => {
@@ -29,10 +35,10 @@ export function InstanceBanner() {
       setLabel(m?.instance_label ?? "");
     }).catch(() => undefined);
   }, []);
-  useEffect(() => (label ? markTestCopy() : undefined), [label]);
+  useEffect(() => (label ? markTestCopy(isDemo(label)) : undefined), [label]);
   if (!label) return null;
   return (
-    <Badge color="red" size="xl" radius="sm" variant="filled" data-testid="instance-banner"
+    <Badge color={isDemo(label) ? "blue" : "red"} size="xl" radius="sm" variant="filled" data-testid="instance-banner"
       style={{ position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)", zIndex: 1000, pointerEvents: "none", boxShadow: "0 2px 8px rgba(0,0,0,.3)" }}>
       {label}
     </Badge>

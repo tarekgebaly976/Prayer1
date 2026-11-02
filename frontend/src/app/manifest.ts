@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 // Generated per request: a test copy (CMMS_INSTANCE_LABEL set on its web container) gets its own name and the red
-// TEST icon, so on a phone's home screen it cannot be mistaken for the real system.
+// TEST icon, so on a phone's home screen it cannot be mistaken for the real system. The public demo is marked DEMO (blue).
 export const dynamic = "force-dynamic";
 
 const BASE = {
@@ -29,8 +29,13 @@ const icons = (dir: string): MetadataRoute.Manifest["icons"] => [
 ];
 
 export default function manifest(): MetadataRoute.Manifest {
-  const test = (process.env.CMMS_INSTANCE_LABEL ?? "").trim() !== "";
-  if (!test) return { ...BASE, icons: icons("/icons") };
+  const label = (process.env.CMMS_INSTANCE_LABEL ?? "").trim();
+  if (!label) return { ...BASE, icons: icons("/icons") };
+  // Public demo (label starting with DEMO): its own name and the blue DEMO colour, the normal icon.
+  if (label.toUpperCase().startsWith("DEMO")) {
+    return { ...BASE, id: "/?instance=demo", name: "PlantPulse DEMO – Maintenance (sample data)", short_name: "PlantPulse DEMO",
+      theme_color: "#1565C0", icons: icons("/icons") };
+  }
   return {
     ...BASE,
     id: "/?instance=test",
