@@ -124,4 +124,21 @@ demo.{$PRODUCT_DOMAIN:plantpulse.localhost} {
 	}
 }
 
+# A paused customer (scripts/customer.sh stop, or a trial that ended): a friendly page instead of an error. The
+# customer's data stays in its stopped containers; customer.sh start switches back to (customer).
+(paused) {
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Cache-Control "no-store"
+		-Server
+	}
+	handle /api/* {
+		respond "This PlantPulse system is paused." 503
+	}
+	handle {
+		rewrite * /paused.html
+		reverse_proxy plantpulse-site:8080
+	}
+}
+
 import caddy.d/*.caddy

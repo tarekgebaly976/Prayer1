@@ -6,7 +6,7 @@
 #   sudo bash scripts/customer.sh new <name> <admin-email> ["Company name"] [options]
 #        options: --plant "Plant name"  --plant-code CODE  --departments general|paper|none
 #                 --currency SAR  --timezone Asia/Riyadh  --lang ar|en (welcome e-mail, default ar)
-#                 --no-mail (the system sends no e-mail at all)
+#                 --no-mail (the system sends no e-mail at all)  --trial 30 (a 30-day trial)
 #        Nothing is e-mailed to the customer yet: check the system, then send the welcome e-mail yourself (below).
 #        e.g.     sudo bash scripts/customer.sh new acme it@acme.com "Acme Paper Co" --departments paper
 #   sudo bash scripts/customer.sh list
@@ -23,7 +23,14 @@
 #   sudo bash scripts/customer.sh progress
 #   sudo bash scripts/customer.sh mail-sync                 after changing the website's mail sender (site.sh resend):
 #                                                           give every customer the same settings
-#   sudo bash scripts/customer.sh stop <name> | start <name> | logs <name>
+#   sudo bash scripts/customer.sh stop <name>               pause: the customer sees a "paused" page, data kept
+#   sudo bash scripts/customer.sh start <name>              back on
+#   sudo bash scripts/customer.sh extend <name> <days>      longer trial (also restarts a paused trial)
+#   sudo bash scripts/customer.sh activate <name>           paid: no trial end any more
+#   sudo bash scripts/customer.sh remind <name> --preview   reminder e-mail to the customer (trial ending), not sent
+#   sudo bash scripts/customer.sh remind <name>             after your check: send it
+#   Trials: you get an e-mail 7 days and 1 day before the end and on the day; nothing stops by itself.
+#   sudo bash scripts/customer.sh logs <name>
 #   sudo bash scripts/customer.sh remove <name>             final backup, then deletes that customer
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -91,25 +98,131 @@ install_cron() {
   [[ "$sign" == "-" ]] && h=$((-h))
   hour=$(( ( (2 - 3 + h) % 24 + 24 ) % 24 ))
   cat > "$CRONFILE" <<CRON
-# PlantPulse customers (scripts/customer.sh): nightly backups, kept 14 days in $BACKUPS
+# PlantPulse customers (scripts/customer.sh): nightly backups (kept 14 days in $BACKUPS), daily trial reminders 09:05 Riyadh
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 $(( (45 + m) % 60 )) $hour * * * root cd $PWD && bash scripts/customer.sh backup-all >> /var/log/plantpulse-customers.log 2>&1
+$(( (5 + m) % 60 )) $(( ( (9 - 3 + h) % 24 + 24 ) % 24 )) * * * root cd $PWD && bash scripts/customer.sh trial-check >> /var/log/plantpulse-customers.log 2>&1
 CRON
   chmod 644 "$CRONFILE"
 }
 
-caddy_add() {  # caddy_add <name>: route <name>.<domain> to the customer, checked before Caddy is touched
-  printf '%s.%s {\n\timport customer %s\n}\n' "$1" "$(domain)" "$1" > "deploy/caddy.d/c-$1.caddy"
+caddy_set() {  # caddy_set <name> customer|paused: route <name>.<domain>, checked before Caddy is touched
+  local f="deploy/caddy.d/c-$1.caddy" old=""
+  [[ -f "$f" ]] && old="$(cat "$f")"
+  printf '%s.%s {\n\timport %s %s\n}\n' "$1" "$(domain)" "$2" "$1" > "$f"
   if ! bash scripts/site.sh caddy-reload; then
-    rm -f "deploy/caddy.d/c-$1.caddy"
-    echo "Caddy was not changed. The customer's containers run, but the address is not served yet."; return 1
+    if [[ -n "$old" ]]; then printf '%s\n' "$old" > "$f"; else rm -f "$f"; fi
+    echo "Caddy was not changed."; return 1
   fi
+}
+caddy_add() { caddy_set "$1" customer || { echo "The customer's containers run, but the address is not served yet."; return 1; }; }
+
+today() { TZ=Asia/Riyadh date +%F; }
+days_left() { echo $(( ( $(date -d "$1" +%s) - $(date -d "$(today)" +%s) ) / 86400 )); }
+
+setval() {  # setval <file> KEY VALUE
+  sed -i "/^$2=/d" "$1"; echo "$2=$3" >> "$1"
+}
+
+# E-mail through the website's sender; JSON built here so names and dates need no quoting.
+send_mail_json() {  # send_mail_json <to or ""> <to-name> <subject> <preview 0|1>  (body lines on stdin)
+  M_TO="$1" M_NAME="$2" M_SUBJECT="$3" M_PREVIEW="$4" python3 -c '
+import json, os, sys
+print(json.dumps({"to": os.environ["M_TO"], "to_name": os.environ["M_NAME"], "subject": os.environ["M_SUBJECT"],
+                  "body": sys.stdin.read().rstrip("\n").split("\n"), "preview": os.environ["M_PREVIEW"] == "1"}))' \
+  | docker compose -p plantpulse-site -f deploy/docker-compose.site.yml --env-file deploy/.env.site exec -T site python /app/server.py mail
+}
+
+plan_text() {  # one-line plan for list/show
+  local f; f="$(cenv "$1")"
+  if [[ "$(getenv PLAN "$f")" == trial ]]; then
+    local u d; u="$(getenv TRIAL_UNTIL "$f")"; d="$(days_left "$u")"
+    if (( d < 0 )); then echo "trial ENDED $u"; elif (( d == 0 )); then echo "trial ends TODAY"; else echo "trial to $u (${d}d)"; fi
+  else
+    echo "active"
+  fi
+}
+
+pause() {
+  need "$1"
+  log "Pausing $1: the address shows a 'paused' page; all data is kept"
+  caddy_set "$1" paused || true
+  C "$1" stop
+  setval "$(cenv "$1")" STATUS paused
+  echo "$1 paused. Back on with: sudo bash scripts/customer.sh start $1"
+}
+
+resume() {
+  need "$1"
+  C "$1" up -d; wait_api "$1"
+  caddy_set "$1" customer || true
+  setval "$(cenv "$1")" STATUS running
+  echo "$1 running: https://$(getenv CUSTOMER_DOMAIN "$(cenv "$1")")"
+}
+
+# remind <name> [lang] [preview]: tell the customer's administrator that the trial ends (only when you run it)
+remind() {
+  need "$1"; local f; f="$(cenv "$1")"
+  [[ "$(getenv PLAN "$f")" == trial ]] || { echo "$1 is not on a trial."; return 1; }
+  local lang="${2:-$(getenv WELCOME_LANG "$f")}" pv="${3:-0}" u d co url
+  u="$(getenv TRIAL_UNTIL "$f")"; d="$(days_left "$u")"; co="$(getenv ORG_NAME "$f")"; url="https://$(getenv CUSTOMER_DOMAIN "$f")"
+  if [[ "${lang:-ar}" == ar ]]; then
+    local when
+    if (( d > 10 )); then when="بعد $d يوماً"; elif (( d > 2 )); then when="بعد $d أيام"; elif (( d == 2 )); then when="بعد يومين"
+    elif (( d == 1 )); then when="غداً"; else when="اليوم"; fi
+    { echo "مرحباً،"; echo
+      if (( d >= 0 )); then echo "نود تذكيركم بأن فترة تجربة نظام PlantPulse الخاص بـ $co تنتهي $when ($u)."
+      else echo "انتهت فترة تجربة نظام PlantPulse الخاص بـ $co يوم $u."; fi
+      echo "  العنوان: $url"; echo
+      echo "بياناتكم وكل ما أدخلتموه محفوظ بالكامل."
+      echo "للاستمرار بدون انقطاع، فقط رد على هذا الإيميل وسنتواصل معكم لترتيب الاشتراك."
+      echo "وإذا احتجتم وقتاً إضافياً للتجربة، أخبرونا."; echo
+      echo "PlantPulse – إدارة الصيانة للمنشآت الصناعية"
+    } | send_mail_json "$(getenv ADMIN_EMAIL "$f")" "$co" "تجربة PlantPulse لـ $co: تنتهي $u" "$pv"
+  else
+    local when; if (( d > 1 )); then when="in $d days"; elif (( d == 1 )); then when="tomorrow"; elif (( d == 0 )); then when="today"; else when="on"; fi
+    { echo "Hello,"; echo
+      if (( d >= 0 )); then echo "A reminder that the PlantPulse trial for $co ends $when ($u)."
+      else echo "The PlantPulse trial for $co ended on $u."; fi
+      echo "  Address: $url"; echo
+      echo "Your data and everything you have entered is kept."
+      echo "To continue without interruption, just reply to this e-mail and we will arrange the subscription."
+      echo "Need more time to try it? Let us know."; echo
+      echo "PlantPulse – maintenance management for industrial plants"
+    } | send_mail_json "$(getenv ADMIN_EMAIL "$f")" "$co" "Your PlantPulse trial for $co ends $u" "$pv"
+  fi
+  if [[ "$pv" == 1 ]]; then echo "Nothing was sent. To send it: sudo bash scripts/customer.sh remind $1${2:+ --lang $2}"
+  else setval "$f" CUSTOMER_REMINDED "$(date -Is)"; fi
+}
+
+# Daily (cron): e-mail YOU when a trial ends in 7 days, 1 day, today, or ended (then weekly). Nothing is stopped.
+trial_check() {
+  local f n u d co last
+  shopt -s nullglob
+  for f in "$CDIR"/*.env; do
+    n="$(basename "$f" .env)"
+    [[ "$(getenv PLAN "$f")" == trial ]] || continue
+    u="$(getenv TRIAL_UNTIL "$f")"; d="$(days_left "$u")"; co="$(getenv ORG_NAME "$f")"
+    [[ $d == 7 || $d == 1 || $d == 0 || ( $d -lt 0 && $(( (-d) % 7 )) == 0 ) ]] || continue
+    last="$(getenv OWNER_REMINDED "$f")"; [[ "$last" == "$(today)" ]] && continue
+    local s; if (( d > 0 )); then s="ends in $d day(s)"; elif (( d == 0 )); then s="ends TODAY"; else s="ENDED $(( -d )) day(s) ago"; fi
+    { echo "Trial of $co ($n) $s: $u"
+      echo "Address: https://$(getenv CUSTOMER_DOMAIN "$f")   Status: $(getenv STATUS "$f" | sed 's/^$/running/')"
+      echo; echo "Nothing has been stopped. Your choice (in Cloud Shell):"; echo
+      echo "  Paid, keep it on:"; echo "    ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh activate $n"
+      echo "  Longer trial (e.g. 14 days):"; echo "    ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh extend $n 14"
+      echo "  Pause it (customer sees a 'paused' page, data kept):"; echo "    ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh stop $n"
+      echo "  Remind the customer (look first, then send):"
+      echo "    ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh remind $n --preview"
+      echo "    ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh remind $n"
+    } | send_mail_json "" "" "PlantPulse: trial of $co $s ($u)" 0 && setval "$f" OWNER_REMINDED "$(today)"
+  done
 }
 
 new() {
   local name="${1:-}" email="${2:-}" org="" plant="Main plant" pcode="MAIN" depts="general" cur="SAR" tz="Asia/Riyadh" mail=1
-  local lang=ar
+  local lang=ar trial=0
   [[ -n "$name" && "$email" == *@* ]] || { sed -n '6,10p' "$0"; exit 2; }
   shift 2
   # Company and plant names may be several words without quotes (quotes get lost through ssh): every word up to
@@ -124,6 +237,7 @@ new() {
       --timezone) tz="$2"; shift 2 ;;
       --no-mail) mail=0; shift ;;
       --lang) lang="$2"; shift 2 ;;
+      --trial) trial="$2"; shift 2 ;;
       *) echo "Unknown option $1"; exit 2 ;;
     esac
   done
@@ -151,6 +265,7 @@ new() {
     echo "INITIAL_ADMIN_PASSWORD=$pw"
     echo "CREATED=$(date -Is)"
     echo "WELCOME_LANG=$lang"
+    if [[ "$trial" =~ ^[1-9][0-9]*$ ]]; then echo "PLAN=trial"; echo "TRIAL_UNTIL=$(date -d "$(today) + $trial days" +%F)"; else echo "PLAN=active"; fi
     echo "OWNER_DB_PASSWORD=$(openssl rand -hex 24)"
     echo "APP_DB_PASSWORD=$(openssl rand -hex 24)"
     if [[ $mail == 1 && -n "$(getenv SITE_SMTP_HOST deploy/.env.site)" ]]; then  # same sender as the website
@@ -206,6 +321,7 @@ show() {
   echo "Admin:      $(getenv ADMIN_EMAIL "$f")"
   echo "Password:   $(getenv INITIAL_ADMIN_PASSWORD "$f")   (first password; useless once changed)"
   echo "Created:    $(getenv CREATED "$f")"
+  echo "Plan:       $(plan_text "$1")    Status: $(getenv STATUS "$f" | sed 's/^$/running/')"
   echo "Welcome:    $(w="$(getenv WELCOME_SENT "$f")"; echo "${w:-not sent yet (customer.sh welcome $1 --preview)}")"
   echo "E-mail:     $([[ -n "$(getenv SMTP_HOST "$f")" ]] && echo "on, from $(getenv SMTP_FROM "$f")" || echo off)"
 }
@@ -215,19 +331,24 @@ list() {
   local files=("$CDIR"/*.env) n run
   echo "Version on the server: $(version)    Memory available: $(free -m | awk '/^Mem:/{print $7}') MB"
   [[ ${#files[@]} -gt 0 ]] || { echo "No customers yet. Create one: sudo bash scripts/customer.sh new <name> <admin-email> \"Company\""; return; }
-  printf '%-16s %-38s %-8s %s\n' NAME ADDRESS RUNNING COMPANY
+  printf '%-14s %-36s %-8s %-27s %s\n' NAME ADDRESS RUNNING PLAN COMPANY
   for f in "${files[@]}"; do
     n="$(basename "$f" .env)"
     run="$(C "$n" ps --status running -q 2>/dev/null | wc -l)"
-    printf '%-16s %-38s %-8s %s\n' "$n" "https://$(getenv CUSTOMER_DOMAIN "$f")" "$run/4" "$(getenv ORG_NAME "$f")"
+    if [[ "$(getenv STATUS "$f")" == paused ]]; then run="paused"; else run="$run/4"; fi
+    printf '%-14s %-36s %-8s %-27s %s\n' "$n" "https://$(getenv CUSTOMER_DOMAIN "$f")" "$run" "$(plan_text "$n")" "$(getenv ORG_NAME "$f")"
   done
 }
 
 backup() {
-  need "$1"; local dir="$BACKUPS/$1" stamp; stamp="$(date +%F-%H%M)"
+  need "$1"; local dir="$BACKUPS/$1" stamp paused=0; stamp="$(date +%F-%H%M)"
   mkdir -p "$dir"; chmod 700 "$BACKUPS" "$dir"
+  if [[ "$(getenv STATUS "$(cenv "$1")")" == paused ]]; then  # only the database, only for the backup
+    paused=1; C "$1" up -d --wait db >/dev/null 2>&1
+  fi
   C "$1" exec -T db pg_dump -U cmms_owner -d cmms -Fc > "$dir/$stamp.dump"
   docker run --rm -v "plantpulse-c-$1_storage:/s:ro" --entrypoint sh postgres:16.10-alpine -c 'tar czf - -C /s .' > "$dir/$stamp.storage.tgz"
+  [[ $paused == 1 ]] && C "$1" stop db >/dev/null 2>&1
   find "$dir" -type f -mtime +14 -delete
   echo "$1: backup $dir/$stamp.dump ($(du -h "$dir/$stamp.dump" | cut -f1)), attachments $(du -h "$dir/$stamp.storage.tgz" | cut -f1)"
 }
@@ -253,7 +374,9 @@ restore() {
 }
 
 update_one() {
-  need "$1"; log "Moving $1 to version $(version)"
+  need "$1"
+  if [[ "$(getenv STATUS "$(cenv "$1")")" == paused ]]; then echo "$1 is paused: left as is (it gets the new version on start)."; return 0; fi
+  log "Moving $1 to version $(version)"
   C "$1" up -d --force-recreate; wait_api "$1"
 }
 
@@ -317,8 +440,24 @@ case "${1:-list}" in
   progress)
     if systemctl is-active --quiet plantpulse-customers-update; then echo "STILL RUNNING – last lines:"; else echo "FINISHED – last lines:"; fi
     journalctl -u plantpulse-customers-update --no-pager -n 25 -o cat 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' ;;
-  stop) need "${2:-}"; C "$2" stop; echo "$2 stopped (data kept)." ;;
-  start) need "${2:-}"; C "$2" up -d; wait_api "$2"; echo "$2 running: https://$(getenv CUSTOMER_DOMAIN "$(cenv "$2")")" ;;
+  stop|pause) pause "${2:-}" ;;
+  start|resume) resume "${2:-}" ;;
+  extend)
+    need "${2:-}"; [[ "${3:-}" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sudo bash scripts/customer.sh extend <name> <days>"; exit 2; }
+    f="$(cenv "$2")"; u="$(getenv TRIAL_UNTIL "$f")"
+    [[ -z "$u" || "$(days_left "$u")" -lt 0 ]] && u="$(today)"
+    setval "$f" PLAN trial; setval "$f" TRIAL_UNTIL "$(date -d "$u + $3 days" +%F)"; sed -i '/^OWNER_REMINDED=/d' "$f"
+    echo "$2: trial now until $(getenv TRIAL_UNTIL "$f")."
+    if [[ "$(getenv STATUS "$f")" == paused ]]; then resume "$2"; fi ;;
+  activate)
+    need "${2:-}"; f="$(cenv "$2")"; setval "$f" PLAN active; sed -i '/^TRIAL_UNTIL=/d;/^OWNER_REMINDED=/d' "$f"
+    echo "$2 is now an active (paid) customer: no trial end."
+    if [[ "$(getenv STATUS "$f")" == paused ]]; then resume "$2"; fi ;;
+  remind)
+    n="${2:-}"; shift 2 || true; l=""; pv=0
+    while [[ $# -gt 0 ]]; do case "$1" in --lang) l="${2:-}"; shift 2 ;; --preview) pv=1; shift ;; *) shift ;; esac; done
+    remind "$n" "$l" "$pv" ;;
+  trial-check) trial_check ;;
   logs) need "${2:-}"; C "$2" logs --tail 60 ;;
   *) sed -n '2,25p' "$0"; exit 2 ;;
 esac

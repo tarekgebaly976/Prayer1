@@ -417,6 +417,23 @@ def main() -> None:
                         "industry": "", "team_size": "", "kind": "demo-request", "message": "If you can read this, the website can send"
                         " demo requests by e-mail.", "lang": "en", "received_at": now})
         sys.exit(0 if ok else 1)
+    if len(sys.argv) > 1 and sys.argv[1] == "mail":  # JSON on stdin from scripts/customer.sh: reminders
+        m = json.loads(sys.stdin.read())  # {to (empty = CONTACT_TO), to_name, subject, body: [lines], preview}
+        to = m.get("to") or os.environ.get("CONTACT_TO", "")
+        if m.get("preview"):
+            print(f"From:     PlantPulse <{sender_address()}>\nTo:       {to}\nSubject:  {m['subject']}\n" + "-" * 60)
+            print("\n".join(m["body"]) + "\n" + "-" * 60)
+            sys.exit(0)
+        if not os.environ.get("SITE_SMTP_HOST") or not to:
+            print("No mail server (or no recipient) set for the website: e-mail not sent.")
+            sys.exit(1)
+        try:
+            _send_to_visitor({"name": m.get("to_name") or "", "email": to}, m["subject"], m["body"])
+        except Exception as exc:
+            print(f"E-mail FAILED: {exc!r}")
+            sys.exit(1)
+        print(f"E-mail sent to {to}.")
+        sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "welcome":  # JSON on stdin, from scripts/customer.sh
         c = json.loads(sys.stdin.read())
         if c.get("preview"):

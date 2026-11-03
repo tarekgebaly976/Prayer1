@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>PlantPulse – متوقف مؤقتاً | Paused</title>
+<style>
+:root{--navy:#17324D;--amber:#F5A623;--muted:#5b6b7b;--line:#dfe5ec}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(160deg,#17324D 0%,#10263b 100%);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",Tahoma,sans-serif;color:#14212e;padding:20px}
+.card{background:#fff;border-radius:16px;max-width:560px;width:100%;padding:32px 28px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.25rem;color:var(--navy);margin-bottom:22px}
+.brand svg{width:36px;height:36px;flex:none}
+h1{font-size:1.45rem;color:var(--navy);margin:0 0 10px;line-height:1.35}
+p{margin:0 0 14px;color:var(--muted);line-height:1.7}
+.host{direction:ltr;display:inline-block;font-weight:600;color:var(--navy)}
+hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+.en{direction:ltr;text-align:left}
+.btn{display:inline-block;background:var(--amber);color:#1b1300;font-weight:700;text-decoration:none;padding:11px 20px;border-radius:10px;margin-top:4px}
+.ok{display:inline-flex;gap:8px;align-items:center;background:#eef7f1;color:#1f6b3c;border-radius:8px;padding:6px 10px;font-size:.9rem;margin-bottom:14px}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand"><svg width="36" height="36" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#17324D"/><g id="mark"><circle cx="256" cy="256" r="134" fill="#FFFFFF"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(0.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(45.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(90.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(135.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(180.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(225.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(270.0 256 256)"/><rect x="232.0" y="86" width="48" height="50" rx="9" fill="#FFFFFF" transform="rotate(315.0 256 256)"/><circle cx="256" cy="256" r="92" fill="#17324D"/><path d="M66 256 H178 L208 186 L246 330 L278 214 L300 256 H446" fill="none" stroke="#F5A623" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></g></svg>PlantPulse</div>
+
+  <h1>هذا النظام متوقف مؤقتاً</h1>
+  <p>نظام PlantPulse على العنوان <span class="host" id="h1"></span> متوقف حالياً.</p>
+  <div class="ok">✓ بياناتكم محفوظة بالكامل ولم يُحذف شيء.</div>
+  <p>لإعادة التفعيل، تواصلوا معنا وسنعيد تشغيله في دقائق.</p>
+  <a class="btn" href="https://plantpulse-cmms.com/?lang=ar#contact">تواصل معنا</a>
+
+  <hr>
+
+  <div class="en">
+    <h1>This system is paused</h1>
+    <p>PlantPulse at <span class="host" id="h2"></span> is currently paused.</p>
+    <div class="ok">✓ Your data is kept safe; nothing has been deleted.</div>
+    <p>To reactivate it, contact us and we will bring it back within minutes.</p>
+    <a class="btn" href="https://plantpulse-cmms.com/?lang=en#contact">Contact us</a>
+  </div>
+</main>
+<script>
+  document.getElementById("h1").textContent = location.hostname;
+  document.getElementById("h2").textContent = location.hostname;
+</script>
+</body>
+</html>
