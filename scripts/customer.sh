@@ -254,6 +254,7 @@ case "${1:-list}" in
   backup) backup "${2:-}" ;;
   backup-all) echo "== $(date -Is)"; each backup ;;
   restore) restore "${2:-}" "${3:-}" "${4:-}" ;;
+  remove) remove "${2:-}" "${3:-}" ;;
   update) update_one "${2:-}" ;;
   build) build_images ;;
   update-all) build_images; each update_one; echo "All customers on version $(version)." ;;
