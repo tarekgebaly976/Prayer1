@@ -158,15 +158,22 @@ def demo_available() -> bool:
     return all(os.environ.get(k) for k in ("DEMO_URL", "DEMO_PASSWORD", "SITE_SMTP_HOST"))
 
 
-def send_demo_access(req: dict) -> None:
-    """E-mail the visitor the demo address and accounts, in the language they used on the website. Raises on failure."""
-    url, pw = os.environ["DEMO_URL"], os.environ["DEMO_PASSWORD"]
-    ar = req.get("lang") == "ar"
-    en_part = [
-        f"Hello {req['name']},",
-        "",
-        "Thank you for your interest in PlantPulse. Here is your access to the live demo:",
-        "",
+def _demo_lines(ar: bool) -> list[str]:
+    """The demo address and accounts, for the visitor's e-mail (empty when the demo is not running)."""
+    url, pw = os.environ.get("DEMO_URL", ""), os.environ.get("DEMO_PASSWORD", "")
+    if not (url and pw):
+        return []
+    if ar:
+        return [
+            f"  العنوان:      {url}",
+            f"  كلمة المرور:  {pw}   (نفسها لكل الحسابات التالية)",
+            "",
+            *[f"  {role}:  {email}" for _, role, email in DEMO_ACCOUNTS],
+            "",
+            "ادخل بحساب مدير الصيانة لترى كل شيء، وبحساب الفني لترى تطبيق الموقع على جوالك.",
+            "البيانات تجريبية ومشتركة بين كل الزوار، وتعود لحالتها الأصلية كل ليلة.",
+        ]
+    return [
         f"  Address:   {url}",
         f"  Password:  {pw}   (the same for every account below)",
         "",
@@ -174,31 +181,12 @@ def send_demo_access(req: dict) -> None:
         "",
         "Sign in as the manager to see everything, as the technician to see the shop-floor app on your phone.",
         "The demo uses SAMPLE data shared by all visitors, and goes back to the original data every night.",
-        "",
-        "Want to see it with your own plant and assets? Just reply to this e-mail.",
-        "",
-        "PlantPulse – maintenance management for industrial plants",
     ]
-    ar_part = [
-        f"مرحباً {req['name']}،",
-        "",
-        "شكراً لاهتمامك بـ PlantPulse. هذه بيانات الدخول إلى النسخة التجريبية:",
-        "",
-        f"  العنوان:      {url}",
-        f"  كلمة المرور:  {pw}   (نفسها لكل الحسابات التالية)",
-        "",
-        *[f"  {role}:  {email}" for _, role, email in DEMO_ACCOUNTS],
-        "",
-        "ادخل بحساب مدير الصيانة لترى كل شيء، وبحساب الفني لترى تطبيق الموقع على جوالك.",
-        "البيانات تجريبية ومشتركة بين كل الزوار، وتعود لحالتها الأصلية كل ليلة.",
-        "",
-        "تريد أن ترى النظام بأصول ومعدات مصنعك؟ فقط رد على هذا الإيميل.",
-        "",
-        "PlantPulse – إدارة الصيانة للمنشآت الصناعية",
-    ]
-    body = ar_part if ar else en_part  # one language: the one the visitor used on the website
+
+
+def _send_to_visitor(req: dict, subject: str, body: list[str]) -> None:
     msg = EmailMessage()
-    msg["Subject"] = "بيانات الدخول إلى النسخة التجريبية من PlantPulse" if ar else "Your PlantPulse demo access"
+    msg["Subject"] = subject
     msg["From"] = formataddr(("PlantPulse", sender_address()))
     msg["To"] = formataddr((req["name"], req["email"]))
     contact = os.environ.get("CONTACT_TO", "")
@@ -207,6 +195,46 @@ def send_demo_access(req: dict) -> None:
     msg["Message-ID"] = make_msgid(domain="plantpulse-cmms.com")
     msg.set_content("\n".join(body))
     smtp_send(msg)
+
+
+def send_demo_access(req: dict) -> None:
+    """E-mail the visitor the demo address and accounts, in the language they used on the website. Raises on failure."""
+    if req.get("lang") == "ar":
+        body = [f"مرحباً {req['name']}،", "", "شكراً لاهتمامك بـ PlantPulse. هذه بيانات الدخول إلى النسخة التجريبية:", "",
+                *_demo_lines(True), "", "تريد أن ترى النظام بأصول ومعدات مصنعك؟ فقط رد على هذا الإيميل.", "",
+                "PlantPulse – إدارة الصيانة للمنشآت الصناعية"]
+        _send_to_visitor(req, "بيانات الدخول إلى النسخة التجريبية من PlantPulse", body)
+    else:
+        body = [f"Hello {req['name']},", "", "Thank you for your interest in PlantPulse. Here is your access to the live demo:", "",
+                *_demo_lines(False), "", "Want to see it with your own plant and assets? Just reply to this e-mail.", "",
+                "PlantPulse – maintenance management for industrial plants"]
+        _send_to_visitor(req, "Your PlantPulse demo access", body)
+
+
+def send_ack(req: dict) -> None:
+    """Tell someone who used the contact form that we have it; include the demo access so they can try it meanwhile."""
+    if not os.environ.get("SITE_SMTP_HOST") or recipient_limited(req["email"]):
+        return
+    ar = req.get("lang") == "ar"
+    demo = _demo_lines(ar)
+    if ar:
+        body = [f"مرحباً {req['name']}،", "", f"شكراً لتواصلك مع PlantPulse. استلمنا طلبك ({req['company']}) وسنتواصل معك خلال يوم عمل واحد.", ""]
+        if demo:
+            body += ["حتى ذلك الحين، يمكنك تجربة النظام بنفسك:", "", *demo, ""]
+        body += ["لأي إضافة، فقط رد على هذا الإيميل.", "", "PlantPulse – إدارة الصيانة للمنشآت الصناعية"]
+        subject = "استلمنا طلبك – PlantPulse"
+    else:
+        body = [f"Hello {req['name']},", "", f"Thank you for contacting PlantPulse. We have your request ({req['company']}) "
+                "and will get back to you within one working day.", ""]
+        if demo:
+            body += ["Meanwhile, you can try the system yourself:", "", *demo, ""]
+        body += ["Anything to add? Just reply to this e-mail.", "", "PlantPulse – maintenance management for industrial plants"]
+        subject = "We have your request – PlantPulse"
+    try:
+        _send_to_visitor(req, subject, body)
+        log(f"confirmation e-mailed to {req['email']}")
+    except Exception as exc:
+        log(f"confirmation to {req['email']} FAILED: {exc!r}")
 
 
 _sent_to: dict[str, list[float]] = {}
@@ -318,6 +346,8 @@ class Handler(BaseHTTPRequestHandler):
                 log(f"demo access e-mail to {req['email']} FAILED: {exc!r}")
                 return self.json(502, {"error": "could not send"})
         threading.Thread(target=send_mail, args=(req,), daemon=True).start()
+        if not access:
+            threading.Thread(target=send_ack, args=(req,), daemon=True).start()
         return self.json(200, {"ok": True})
 
 
