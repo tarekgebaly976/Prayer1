@@ -1,6 +1,6 @@
 # PlantPulse operator guide (the product) – every command in one place
 
-Arabic version: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md)
+Arabic version: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md) · Someone asks for a trial: [TRIAL-PLAYBOOK.md](TRIAL-PLAYBOOK.md)
 
 Type every command in **Cloud Shell** (or PowerShell on a computer), one line at a time, then Enter.
 Commands are written **without quotes** so a phone keyboard cannot change them.

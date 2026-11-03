@@ -1,6 +1,6 @@
 # دليل تشغيل PlantPulse (المنتج) – كل الأوامر في مكان واحد
 
-English version: [PLANTPULSE-GUIDE.md](PLANTPULSE-GUIDE.md)
+English version: [PLANTPULSE-GUIDE.md](PLANTPULSE-GUIDE.md) · عميل يطلب تجربة: [TRIAL-PLAYBOOK.md](TRIAL-PLAYBOOK.md)
 
 كل الأوامر تُكتب في **Cloud Shell** (أو PowerShell على الكمبيوتر)، كل سطر لوحده، ثم Enter.
 الأوامر مكتوبة **بدون علامات تنصيص** حتى لا يغيّرها كيبورد الموبايل.

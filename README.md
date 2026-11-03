@@ -73,6 +73,7 @@ npx playwright test                          # E2E, needs API + web running with
 | Project status | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) |
 | Product roadmap (website, app, operations) | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Operator guide: website, demo, customers | [English](docs/PLANTPULSE-GUIDE.md) · [Arabic](docs/PLANTPULSE-GUIDE-AR.md) |
+| A customer asks for a trial (step by step + record sheet) | [docs/TRIAL-PLAYBOOK.md](docs/TRIAL-PLAYBOOK.md) |
 | Excel import templates | [docs/templates/](docs/templates/) |
 
 Generated documents (ERD, data dictionary, KPI definitions, role matrix, templates) are rebuilt with
