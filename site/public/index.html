@@ -7,7 +7,7 @@
 <meta name="description" content="PlantPulse is a maintenance management system (CMMS) for industrial plants: work orders, preventive maintenance, lubrication, condition monitoring, spare parts and KPIs. English and Arabic, web and mobile.">
 <meta property="og:title" content="PlantPulse – Maintenance management for industrial plants">
 <meta property="og:description" content="Work orders, PM, lubrication, condition monitoring, spare parts and KPIs in one system. English and Arabic.">
-<meta property="og:image" content="/img/og.png">
+<meta property="og:image" content="https://plantpulse-cmms.com/img/og.png">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#17324D">
 <link rel="icon" href="/img/logo.svg" type="image/svg+xml">
@@ -48,39 +48,38 @@ nav.links a:hover{color:#fff}
 @media (max-width:820px){nav.links{display:none}.lang{margin-inline-start:auto}.top .btn{display:none}}
 
 /* hero */
-.hero{background:linear-gradient(160deg,var(--navy) 0%,#10263b 100%);color:#fff;overflow:hidden;position:relative}
-.hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;align-items:center;padding-top:64px;padding-bottom:72px}
-.hero h1{font-size:clamp(2rem,4.2vw,3.1rem);line-height:1.15;margin:0 0 18px;font-weight:800}
+.hero{background:#10263b;color:#fff;overflow:hidden;position:relative;min-height:620px;display:flex;align-items:center}
+.hero-photo{position:absolute;inset:0;background:url(/img/v2/hero-tech.webp) right center/cover no-repeat}
+.hero-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#10263b 0%,rgba(16,38,59,.94) 30%,rgba(16,38,59,.55) 52%,rgba(16,38,59,0) 72%)}
+[dir=rtl] .hero-photo{transform:scaleX(-1)}
+.hero .wrap{position:relative;z-index:2;width:100%;padding-top:72px;padding-bottom:84px}
+.hero .copy{max-width:560px}
+.hero h1{font-size:clamp(2rem,4.2vw,3.1rem);line-height:1.15;margin:0 0 18px;font-weight:800;text-shadow:0 2px 18px rgba(0,0,0,.35)}
 .hero h1 em{font-style:normal;color:var(--amber)}
-.hero p.lead{font-size:1.15rem;color:#cfdbe8;margin:0 0 28px;max-width:560px}
+.hero p.lead{font-size:1.15rem;color:#d7e2ee;margin:0 0 28px;max-width:540px}
 .hero .ctas{display:flex;flex-wrap:wrap;gap:12px}
-.hero .chips{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:28px;color:#a9bdd1;font-size:.92rem;padding:0;list-style:none}
+.hero .chips{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:28px;color:#b9cadb;font-size:.92rem;padding:0;list-style:none}
 .hero .chips li::before{content:"✓";color:var(--amber);margin-inline-end:6px;font-weight:700}
-.hero-shots{position:relative;height:500px}
 .phone{border-radius:26px;background:#0b1622;padding:8px;box-shadow:0 24px 60px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12)}
 .phone img{border-radius:19px;width:100%;height:auto;aspect-ratio:9/16;object-fit:cover;background:#fff}
-.hero-shots .phone{position:absolute;width:236px}
-.hero-shots .p1{inset-inline-start:30%;top:6px;z-index:2;transform:rotate(-3deg)}
-.hero-shots .p2{inset-inline-start:2%;top:56px;z-index:1;transform:rotate(-9deg) scale(.88);opacity:.85}
 .float{position:absolute;z-index:3;background:#fff;color:var(--text);border-radius:12px;padding:10px 14px;font-size:.88rem;font-weight:600;
-  box-shadow:0 14px 34px rgba(0,0,0,.35);display:flex;align-items:center;gap:10px;line-height:1.3;max-width:230px}
+  box-shadow:0 14px 34px rgba(0,0,0,.35);display:flex;align-items:center;gap:10px;line-height:1.3;max-width:250px}
 .float small{display:block;color:var(--muted);font-weight:500;font-size:.78rem}
-.float .dot{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:1rem}
-.float.alert{inset-inline-end:0;top:70px}
+.float .dot{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:.85rem;font-weight:800}
+.float.scan{inset-inline-end:23%;top:17%}
+.float.scan .dot{background:#e8f0fb;color:var(--navy)}
+.float.alert{inset-inline-end:3%;bottom:18%}
 .float.alert .dot{background:#fdecec;color:#c0392b}
-.float.kpi{inset-inline-start:6%;bottom:40px}
-.float.kpi .dot{background:#e9f7ef;color:#1f8a4c}
 @media (max-width:900px){
-  .hero .wrap{grid-template-columns:1fr;padding-top:40px;padding-bottom:40px}
-  .hero-shots{height:auto;max-width:420px;margin:8px auto 0;width:100%;display:flex;justify-content:center;align-items:flex-start;padding:18px 0 24px}
-  .hero-shots .p2{display:none}
-  .hero-shots .phone{width:252px;height:auto}
-  .hero-shots .p1{position:relative;inset:auto;transform:rotate(-2deg)}
-  .float{font-size:.76rem;padding:7px 10px;max-width:168px;gap:8px}
-  .float .dot{width:24px;height:24px;font-size:.85rem}
+  .hero{display:block;min-height:0}
+  .hero-photo{position:relative;height:300px;background-image:url(/img/v2/hero-tech-m.webp);background-position:center 30%}
+  .hero-photo::after{background:linear-gradient(180deg,rgba(16,38,59,0) 55%,#10263b 100%)}
+  .hero .wrap{padding-top:18px;padding-bottom:44px}
+  .float{font-size:.76rem;padding:7px 10px;max-width:205px;gap:8px}
+  .float .dot{width:26px;height:26px;font-size:.72rem}
   .float small{font-size:.7rem}
-  .float.alert{inset-inline-end:0;top:0}
-  .float.kpi{inset-inline-start:0;bottom:6px}
+  .float.scan{inset-inline-start:14px;inset-inline-end:auto;top:238px}
+  .float.alert{inset-inline-end:14px;top:18px;bottom:auto}
 }
 .pulse-line{position:absolute;bottom:22px;inset-inline:0;height:40px;opacity:.25;pointer-events:none}
 
@@ -171,8 +170,11 @@ footer a{color:#cfdbe8}
 
 <main id="top">
 <section class="hero" style="padding:0">
+  <div class="hero-photo" role="img" aria-label="Technician scanning the QR code on a motor with a phone"></div>
+  <div class="float scan"><span class="dot">QR</span><span><span data-i18n="fl.scan">QR scanned</span><small data-i18n="fl.scan2">Drive roll bearing → new work request</small></span></div>
+  <div class="float alert"><span class="dot">⚠</span><span><span data-i18n="fl.alert">Critical alert</span><small data-i18n="fl.alert2">DR1 bearing vibration 7.5 mm/s</small></span></div>
   <div class="wrap">
-    <div>
+    <div class="copy">
       <h1 data-i18n-html="hero.title">Maintenance management that works <em>on the shop floor</em></h1>
       <p class="lead" data-i18n="hero.lead">PlantPulse is a CMMS for industrial plants: work orders, preventive maintenance, lubrication, condition monitoring, spare parts and KPIs in one system, on the phone and in the office, in English and Arabic.</p>
       <div class="ctas">
@@ -184,12 +186,6 @@ footer a{color:#cfdbe8}
         <li data-i18n="hero.c2">Phone, tablet &amp; desktop</li>
         <li data-i18n="hero.c3">Your own database</li>
       </ul>
-    </div>
-    <div class="hero-shots" aria-hidden="true">
-      <div class="phone p2"><img src="/img/v2/mywork.webp" alt="" width="540" height="960"></div>
-      <div class="phone p1"><img id="heroImg" src="/img/v2/dashboard.webp" alt="" width="540" height="960"></div>
-      <div class="float alert"><span class="dot">⚠</span><span><span data-i18n="fl.alert">Critical alert</span><small data-i18n="fl.alert2">DR1 bearing vibration 7.5 mm/s</small></span></div>
-      <div class="float kpi"><span class="dot">✓</span><span><span data-i18n="fl.kpi">PM compliance 83%</span><small data-i18n="fl.kpi2">MTBF 225 h · OEE 88%</small></span></div>
     </div>
   </div>
   <svg class="pulse-line" viewBox="0 0 1200 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 H520 L545 4 L570 36 L595 12 L612 20 H1200" fill="none" stroke="#F5A623" stroke-width="3"/></svg>
@@ -389,7 +385,7 @@ footer a{color:#cfdbe8}
     "s1":"أعمالي (الفني)","s2":"Work order – أمر عمل","s3":"Condition monitoring – مراقبة الحالة","s4":"الواجهة العربية","s5":"Scan QR – مسح QR","s6":"Dashboard – لوحة التحكم","s7":"KPIs – مؤشرات الأداء",
     "g1":"امسح QR ← صفحة المعدة","g2":"ملصق QR لكل معدة","g3":"طلب عمل من الجوال","g4":"أمر العمل","g5":"خطط الصيانة الوقائية (PM)",
     "g6":"مراقبة الحالة: اتجاه الاهتزاز","g7":"اتجاه المؤشر: MTBF شهرياً","g8":"أنماط الأعطال (Pareto)",
-    "fl.alert":"تنبيه حرج","fl.alert2":"اهتزاز مرتفع في رولمان آلة الورق","fl.kpi":"التزام الصيانة الوقائية 83%","fl.kpi2":"MTBF 225 h · OEE 88%",
+    "fl.scan":"تم مسح QR","fl.scan2":"رولمان أسطوانة الدفع ← طلب عمل جديد","fl.alert":"تنبيه حرج","fl.alert2":"اهتزاز مرتفع في رولمان آلة الورق","fl.kpi":"التزام الصيانة الوقائية 83%","fl.kpi2":"MTBF 225 h · OEE 88%",
     "h.eyebrow":"نظامك الخاص","h.title":"لكل مصنع نسخته الخاصة من PlantPulse",
     "h.sub":"لا قاعدة بيانات مشتركة مع شركات أخرى. مصنعك يعمل على نسخة مستقلة بعنوانها ومستخدميها وبياناتها ومرفقاتها.",
     "h1.t":"قاعدة بيانات مستقلة","h1.d":"بياناتك لا تُخزَّن أبداً مع بيانات عميل آخر.",
@@ -440,7 +436,6 @@ footer a{color:#cfdbe8}
       if (n.hasAttribute("data-i18n-html")) n.innerHTML = v; else n.textContent = v;
     });
     document.getElementById("langBtn").textContent = lang === "ar" ? "English" : "عربي";
-    document.getElementById("heroImg").src = lang === "ar" ? "/img/v2/dashboard-ar.webp" : "/img/v2/dashboard.webp";
     document.title = lang === "ar" ? "PlantPulse – نظام إدارة الصيانة (CMMS) للمنشآت الصناعية"
                                    : "PlantPulse – Maintenance management (CMMS) for industrial plants";
     try { localStorage.setItem("pp-lang", lang); } catch (e) {}
