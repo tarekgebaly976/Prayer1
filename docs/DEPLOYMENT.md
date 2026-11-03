@@ -4,6 +4,19 @@
 > verified with the full E2E suite over HTTPS. **No public cloud deployment has been performed** because no cloud
 > credentials were available; the cloud steps below are instructions and an unexecuted pipeline template.
 
+## Product hosting on one server (live since 2026-11)
+The production server also runs the product website, the public demo and one instance per customer, each a separate
+Docker Compose project behind the main Caddy (shared `papermill-cmms-edge` network):
+
+| Project | Compose file | Script |
+|---|---|---|
+| website + forms | `deploy/docker-compose.site.yml` | `scripts/site.sh` |
+| public demo | `deploy/docker-compose.demo.yml` | `scripts/demo.sh` |
+| customer `<name>` | `deploy/docker-compose.customer.yml` (project `plantpulse-c-<name>`) | `scripts/customer.sh` |
+
+Caddy routes `PRODUCT_DOMAIN`, `www.`, `demo.` and one file per customer in `deploy/caddy.d/` (reload, no restart);
+every change is validated first. Commands: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md).
+
 ## Environments
 | Environment | Purpose | Data |
 |---|---|---|
