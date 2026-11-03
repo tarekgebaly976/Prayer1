@@ -243,7 +243,23 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh status
 ```
 ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh WIPE-ALL-DATA
 ```
-To put everything back, use the `undo` line printed at the end (with the backup file name).
+The backup taken just before the wipe is copied to `/opt/cmms-backups/keep/` – the 14-day cleanup never touches that
+folder, so the old data can be put back **at any time**, even years later. Use the `undo` line printed at the end.
+
+**Record – Obeikan data wiped on 2026-11-03.** The old data (assets, PM, PdM, work orders, attachments …) is kept in:
+- the server: `/opt/cmms-backups/keep/cmms_<time>.dump` (+ `storage_<time>.tar.gz` for the attachments)
+- off the server: Oracle Object Storage, folder `20261103/` (never deleted automatically)
+
+See what is kept, and put the old data back (this replaces the examples and anything entered since):
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh kept
+```
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh undo /opt/cmms-backups/keep/cmms_FILE-NAME.dump
+```
+Keep any other backup permanently: `… reset-to-examples.sh keep /opt/cmms-backups/cmms_FILE-NAME.dump`.
+If the server itself is ever lost: download the 4 files of `20261103/` from Object Storage to
+`/opt/cmms-backups/keep/` on the new server and run the same `undo` line.
 
 ## 11. Checklist: a new paying customer
 

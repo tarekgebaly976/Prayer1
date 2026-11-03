@@ -223,7 +223,23 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh status
 ```
 ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh WIPE-ALL-DATA
 ```
-للتراجع: استخدم سطر `undo` الذي يظهر في النهاية (مع اسم ملف النسخة الاحتياطية).
+النسخة الاحتياطية التي تُؤخذ قبل المسح تُنسخ إلى `/opt/cmms-backups/keep/` – هذا المجلد لا يُحذف منه شيء أبداً
+(الحذف التلقائي بعد 14 يوماً لا يلمسه)، لذلك يمكن إرجاع البيانات القديمة **في أي وقت**، حتى بعد سنوات.
+
+**سجل – مسح بيانات Obeikan يوم 2026-11-03.** البيانات القديمة (الأصول، PM، PdM، أوامر العمل، المرفقات …) محفوظة في:
+- الخادم: `/opt/cmms-backups/keep/cmms_<الوقت>.dump` (+ `storage_<الوقت>.tar.gz` للمرفقات)
+- خارج الخادم: Oracle Object Storage، مجلد `20261103/` (لا يُحذف تلقائياً)
+
+عرض المحفوظ، ثم إرجاع البيانات القديمة (يستبدل الأمثلة وأي شيء أُدخل بعد المسح):
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh kept
+```
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh undo /opt/cmms-backups/keep/cmms_FILE-NAME.dump
+```
+لحفظ أي نسخة أخرى للأبد: `… reset-to-examples.sh keep /opt/cmms-backups/cmms_FILE-NAME.dump`.
+لو ضاع الخادم نفسه: نزّل الملفات الأربعة من مجلد `20261103/` في Object Storage إلى `/opt/cmms-backups/keep/`
+على الخادم الجديد ثم نفّذ نفس سطر `undo`.
 
 ## 9. قائمة تحقق: عميل جديد يدفع
 

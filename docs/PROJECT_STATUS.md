@@ -21,6 +21,11 @@ Operator guide (every command): [English](PLANTPULSE-GUIDE.md) · [Arabic](PLANT
 Domain `plantpulse-cmms.com` on Cloudflare (DNS only): A records `@`, `www`, `demo`, `*` → the server; Resend e-mail
 records (`send`, `rsend`, `resend._domainkey`) and `_dmarc`. HTTPS by Caddy (automatic certificates).
 
+**2026-11-03 – real plant data wiped, replaced by examples** (`scripts/reset-to-examples.sh WIPE-ALL-DATA`; users and
+departments kept). The data from before the wipe is **kept permanently** in `/opt/cmms-backups/keep/` (excluded from the
+14-day cleanup) and in Object Storage `20261103/`; it can be put back at any time with
+`reset-to-examples.sh undo /opt/cmms-backups/keep/cmms_<time>.dump` (see PLANTPULSE-GUIDE.md §10).
+
 ## Completed
 
 ### Product: website (2026-11-02/03)

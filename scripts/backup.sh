@@ -23,7 +23,7 @@ printf '{"timestamp":"%s","migration":"%s","row_counts":%s}\n' "$TS" "$REV" "$RO
 ( cd "$DIR" && sha256sum "cmms_$TS.dump" "storage_$TS.tar.gz" "manifest_$TS.json" > "SHA256SUMS_$TS" )
 pg_restore --list "$DIR/cmms_$TS.dump" > /dev/null 2>&1 || "${COMPOSE[@]}" exec -T db pg_restore --list < "$DIR/cmms_$TS.dump" > /dev/null
 echo "[backup] verified dump is readable"
-find "$DIR" -type f -mtime +"$RETENTION_DAYS" \( -name 'cmms_*.dump' -o -name 'storage_*.tar.gz' -o -name 'manifest_*.json' -o -name 'SHA256SUMS_*' \) -delete
+find "$DIR" -maxdepth 1 -type f -mtime +"$RETENTION_DAYS" \( -name 'cmms_*.dump' -o -name 'storage_*.tar.gz' -o -name 'manifest_*.json' -o -name 'SHA256SUMS_*' \) -delete
 URL="${BACKUP_UPLOAD_URL:-$(grep -s '^BACKUP_UPLOAD_URL=' "${ENV_FILE:-deploy/.env}" | cut -d= -f2- || true)}"
 if [[ -n "$URL" ]]; then
   for f in "cmms_$TS.dump" "storage_$TS.tar.gz" "manifest_$TS.json" "SHA256SUMS_$TS"; do
