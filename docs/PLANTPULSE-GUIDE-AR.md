@@ -43,6 +43,7 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh new alsafi it@als
 | `--departments paper` | أقسام مصنع ورق (PM, SP, FH…). الافتراضي `general` (إنتاج، صيانة، مرافق، مباني) |
 | `--departments none` | بدون أقسام، العميل يضيفها بنفسه |
 | `--plant Mill No 2` | اسم المصنع (الافتراضي Main plant) |
+| `--trial 30` | فترة تجربة 30 يوماً (بدونها = عميل مدفوع) |
 | `--lang en` | إيميل الترحيب بالإنجليزي (الافتراضي عربي) |
 | `--currency USD` / `--timezone Asia/Dubai` | الافتراضي SAR و Asia/Riyadh |
 
@@ -80,10 +81,27 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh new alsafi it@als
 | إرسال إيميل الترحيب (أو إعادته) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi` |
 | مستخدم نسي كلمة السر | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com` |
 | نسخة احتياطية الآن | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh backup alsafi` |
-| إيقاف مؤقت (مثلاً لم يدفع) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh stop alsafi` |
+| إيقاف مؤقت (يرى العميل صفحة "متوقف مؤقتاً"، البيانات محفوظة) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh stop alsafi` |
 | تشغيل بعد الإيقاف | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh start alsafi` |
 | سجل الأخطاء | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh logs alsafi` |
 | حذف عميل نهائياً (بعد نسخة احتياطية أخيرة) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh remove alsafi --yes` |
+
+### فترة التجربة
+
+- عميل بتجربة: أضف `--trial 30` عند الإنشاء. `list` و `show` يوضحان تاريخ الانتهاء وكم يوماً بقي.
+- **يصلك إيميل تذكير** على `plantpulse.cmms@gmail.com` قبل الانتهاء بـ 7 أيام، وقبلها بيوم، ويوم الانتهاء،
+  ثم كل أسبوع بعد الانتهاء – وفيه الأوامر الجاهزة للنسخ.
+- **لا يتوقف أي شيء تلقائياً.** القرار لك:
+
+| القرار | الأمر |
+|---|---|
+| دفع ← عميل دائم | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh activate alsafi` |
+| تمديد التجربة 14 يوماً | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh extend alsafi 14` |
+| إيقاف مؤقت | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh stop alsafi` |
+| معاينة تذكير للعميل (بدون إرسال) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh remind alsafi --preview` |
+| إرسال التذكير للعميل بعد موافقتك | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh remind alsafi` |
+
+`activate` و `extend` يعيدان تشغيل العميل تلقائياً إذا كان متوقفاً.
 
 **النسخ الاحتياطي:** تلقائي كل ليلة 2:45 لكل العملاء، يُحفظ 14 يوماً في `/opt/plantpulse-backups/اسم-العميل`.
 ⚠️ النسخ حالياً **على نفس الخادم** – الخطوة التالية: نسخة خارج الخادم.
@@ -181,7 +199,7 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh mail-sync
 ## 9. قائمة تحقق: عميل جديد يدفع
 
 1. ☐ اتفاق مكتوب (السعر، مدة الاشتراك، الدعم، من يُدخل البيانات).
-2. ☐ اسم قصير للعنوان + إيميل مسؤول عند العميل.
+2. ☐ اسم قصير للعنوان + إيميل مسؤول عند العميل (+ `--trial 30` إذا كانت تجربة).
 3. ☐ `customer.sh new …` ← ادخل وراجع النظام بنفسك.
 4. ☐ `customer.sh welcome الاسم --preview` ثم `customer.sh welcome الاسم` ← تأكد من وصول الإيميل.
 5. ☐ العميل دخل وغيّر كلمة السر.
