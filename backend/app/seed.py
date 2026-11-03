@@ -100,7 +100,9 @@ ASSETS = [
 ]
 
 
-def seed_demo(password: str) -> None:
+def seed_demo(password: str, profile: str = "paper") -> None:
+    """profile "paper": the sample paper mill (used by the tests); "general": the same plant renamed into a general
+    manufacturing plant (app.demo_general), used by the public demo."""
     with SessionLocal() as db, db.begin():
         sync_rbac(db)
         if db.execute(select(Organization).where(Organization.code == "DEMO")).scalar_one_or_none():
@@ -408,8 +410,12 @@ def seed_demo(password: str) -> None:
         from app.demo_activity import add_demo_activity
 
         activity = add_demo_activity(db, plant)
+        if profile == "general":
+            from app.demo_general import generalize
+
+            generalize(db, plant)
     print(
         f"Demo activity: {activity['history']} past work orders, {activity['open']} open, {activity['requests']} new requests, "
         f"{activity['lube_overdue']} overdue lubrication tasks"
     )
-    print("Demo data loaded: organization DEMO, plant DMO. Users: " + ", ".join(e for e, *_ in USERS))
+    print(f"Demo data loaded ({profile} plant): organization DEMO, plant DMO. Users: " + ", ".join(e for e, *_ in USERS))

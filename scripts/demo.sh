@@ -73,7 +73,7 @@ wait_api() {
 
 seed() {
   log "Loading the sample data"
-  "${DEMO[@]}" exec -T -e "CMMS_DEMO_PASSWORD=$(getenv DEMO_PASSWORD "$DENV")" demo-api python -m app.cli seed-demo
+  "${DEMO[@]}" exec -T -e "CMMS_DEMO_PASSWORD=$(getenv DEMO_PASSWORD "$DENV")" demo-api python -m app.cli seed-demo --profile general
 }
 
 # Visitors share the demo accounts: put the password back if someone changed it, and lift any login lock-out.

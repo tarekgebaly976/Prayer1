@@ -2,7 +2,8 @@
 
   python -m app.cli bootstrap --org-code ACME --org-name "Acme Paper" --plant-code PM1 --plant-name "Mill 1" \
         --admin-email admin@example.com           # password from CMMS_ADMIN_PASSWORD or interactive prompt
-  python -m app.cli seed-demo                     # isolated DEMO organization; password from CMMS_DEMO_PASSWORD
+  python -m app.cli seed-demo [--profile general]  # isolated DEMO organization (paper mill, or a general factory);
+                                                   # password from CMMS_DEMO_PASSWORD
   python -m app.cli reset-password --email admin@example.com   # new password from CMMS_NEW_PASSWORD or prompt
   python -m app.cli sync-rbac
   python -m app.cli run-scheduler [--plant-code X]
@@ -141,7 +142,8 @@ def main() -> None:
     b.add_argument("--departments", choices=["general", "paper", "none"], default="general", help="starting departments")
     rp = sub.add_parser("reset-password")
     rp.add_argument("--email", required=True)
-    sub.add_parser("seed-demo")
+    sd = sub.add_parser("seed-demo")
+    sd.add_argument("--profile", choices=["paper", "general"], default="paper", help="sample plant: paper mill or general factory")
     sub.add_parser("sync-rbac")
     r = sub.add_parser("run-scheduler")
     r.add_argument("--plant-code")
@@ -159,7 +161,7 @@ def main() -> None:
     elif a.cmd == "seed-demo":
         from app.seed import seed_demo
 
-        seed_demo(_password("CMMS_DEMO_PASSWORD"))
+        seed_demo(_password("CMMS_DEMO_PASSWORD"), a.profile)
     elif a.cmd == "sync-rbac":
         with SessionLocal() as db, db.begin():
             sync_rbac(db)

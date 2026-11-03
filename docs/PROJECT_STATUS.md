@@ -34,7 +34,9 @@ records (`send`, `rsend`, `resend._domainkey`) and `_dmarc`. HTTPS by Caddy (aut
 
 ### Product: public demo
 * Own database and images, blue **DEMO** label, no e-mail from the app, reset every night.
-* A living sample plant regenerated each night relative to "today": 6 months of history (breakdowns with failure
+* A living sample plant – a **general manufacturing plant** (production line with mixer, hydraulic press, drying oven
+  and packaging; crusher and grinding mill; palletizer; utilities), not tied to one industry – regenerated each night
+  relative to "today": 6 months of history (breakdowns with failure
   codes, PM history, contractor work, production, budget), 13 open work orders in every status, requests, alarms,
   overdue lubrication. Six-month KPIs: PM compliance 83 %, MTBF 225 h, MTTR 3.1 h, OEE 88 %, availability 98.6 %.
 * Shared password guarded every 10 minutes (restored if a visitor changes it; lock-outs lifted).
@@ -59,7 +61,8 @@ records (`send`, `rsend`, `resend._domainkey`) and `_dmarc`. HTTPS by Caddy (aut
 ### CMMS application (earlier, see TEST_REPORT.md)
 * Milestones 1–4 complete, milestone 5 mostly (see earlier sections of README / PRODUCTION_READINESS.md).
 * Recent app changes for the product: blue DEMO instance label (TEST stays red); the KPI page opens on the last six
-  months on a demo instance; `seed-demo` loads the living sample plant.
+  months on a demo instance; `seed-demo` loads the living sample plant (`--profile general` for the public demo;
+  the default paper-mill profile is what the automated tests use).
 
 ## Capacity (measured 2026-11-03)
 2 OCPU, 12 GB RAM (8.7 GB available), 45 GB disk (23 GB free), 4 GB swap. A small customer uses ≈ 0.5 GB RAM and
