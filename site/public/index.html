@@ -56,14 +56,33 @@ nav.links a:hover{color:#fff}
 .hero .ctas{display:flex;flex-wrap:wrap;gap:12px}
 .hero .chips{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:28px;color:#a9bdd1;font-size:.92rem;padding:0;list-style:none}
 .hero .chips li::before{content:"✓";color:var(--amber);margin-inline-end:6px;font-weight:700}
-.hero-shots{position:relative;height:440px}
+.hero-shots{position:relative;height:500px}
 .phone{border-radius:26px;background:#0b1622;padding:8px;box-shadow:0 24px 60px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12)}
 .phone img{border-radius:19px;width:100%;height:auto;aspect-ratio:9/16;object-fit:cover;background:#fff}
-.hero-shots .phone{position:absolute;width:210px}
-.hero-shots .p1{inset-inline-start:8%;top:30px;transform:rotate(-4deg)}
-.hero-shots .p2{inset-inline-start:46%;top:0;transform:rotate(4deg)}
+.hero-shots .phone{position:absolute;width:236px}
+.hero-shots .p1{inset-inline-start:30%;top:6px;z-index:2;transform:rotate(-3deg)}
+.hero-shots .p2{inset-inline-start:2%;top:56px;z-index:1;transform:rotate(-9deg) scale(.88);opacity:.85}
+.float{position:absolute;z-index:3;background:#fff;color:var(--text);border-radius:12px;padding:10px 14px;font-size:.88rem;font-weight:600;
+  box-shadow:0 14px 34px rgba(0,0,0,.35);display:flex;align-items:center;gap:10px;line-height:1.3;max-width:230px}
+.float small{display:block;color:var(--muted);font-weight:500;font-size:.78rem}
+.float .dot{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:1rem}
+.float.alert{inset-inline-end:0;top:70px}
+.float.alert .dot{background:#fdecec;color:#c0392b}
+.float.kpi{inset-inline-start:6%;bottom:40px}
+.float.kpi .dot{background:#e9f7ef;color:#1f8a4c}
+@media (max-width:900px){
+  .hero .wrap{grid-template-columns:1fr;padding-top:40px;padding-bottom:40px}
+  .hero-shots{height:auto;max-width:420px;margin:8px auto 0;width:100%;display:flex;justify-content:center;align-items:flex-start;padding:18px 0 24px}
+  .hero-shots .p2{display:none}
+  .hero-shots .phone{width:252px;height:auto}
+  .hero-shots .p1{position:relative;inset:auto;transform:rotate(-2deg)}
+  .float{font-size:.76rem;padding:7px 10px;max-width:168px;gap:8px}
+  .float .dot{width:24px;height:24px;font-size:.85rem}
+  .float small{font-size:.7rem}
+  .float.alert{inset-inline-end:0;top:0}
+  .float.kpi{inset-inline-start:0;bottom:6px}
+}
 .pulse-line{position:absolute;bottom:22px;inset-inline:0;height:40px;opacity:.25;pointer-events:none}
-@media (max-width:900px){.hero .wrap{grid-template-columns:1fr;padding-top:44px}.hero-shots{height:360px;max-width:440px}.hero-shots .phone{width:165px}.hero-shots .p1{inset-inline-start:0}.hero-shots .p2{inset-inline-start:50%}}
 
 /* sections */
 section{padding:80px 0;scroll-margin-top:64px}
@@ -167,8 +186,10 @@ footer a{color:#cfdbe8}
       </ul>
     </div>
     <div class="hero-shots" aria-hidden="true">
-      <div class="phone p1"><img src="/img/my-work.webp" alt="" width="540" height="960"></div>
-      <div class="phone p2"><img src="/img/work-order.webp" alt="" width="540" height="960"></div>
+      <div class="phone p2"><img src="/img/my-work.webp" alt="" width="540" height="960"></div>
+      <div class="phone p1"><img id="heroImg" src="/img/dashboard.webp" alt="" width="540" height="960"></div>
+      <div class="float alert"><span class="dot">⚠</span><span><span data-i18n="fl.alert">Critical alert</span><small data-i18n="fl.alert2">DR1 bearing vibration 7.5 mm/s</small></span></div>
+      <div class="float kpi"><span class="dot">✓</span><span><span data-i18n="fl.kpi">PM compliance 83%</span><small data-i18n="fl.kpi2">MTBF 225 h · OEE 88%</small></span></div>
     </div>
   </div>
   <svg class="pulse-line" viewBox="0 0 1200 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 H520 L545 4 L570 36 L595 12 L612 20 H1200" fill="none" stroke="#F5A623" stroke-width="3"/></svg>
@@ -214,12 +235,12 @@ footer a{color:#cfdbe8}
     <h2 data-i18n="s.title">Made for technicians, not just planners</h2>
     <p class="sub" data-i18n="s.sub">Big buttons, short forms and one tap to the next job. These screens use sample data.</p>
     <div class="shots" tabindex="0" aria-label="Screenshots">
-      <figure><div class="phone"><img loading="lazy" src="/img/my-work.webp" alt="My work screen" width="540" height="960"></div><figcaption data-i18n="s1">My work</figcaption></figure>
-      <figure><div class="phone"><img loading="lazy" src="/img/work-order.webp" alt="Work order screen" width="540" height="960"></div><figcaption data-i18n="s2">Work order</figcaption></figure>
-      <figure><div class="phone"><img loading="lazy" src="/img/condition.webp" alt="Condition monitoring screen" width="540" height="960"></div><figcaption data-i18n="s3">Condition monitoring</figcaption></figure>
-      <figure><div class="phone"><img loading="lazy" src="/img/work-order-ar.webp" alt="Work order in Arabic" width="540" height="960"></div><figcaption data-i18n="s4">Arabic interface</figcaption></figure>
-      <figure><div class="phone"><img loading="lazy" src="/img/scan.webp" alt="QR scanner" width="540" height="960"></div><figcaption data-i18n="s5">Scan QR</figcaption></figure>
       <figure><div class="phone"><img loading="lazy" src="/img/dashboard.webp" alt="Dashboard" width="540" height="960"></div><figcaption data-i18n="s6">Dashboard</figcaption></figure>
+      <figure><div class="phone"><img loading="lazy" src="/img/my-work.webp" alt="My work screen" width="540" height="960"></div><figcaption data-i18n="s1">My work</figcaption></figure>
+      <figure><div class="phone"><img loading="lazy" src="/img/kpis.webp" alt="KPIs" width="540" height="960"></div><figcaption data-i18n="s7">KPIs &amp; reports</figcaption></figure>
+      <figure><div class="phone"><img loading="lazy" src="/img/work-order.webp" alt="Work order screen" width="540" height="960"></div><figcaption data-i18n="s2">Work order</figcaption></figure>
+      <figure><div class="phone"><img loading="lazy" src="/img/dashboard-ar.webp" alt="Arabic dashboard" width="540" height="960"></div><figcaption data-i18n="s4">Arabic interface</figcaption></figure>
+      <figure><div class="phone"><img loading="lazy" src="/img/scan.webp" alt="QR scanner" width="540" height="960"></div><figcaption data-i18n="s5">Scan QR</figcaption></figure>
     </div>
   </div>
 </section>
@@ -360,7 +381,8 @@ footer a{color:#cfdbe8}
     "f12.t":"جوال وثنائي اللغة","f12.d":"تطبيق قابل للتثبيت على الجوال والتابلت، وواجهة عربية كاملة من اليمين لليسار وإنجليزية.",
     "s.eyebrow":"صور الشاشات","s.title":"مصمم للفنيين، وليس للمخططين فقط",
     "s.sub":"أزرار كبيرة ونماذج قصيرة ولمسة واحدة للعمل التالي. هذه الشاشات ببيانات تجريبية.",
-    "s1":"My work – أعمالي","s2":"Work order – أمر عمل","s3":"Condition monitoring – مراقبة الحالة","s4":"الواجهة العربية","s5":"Scan QR – مسح QR","s6":"Dashboard – لوحة التحكم",
+    "s1":"My work – أعمالي","s2":"Work order – أمر عمل","s3":"Condition monitoring – مراقبة الحالة","s4":"الواجهة العربية","s5":"Scan QR – مسح QR","s6":"Dashboard – لوحة التحكم","s7":"KPIs – مؤشرات الأداء",
+    "fl.alert":"تنبيه حرج","fl.alert2":"اهتزاز مرتفع في رولمان آلة الورق","fl.kpi":"التزام الصيانة الوقائية 83%","fl.kpi2":"MTBF 225 h · OEE 88%",
     "h.eyebrow":"نظامك الخاص","h.title":"لكل مصنع نسخته الخاصة من PlantPulse",
     "h.sub":"لا قاعدة بيانات مشتركة مع شركات أخرى. مصنعك يعمل على نسخة مستقلة بعنوانها ومستخدميها وبياناتها ومرفقاتها.",
     "h1.t":"قاعدة بيانات مستقلة","h1.d":"بياناتك لا تُخزَّن أبداً مع بيانات عميل آخر.",
@@ -411,6 +433,7 @@ footer a{color:#cfdbe8}
       if (n.hasAttribute("data-i18n-html")) n.innerHTML = v; else n.textContent = v;
     });
     document.getElementById("langBtn").textContent = lang === "ar" ? "English" : "عربي";
+    document.getElementById("heroImg").src = lang === "ar" ? "/img/dashboard-ar.webp" : "/img/dashboard.webp";
     document.title = lang === "ar" ? "PlantPulse – نظام إدارة الصيانة (CMMS) للمنشآت الصناعية"
                                    : "PlantPulse – Maintenance management (CMMS) for industrial plants";
     try { localStorage.setItem("pp-lang", lang); } catch (e) {}
