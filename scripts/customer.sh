@@ -348,9 +348,21 @@ backup() {
   fi
   C "$1" exec -T db pg_dump -U cmms_owner -d cmms -Fc > "$dir/$stamp.dump"
   docker run --rm -v "plantpulse-c-$1_storage:/s:ro" --entrypoint sh postgres:16.10-alpine -c 'tar czf - -C /s .' > "$dir/$stamp.storage.tgz"
+  C "$1" exec -T db pg_restore --list < "$dir/$stamp.dump" >/dev/null || { echo "$1: BACKUP UNREADABLE ($dir/$stamp.dump)"; return 1; }
   [[ $paused == 1 ]] && C "$1" stop db >/dev/null 2>&1
   find "$dir" -type f -mtime +14 -delete
   echo "$1: backup $dir/$stamp.dump ($(du -h "$dir/$stamp.dump" | cut -f1)), attachments $(du -h "$dir/$stamp.storage.tgz" | cut -f1)"
+  # Off-server copy: the same object-storage bucket as the main system's backups (scripts/set-backup-upload.sh),
+  # under customers/<name>/.
+  local url; url="$(getenv BACKUP_UPLOAD_URL deploy/.env)"
+  if [[ -n "$url" ]]; then
+    curl -fsS --retry 3 -T "$dir/$stamp.dump" "${url%/}/customers/$1/$stamp.dump" >/dev/null \
+      && curl -fsS --retry 3 -T "$dir/$stamp.storage.tgz" "${url%/}/customers/$1/$stamp.storage.tgz" >/dev/null \
+      && echo "$1: copied off the server (object storage customers/$1/)" \
+      || { echo "$1: OFF-SERVER COPY FAILED (the local backup is fine)"; return 1; }
+  else
+    echo "$1: no off-server copy (BACKUP_UPLOAD_URL not set: sudo bash scripts/set-backup-upload.sh)"
+  fi
 }
 
 restore() {
