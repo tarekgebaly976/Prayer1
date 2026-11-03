@@ -9,6 +9,7 @@
 #   sudo bash scripts/site.sh requests    list who asked for a demo or took the demo (default: last 20; `requests 100`)
 #   sudo bash scripts/site.sh test-mail   send a test e-mail to the address that receives demo requests
 #   sudo bash scripts/site.sh mail        change that address / the mail server (then restarts the form)
+#   sudo bash scripts/site.sh resend noreply@your-domain [receiver]   send from your own domain via resend.com
 #   sudo bash scripts/site.sh gmail sender@gmail.com [receiver@example.com]
 #                                         the same for a Gmail sender with one question only (the App password;
 #                                         or give it on stdin), then sends a test e-mail; handy from a phone
@@ -191,9 +192,33 @@ case "${1:-start}" in
     "${SITE[@]}" exec -T site python /app/server.py test-mail \
       && echo "Test e-mail sent. Look in $receiver (also Spam)." \
       || { echo "Sending failed (details above): check the App password and try again."; exit 1; } ;;
+  resend)
+    # Send from your own domain (e.g. noreply@plantpulse-cmms.com) through Resend (resend.com), after the domain is
+    # verified there. Replies still go to CONTACT_TO. Optional third argument: a new address for the notifications.
+    sender="${2:-}"; receiver="${3:-}"
+    [[ "$sender" == *@* ]] || { echo "Usage: sudo bash scripts/site.sh resend noreply@your-domain [receiver]"; exit 2; }
+    if [[ -t 0 ]]; then
+      read -rsp "Paste the Resend API key (starts with re_; nothing shows while you paste), then Enter: " pass || true; echo
+    else
+      pass="$(head -c 300)"
+    fi
+    pass="$(printf '%s' "$pass" | tr -d ' \t\r\n')"
+    [[ "$pass" =~ ^re_[A-Za-z0-9_]{10,}$ ]] || { echo "That is not a Resend API key (it starts with re_). Nothing changed."; exit 2; }
+    ensure_domain; umask 077; touch "$SENV"
+    [[ -n "$receiver" ]] && setenv CONTACT_TO "$receiver" "$SENV"
+    [[ -n "$(getenv CONTACT_TO "$SENV")" ]] || { echo "Give the address that receives the requests as third argument."; exit 2; }
+    setenv SITE_SMTP_HOST smtp.resend.com "$SENV"; setenv SITE_SMTP_PORT 587 "$SENV"
+    setenv SITE_SMTP_USER resend "$SENV"; setenv SITE_SMTP_PASSWORD "$pass" "$SENV"; setenv SITE_SMTP_FROM "$sender" "$SENV"
+    chmod 600 "$SENV"
+    log "Mail settings saved: sent from $sender, requests go to $(getenv CONTACT_TO "$SENV")"
+    "${SITE[@]}" up -d --force-recreate; wait_site
+    log "Sending a test e-mail to $(getenv CONTACT_TO "$SENV")"
+    "${SITE[@]}" exec -T site python /app/server.py test-mail \
+      && echo "Test e-mail sent. Look in $(getenv CONTACT_TO "$SENV") (also Spam)." \
+      || { echo "Sending failed (details above): is the domain verified in Resend, and the key right?"; exit 1; } ;;
   caddy) ensure_domain; update_caddy ;;  # used by scripts/demo.sh after it adds demo.<domain>
   stop) "${SITE[@]}" stop; echo "Website stopped (https://$(getenv PRODUCT_DOMAIN deploy/.env) answers 502). Requests are kept." ;;
   status) "${SITE[@]}" ps; echo "Address: https://$(getenv PRODUCT_DOMAIN deploy/.env)" ;;
   logs) "${SITE[@]}" logs --tail 100 site ;;
-  *) echo "Usage: sudo bash scripts/site.sh start|update|requests [n]|test-mail|mail|gmail|stop|status|logs"; exit 2 ;;
+  *) echo "Usage: sudo bash scripts/site.sh start|update|requests [n]|test-mail|mail|gmail|resend|stop|status|logs"; exit 2 ;;
 esac
