@@ -159,7 +159,7 @@ def demo_available() -> bool:
 
 
 def send_demo_access(req: dict) -> None:
-    """E-mail the visitor the demo address and accounts (Arabic and English). Raises on failure."""
+    """E-mail the visitor the demo address and accounts, in the language they used on the website. Raises on failure."""
     url, pw = os.environ["DEMO_URL"], os.environ["DEMO_PASSWORD"]
     ar = req.get("lang") == "ar"
     en_part = [
@@ -196,11 +196,9 @@ def send_demo_access(req: dict) -> None:
         "",
         "PlantPulse – إدارة الصيانة للمنشآت الصناعية",
     ]
-    sep = ["", "—" * 30, ""]
-    body = (ar_part + sep + en_part) if ar else (en_part + sep + ar_part)
+    body = ar_part if ar else en_part  # one language: the one the visitor used on the website
     msg = EmailMessage()
-    msg["Subject"] = "بيانات الدخول إلى تجربة PlantPulse – Your PlantPulse demo access" if ar \
-        else "Your PlantPulse demo access – بيانات الدخول إلى تجربة PlantPulse"
+    msg["Subject"] = "بيانات الدخول إلى النسخة التجريبية من PlantPulse" if ar else "Your PlantPulse demo access"
     msg["From"] = formataddr(("PlantPulse", sender_address()))
     msg["To"] = formataddr((req["name"], req["email"]))
     contact = os.environ.get("CONTACT_TO", "")
