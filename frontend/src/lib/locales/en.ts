@@ -5,6 +5,7 @@ export const en = {
   app: { name: "PlantPulse", tagline: "Maintenance management for industrial plants", online: "Online", offline: "Offline — changes cannot be saved",
     plant: "Plant", language: "Language", logout: "Sign out", loading: "Loading…", noAccess: "You do not have access to this page.",
     noPlants: "Your account has no active plant membership. Contact your administrator." },
+  navGroup: { daily: "Daily work", maintenance: "Maintenance", resources: "Assets & resources", insight: "Analysis & admin" },
   nav: { dashboard: "Dashboard", myWork: "My work", scan: "Scan QR", requests: "Work requests", workOrders: "Work orders", assets: "Assets",
     pm: "Preventive maintenance", lubrication: "Lubrication", pdm: "Condition monitoring", shifts: "Shifts & handover", inventory: "Spare parts",
     shutdowns: "Shutdowns", kpis: "KPIs & reports", notifications: "Notifications", admin: "Administration" },

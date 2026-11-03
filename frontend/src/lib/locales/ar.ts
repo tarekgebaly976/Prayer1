@@ -8,6 +8,7 @@ export const ar: Dict = {
   app: { name: "PlantPulse", tagline: "إدارة الصيانة للمنشآت الصناعية", online: "متصل", offline: "غير متصل — لا يمكن حفظ التغييرات",
     plant: "المصنع", language: "اللغة", logout: "تسجيل الخروج", loading: "جارٍ التحميل…", noAccess: "ليس لديك صلاحية الوصول إلى هذه الصفحة.",
     noPlants: "لا توجد عضوية نشطة في أي مصنع لحسابك. تواصل مع مسؤول النظام." },
+  navGroup: { daily: "العمل اليومي", maintenance: "الصيانة", resources: "الأصول والموارد", insight: "التحليل والإدارة" },
   nav: { dashboard: "لوحة المعلومات", myWork: "أعمالي", scan: "مسح رمز QR", requests: "طلبات العمل", workOrders: "أوامر العمل", assets: "الأصول",
     pm: "الصيانة الوقائية", lubrication: "التزييت", pdm: "مراقبة الحالة", shifts: "المناوبات والتسليم", inventory: "قطع الغيار",
     shutdowns: "التوقفات المخططة", kpis: "المؤشرات والتقارير", notifications: "الإشعارات", admin: "الإدارة" },

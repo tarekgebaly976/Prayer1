@@ -25,7 +25,7 @@ export function StatusBadge({ value, ...rest }: { value: string | null | undefin
   if (!value) return <>—</>;
   const key = `status.${value}`;
   const label = i18n.exists(key) ? t(key) : i18n.exists(`woType.${value}`) ? t(`woType.${value}`) : value;
-  return <Badge color={STATUS_COLORS[value] ?? "gray"} variant="light" {...rest}>{label}</Badge>;
+  return <Badge color={STATUS_COLORS[value] ?? "gray"} variant="light" tt="none" fw={600} styles={{ label: { overflow: "visible" } }} {...rest}>{label}</Badge>;
 }
 
 export function PageHeader({ title, actions, children }: { title: string; actions?: ReactNode; children?: ReactNode }) {
@@ -50,6 +50,10 @@ export function ErrorText({ error }: { error: unknown }) {
   return <Text c="red" size="sm">{(error as Error).message}</Text>;
 }
 
+/** Dates and date-times are not broken over two lines in table cells ("2026-11-" / "03"). */
+const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+const keepTogether = (v: ReactNode) => (typeof v === "string" && DATE_RE.test(v) ? <span className="nowrap">{v}</span> : v);
+
 export interface Column<T> { key: string; label: ReactNode; render: (row: T) => ReactNode; hideOnMobile?: boolean }
 
 export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKey, selected, onSelect }: {
@@ -66,8 +70,8 @@ export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKe
   const all = ids.length > 0 && ids.every((x) => sel.has(x));
   const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); onSelect?.([...n]); };
   return (
-    <ScrollArea type="auto">
-      <Table striped highlightOnHover={!!onRow} verticalSpacing="xs" miw={600}>
+    <ScrollArea type="auto" className="pp-table">
+      <Table striped highlightOnHover={!!onRow} verticalSpacing="sm" horizontalSpacing="md" miw={600} stripedColor="var(--pp-page-bg)">
         <Table.Thead><Table.Tr>
           {onSelect && <Table.Th w={36}><Checkbox aria-label="all" checked={all} indeterminate={!all && ids.some((x) => sel.has(x))}
             onChange={() => onSelect(all ? [...sel].filter((x) => !ids.includes(x)) : [...new Set([...sel, ...ids])])} /></Table.Th>}
@@ -77,7 +81,7 @@ export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKe
           {rows.map((r, i) => (
             <Table.Tr key={idOf(r, i)} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: "pointer" } : undefined}>
               {onSelect && <Table.Td onClick={(e) => e.stopPropagation()}><Checkbox aria-label="select" checked={sel.has(idOf(r, i))} onChange={() => toggle(idOf(r, i))} /></Table.Td>}
-              {columns.map((c) => <Table.Td key={c.key}>{c.render(r)}</Table.Td>)}
+              {columns.map((c) => <Table.Td key={c.key}>{keepTogether(c.render(r))}</Table.Td>)}
             </Table.Tr>
           ))}
         </Table.Tbody>

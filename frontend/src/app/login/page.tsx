@@ -33,14 +33,18 @@ export default function LoginPage() {
   const switchLang = (l: Lang) => { void i18n.changeLanguage(l); applyDirection(l); };
 
   return (
-    <Center mih="100vh" p="md" bg="var(--mantine-color-gray-0)">
-      <Paper withBorder shadow="sm" p="xl" radius="md" w="100%" maw={420}>
+    <Center p="md" className="pp-login">
+      <Paper shadow="xl" p="xl" radius="lg" w="100%" maw={420}>
         <form onSubmit={submit}>
           <Stack>
-            <div>
-              <Title order={2}>{t("app.name")}</Title>
-              <Text c="dimmed" size="sm">{t("app.tagline")}</Text>
-            </div>
+            <Group gap="sm" wrap="nowrap" mb={4}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/icon.svg" alt="" width={48} height={48} />
+              <div>
+                <Title order={2} c="brand.7" lh={1.1}>{t("app.name")}</Title>
+                <Text c="dimmed" size="sm">{t("app.tagline")}</Text>
+              </div>
+            </Group>
             {error && <Alert color="red" data-testid="login-error">{error}</Alert>}
             <TextInput label={t("auth.email")} type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.currentTarget.value)} name="email" />
             <PasswordInput label={t("auth.password")} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.currentTarget.value)} name="password" />

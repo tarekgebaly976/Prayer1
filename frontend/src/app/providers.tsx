@@ -9,10 +9,25 @@ import { InstanceBanner } from "@/components/InstanceBanner";
 import i18n from "@/lib/i18n";
 import { SessionProvider } from "@/lib/session";
 
+// PlantPulse brand (same as the website): navy #17324D with amber #F5A623 accents. Fonts are self-hosted
+// (Inter for Latin, IBM Plex Sans Arabic for Arabic), so they also load with the strict CSP and in the installed app.
+const FONT = "'Inter Variable', 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Noto Sans Bengali', 'Nirmala UI', Vrinda, Tahoma, sans-serif";
 const theme = createTheme({
-  primaryColor: "indigo",
-  fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Arabic', 'Noto Sans Bengali', 'Nirmala UI', Vrinda, Tahoma, sans-serif",
+  colors: {
+    brand: ["#eef3f8", "#dbe4ee", "#b4c7da", "#89a7c5", "#6589b0", "#4c74a2", "#2f5a85", "#17324D", "#122a41", "#0b1d2e"],
+    accent: ["#fff7e6", "#ffecc4", "#ffdc8f", "#fdcb57", "#f9bb34", "#F5A623", "#de9312", "#c97f00", "#a06500", "#7a4c00"],
+  },
+  primaryColor: "brand",
+  primaryShade: { light: 7, dark: 4 },
+  fontFamily: FONT,
+  headings: { fontFamily: FONT, fontWeight: "700" },
   defaultRadius: "md",
+  cursorType: "pointer",
+  components: {
+    Card: { defaultProps: { shadow: "xs", radius: "md" } },
+    Paper: { defaultProps: { radius: "md" } },
+    Badge: { defaultProps: { radius: "sm" } },
+  },
 });
 
 export function Providers({ children }: { children: ReactNode }) {

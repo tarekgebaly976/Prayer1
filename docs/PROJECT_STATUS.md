@@ -63,6 +63,19 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
   Always Free; protects it from idle reclamation); budget alert at €1/month.
 * Every Caddy change is validated in a throw-away Caddy before the running one is touched.
 
+### App look (2026-11-03) – on the public demo first
+* Same brand as the website: navy `#17324D` + amber `#F5A623`, self-hosted fonts (Inter, IBM Plex Sans Arabic), logo in
+  the header, light-grey page with white cards, branded sign-in page.
+* Sidebar in navy, grouped (Daily work / Maintenance / Assets & resources / Analysis & admin) with live counts
+  (new requests, emergencies, overdue lubrication, PM approvals, critical alerts) and the user card at the bottom.
+* Dashboard cards with icons and a coloured edge when something needs attention; tables as white cards, dates and
+  WO numbers no longer split over two lines, status badges in normal case.
+* Roll-out: demo first (`git pull` + `demo.sh launch-update`), customers and the plant only after approval.
+
+### Spare parts import (2026-11-03)
+* Import button on the Inventory page (template, preview, errors.csv); optional warehouse / qty_on_hand / bin columns
+  are booked as opening stock.
+
 ### CMMS application (earlier, see TEST_REPORT.md)
 * Milestones 1–4 complete, milestone 5 mostly (see earlier sections of README / PRODUCTION_READINESS.md).
 * Recent app changes for the product: blue DEMO instance label (TEST stays red); the KPI page opens on the last six
@@ -82,6 +95,8 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * A paused customer page and trial reminders on the server (tested with stand-ins only).
 * E-mail deliverability to corporate mail systems: messages are delivered but some (e.g. Proofpoint) hold mail from
   the new domain; reputation builds over weeks. Ask customers' IT to allow `plantpulse-cmms.com`.
+* Three e2e tests fail on a fresh local run with and without the design change (`pdm-points` bulk priorities,
+  `user-admin` edit user, `workflow` KPI "Not available"); they look data-dependent and need a look.
 * Customer restore on the server (scripted; drill pending). Real phones and QR scanning by customers.
 * The €93 card authorisation from the Oracle upgrade (2026-11-03) should be released by the bank; check it.
 

@@ -9,6 +9,7 @@ export const bn: Dict = {
   app: { name: "PlantPulse", tagline: "শিল্প কারখানার রক্ষণাবেক্ষণ ব্যবস্থাপনা", online: "অনলাইন", offline: "অফলাইন — পরিবর্তন সেভ করা যাবে না",
     plant: "প্ল্যান্ট", language: "ভাষা", logout: "সাইন আউট", loading: "লোড হচ্ছে…", noAccess: "এই পেজে আপনার অ্যাক্সেস নেই।",
     noPlants: "আপনার অ্যাকাউন্টে কোনো সক্রিয় প্ল্যান্ট নেই। অ্যাডমিনিস্ট্রেটরের সাথে যোগাযোগ করুন।" },
+  navGroup: { daily: "দৈনিক কাজ", maintenance: "রক্ষণাবেক্ষণ", resources: "সম্পদ ও সংস্থান", insight: "বিশ্লেষণ ও প্রশাসন" },
   nav: { dashboard: "ড্যাশবোর্ড", myWork: "আমার কাজ", scan: "QR স্ক্যান", requests: "কাজের অনুরোধ", workOrders: "ওয়ার্ক অর্ডার", assets: "যন্ত্রপাতি",
     pm: "প্রতিরোধমূলক রক্ষণাবেক্ষণ (PM)", lubrication: "লুব্রিকেশন", pdm: "কন্ডিশন মনিটরিং", shifts: "শিফট ও হ্যান্ডওভার", inventory: "স্পেয়ার পার্টস",
     shutdowns: "শাটডাউন", kpis: "KPI ও রিপোর্ট", notifications: "নোটিফিকেশন", admin: "প্রশাসন" },
