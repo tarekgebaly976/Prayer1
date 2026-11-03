@@ -23,7 +23,7 @@ and reports. Web application for desktop, tablet and phone (installable PWA), En
 | Website | https://plantpulse-cmms.com – EN/AR, "Try the demo" and "Contact us" (`scripts/site.sh`) |
 | Public demo | https://demo.plantpulse-cmms.com – sample plant, reset nightly (`scripts/demo.sh`) |
 | Customers | https://&lt;name&gt;.plantpulse-cmms.com – one separate PlantPulse per customer (`scripts/customer.sh`) |
-| Operator guide (Arabic) | [docs/PLANTPULSE-GUIDE.md](docs/PLANTPULSE-GUIDE.md) (English) · [Arabic](docs/PLANTPULSE-GUIDE-AR.md) – every command |
+| Operator guide | [docs/PLANTPULSE-GUIDE.md](docs/PLANTPULSE-GUIDE.md) (English) · [Arabic](docs/PLANTPULSE-GUIDE-AR.md) – every command |
 | Status and plan | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) · [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 ## Quick start (Docker, everything on one machine)
