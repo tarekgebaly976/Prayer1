@@ -23,7 +23,7 @@ and reports. Web application for desktop, tablet and phone (installable PWA), En
 | Website | https://plantpulse-cmms.com – EN/AR, "Try the demo" and "Contact us" (`scripts/site.sh`) |
 | Public demo | https://demo.plantpulse-cmms.com – sample plant, reset nightly (`scripts/demo.sh`) |
 | Customers | https://&lt;name&gt;.plantpulse-cmms.com – one separate PlantPulse per customer (`scripts/customer.sh`) |
-| Operator guide (Arabic) | [docs/PLANTPULSE-GUIDE-AR.md](docs/PLANTPULSE-GUIDE-AR.md) – every command |
+| Operator guide (Arabic) | [docs/PLANTPULSE-GUIDE.md](docs/PLANTPULSE-GUIDE.md) (English) · [Arabic](docs/PLANTPULSE-GUIDE-AR.md) – every command |
 | Status and plan | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) · [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 ## Quick start (Docker, everything on one machine)
@@ -72,7 +72,7 @@ npx playwright test                          # E2E, needs API + web running with
 | Production readiness, acceptance criteria, limitations, roadmap | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) |
 | Project status | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) |
 | Product roadmap (website, app, operations) | [docs/ROADMAP.md](docs/ROADMAP.md) |
-| Operator guide: website, demo, customers (Arabic) | [docs/PLANTPULSE-GUIDE-AR.md](docs/PLANTPULSE-GUIDE-AR.md) |
+| Operator guide: website, demo, customers | [English](docs/PLANTPULSE-GUIDE.md) · [Arabic](docs/PLANTPULSE-GUIDE-AR.md) |
 | Excel import templates | [docs/templates/](docs/templates/) |
 
 Generated documents (ERD, data dictionary, KPI definitions, role matrix, templates) are rebuilt with

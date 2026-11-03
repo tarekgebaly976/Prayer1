@@ -6,7 +6,7 @@ PlantPulse is now two things on one server (Oracle Cloud, Riyadh, `84.8.106.22`)
    https://test.84-8-106-22.sslip.io. Unchanged by the product work below.
 2. **PlantPulse as a product** for other plants: website, public demo, and one separate PlantPulse per customer.
 
-Operator guide (Arabic, every command): [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md) · Plan ahead: [ROADMAP.md](ROADMAP.md)
+Operator guide (every command): [English](PLANTPULSE-GUIDE.md) · [Arabic](PLANTPULSE-GUIDE-AR.md) · Plan ahead: [ROADMAP.md](ROADMAP.md)
 
 ## Live on the server
 

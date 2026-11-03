@@ -1,6 +1,6 @@
 # Roadmap — PlantPulse as a product (from 2026-11-03)
 
-Status of what exists: [PROJECT_STATUS.md](PROJECT_STATUS.md). Operator commands: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md).
+Status of what exists: [PROJECT_STATUS.md](PROJECT_STATUS.md). Operator commands: [PLANTPULSE-GUIDE.md](PLANTPULSE-GUIDE.md) (Arabic: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md)).
 Technical CMMS roadmap (SSO, offline, …): [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md#roadmap-suggested-order).
 Checklist with owner and target month (Arabic): [ACTION_PLAN_2026-11.md](ACTION_PLAN_2026-11.md).
 
