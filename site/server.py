@@ -351,6 +351,56 @@ class Handler(BaseHTTPRequestHandler):
         return self.json(200, {"ok": True})
 
 
+def send_welcome(c: dict) -> None:
+    """Welcome e-mail for a new customer's first administrator (scripts/customer.sh new / welcome). Raises on failure.
+    c: name, email, company, url, password, lang ("ar" or "en")."""
+    if c.get("lang") == "ar":
+        subject = f"نظام PlantPulse الخاص بـ {c['company']} جاهز"
+        body = [
+            "مرحباً،",
+            "",
+            f"تم تجهيز نظام PlantPulse الخاص بـ {c['company']}. هذه بيانات الدخول كمسؤول النظام (Admin):",
+            "",
+            f"  العنوان:            {c['url']}",
+            f"  البريد الإلكتروني:  {c['email']}",
+            f"  كلمة المرور الأولى: {c['password']}",
+            "",
+            "الخطوات الأولى:",
+            "  1. ادخل وغيّر كلمة المرور فوراً (قائمة الملف الشخصي ← تغيير كلمة المرور).",
+            "  2. راجع الأقسام والمصنع من صفحة الإدارة (Admin).",
+            "  3. أضف المستخدمين، أو استوردهم من قالب Excel.",
+            "  4. استورد سجل الأصول وخطط الصيانة من قوالب Excel الموجودة في النظام.",
+            "",
+            "هذا النظام خاص بشركتكم: قاعدة بيانات ومرفقات مستقلة، مع نسخ احتياطي كل ليلة.",
+            "لأي سؤال أو مساعدة في إدخال البيانات، فقط رد على هذا الإيميل.",
+            "",
+            "PlantPulse – إدارة الصيانة للمنشآت الصناعية",
+        ]
+    else:
+        subject = f"Your PlantPulse for {c['company']} is ready"
+        body = [
+            "Hello,",
+            "",
+            f"PlantPulse for {c['company']} is ready. These are your administrator sign-in details:",
+            "",
+            f"  Address:         {c['url']}",
+            f"  E-mail:          {c['email']}",
+            f"  First password:  {c['password']}",
+            "",
+            "First steps:",
+            "  1. Sign in and change the password straight away (profile menu > Change password).",
+            "  2. Check the plant and departments in Admin.",
+            "  3. Add your users, or import them from the Excel template.",
+            "  4. Import your asset register and PM plans from the Excel templates in the system.",
+            "",
+            "This system is yours alone: its own database and attachments, backed up every night.",
+            "Any question, or help loading your data? Just reply to this e-mail.",
+            "",
+            "PlantPulse – maintenance management for industrial plants",
+        ]
+    _send_to_visitor({"name": c["company"], "email": c["email"]}, subject, body)
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "test-mail":
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -358,6 +408,18 @@ def main() -> None:
                         "industry": "", "team_size": "", "kind": "demo-request", "message": "If you can read this, the website can send"
                         " demo requests by e-mail.", "lang": "en", "received_at": now})
         sys.exit(0 if ok else 1)
+    if len(sys.argv) > 1 and sys.argv[1] == "welcome":  # JSON on stdin, from scripts/customer.sh
+        c = json.loads(sys.stdin.read())
+        if not os.environ.get("SITE_SMTP_HOST"):
+            print("No mail server set for the website: welcome e-mail not sent.")
+            sys.exit(1)
+        try:
+            send_welcome(c)
+        except Exception as exc:
+            print(f"Welcome e-mail FAILED: {exc!r}")
+            sys.exit(1)
+        print(f"Welcome e-mail sent to {c['email']}.")
+        sys.exit(0)
     httpd = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     log(f"PlantPulse site on :{PORT}, mail to {os.environ.get('CONTACT_TO') or '(not set)'}")
     httpd.serve_forever()

@@ -5,10 +5,12 @@
 #
 #   sudo bash scripts/customer.sh new <name> <admin-email> ["Company name"] [options]
 #        options: --plant "Plant name"  --plant-code CODE  --departments general|paper|none
-#                 --currency SAR  --timezone Asia/Riyadh  --no-mail
+#                 --currency SAR  --timezone Asia/Riyadh  --lang ar|en (welcome e-mail, default ar)
+#                 --no-welcome (no e-mail to the administrator)  --no-mail (the system sends no e-mail at all)
 #        e.g.     sudo bash scripts/customer.sh new acme it@acme.com "Acme Paper Co" --departments paper
 #   sudo bash scripts/customer.sh list
 #   sudo bash scripts/customer.sh show <name>               address, admin e-mail and first password
+#   sudo bash scripts/customer.sh welcome <name> [--lang en]   send the welcome e-mail (again) to the administrator
 #   sudo bash scripts/customer.sh reset-password <name> <e-mail>   new random password for that user
 #   sudo bash scripts/customer.sh backup <name>             now; all customers are also backed up every night
 #   sudo bash scripts/customer.sh restore <name> <file.dump>
@@ -16,6 +18,8 @@
 #   sudo bash scripts/customer.sh launch-update-all         after `sudo git pull`: build the new version and move
 #                                                           every customer to it, on the server by itself; then
 #   sudo bash scripts/customer.sh progress
+#   sudo bash scripts/customer.sh mail-sync                 after changing the website's mail sender (site.sh resend):
+#                                                           give every customer the same settings
 #   sudo bash scripts/customer.sh stop <name> | start <name> | logs <name>
 #   sudo bash scripts/customer.sh remove <name>             final backup, then deletes that customer
 set -euo pipefail
@@ -102,17 +106,22 @@ caddy_add() {  # caddy_add <name>: route <name>.<domain> to the customer, checke
 
 new() {
   local name="${1:-}" email="${2:-}" org="" plant="Main plant" pcode="MAIN" depts="general" cur="SAR" tz="Asia/Riyadh" mail=1
+  local lang=ar welcome_mail=1
   [[ -n "$name" && "$email" == *@* ]] || { sed -n '6,10p' "$0"; exit 2; }
   shift 2
-  if [[ $# -gt 0 && "$1" != --* ]]; then org="$1"; shift; fi
+  # Company and plant names may be several words without quotes (quotes get lost through ssh): every word up to
+  # the next --option belongs to the name.
+  while [[ $# -gt 0 && "$1" != --* ]]; do org="${org:+$org }$1"; shift; done
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --plant) plant="$2"; shift 2 ;;
+      --plant) plant=""; shift; while [[ $# -gt 0 && "$1" != --* ]]; do plant="${plant:+$plant }$1"; shift; done ;;
       --plant-code) pcode="$2"; shift 2 ;;
       --departments) depts="$2"; shift 2 ;;
       --currency) cur="$2"; shift 2 ;;
       --timezone) tz="$2"; shift 2 ;;
-      --no-mail) mail=0; shift ;;
+      --no-mail) mail=0; welcome_mail=0; shift ;;
+      --no-welcome) welcome_mail=0; shift ;;
+      --lang) lang="$2"; shift 2 ;;
       *) echo "Unknown option $1"; exit 2 ;;
     esac
   done
@@ -139,6 +148,7 @@ new() {
     echo "ADMIN_EMAIL=$email"
     echo "INITIAL_ADMIN_PASSWORD=$pw"
     echo "CREATED=$(date -Is)"
+    echo "WELCOME_LANG=$lang"
     echo "OWNER_DB_PASSWORD=$(openssl rand -hex 24)"
     echo "APP_DB_PASSWORD=$(openssl rand -hex 24)"
     if [[ $mail == 1 && -n "$(getenv SITE_SMTP_HOST deploy/.env.site)" ]]; then  # same sender as the website
@@ -159,10 +169,24 @@ new() {
   log "Publishing https://$name.$dom"
   caddy_add "$name" || true
   install_cron
+  if [[ $welcome_mail == 1 ]]; then log "Welcome e-mail to $email"; welcome "$name" || true; fi
   log "Ready"
   show "$name"
   echo "The certificate for the address is issued on first use; the first page load can take ~20 seconds."
   echo "The administrator should change the password after signing in (profile menu > Change password)."
+}
+
+# welcome <name> [en|ar]: e-mail the administrator the address and first password, through the website's mail sender.
+welcome() {
+  need "$1"; local f; f="$(cenv "$1")"
+  local lang="${2:-$(getenv WELCOME_LANG "$f")}"
+  W_NAME="$1" W_EMAIL="$(getenv ADMIN_EMAIL "$f")" W_COMPANY="$(getenv ORG_NAME "$f")" W_URL="https://$(getenv CUSTOMER_DOMAIN "$f")" \
+  W_PW="$(getenv INITIAL_ADMIN_PASSWORD "$f")" W_LANG="${lang:-ar}" python3 -c '
+import json, os
+print(json.dumps({"name": os.environ["W_NAME"], "email": os.environ["W_EMAIL"], "company": os.environ["W_COMPANY"],
+                  "url": os.environ["W_URL"], "password": os.environ["W_PW"], "lang": os.environ["W_LANG"]}))' \
+  | docker compose -p plantpulse-site -f deploy/docker-compose.site.yml --env-file deploy/.env.site exec -T site python /app/server.py welcome \
+  || { echo "Welcome e-mail not sent (website mail not set up?). Send the details above yourself."; return 1; }
 }
 
 show() {
@@ -236,6 +260,17 @@ remove() {
   echo "Customer $name removed. Its last backup and settings are in $BACKUPS/$name"
 }
 
+mail_sync() {  # copy the website's mail sender (deploy/.env.site) to one customer and restart its app if it changed
+  need "$1"; local f before after k; f="$(cenv "$1")"
+  [[ -n "$(getenv SMTP_HOST "$f")" ]] || { echo "$1: e-mail is off (--no-mail), left as is."; return 0; }
+  before="$(grep '^SMTP_' "$f" | sort)"
+  for k in HOST PORT USER PASSWORD FROM; do
+    sed -i "/^SMTP_$k=/d" "$f"; echo "SMTP_$k=$(getenv "SITE_SMTP_$k" deploy/.env.site)" >> "$f"
+  done
+  after="$(grep '^SMTP_' "$f" | sort)"
+  if [[ "$before" != "$after" ]]; then C "$1" up -d api worker >/dev/null 2>&1; echo "$1: mail settings updated."; else echo "$1: already up to date."; fi
+}
+
 each() {  # each <function>: run for every customer, continue on errors
   shopt -s nullglob; local f rc=0
   for f in "$CDIR"/*.env; do "$1" "$(basename "$f" .env)" || rc=1; done
@@ -246,12 +281,14 @@ case "${1:-list}" in
   new) shift; new "$@" ;;
   list) list ;;
   show) show "${2:-}" ;;
+  welcome) l=""; [[ "${3:-}" == --lang ]] && l="${4:-}"; welcome "${2:-}" "$l" ;;
   reset-password)
     need "${2:-}"; [[ "${3:-}" == *@* ]] || { echo "Usage: sudo bash scripts/customer.sh reset-password <name> <e-mail>"; exit 2; }
     pw="$(new_password)"
     C "$2" exec -T -e "CMMS_NEW_PASSWORD=$pw" api python -m app.cli reset-password --email "$3"
     echo "New password for $3 at https://$(getenv CUSTOMER_DOMAIN "$(cenv "$2")"):  $pw" ;;
   backup) backup "${2:-}" ;;
+  mail-sync) [[ -n "$(getenv SITE_SMTP_HOST deploy/.env.site)" ]] || { echo "The website has no mail sender set."; exit 1; }; each mail_sync ;;
   backup-all) echo "== $(date -Is)"; each backup ;;
   restore) restore "${2:-}" "${3:-}" "${4:-}" ;;
   remove) remove "${2:-}" "${3:-}" ;;
