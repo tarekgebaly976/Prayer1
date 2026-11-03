@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 
 from app.models.assets import Asset
 from app.models.enums import ASSET_LEVEL_ORDER, AssetLevel, Criticality
-from app.models.inventory import Part
+from app.models.inventory import Part, Warehouse
 from app.models.tenancy import Department, Plant
+from app.services import inventory as inv
 from app.services.assets import compute_path, new_qr_token
 from app.services.common import audit
 
@@ -52,6 +53,9 @@ TEMPLATES: dict[str, list[tuple[str, str]]] = {
         ("lead_time_days", "integer"),
         ("unit_price", "number"),
         ("category", "text"),
+        ("warehouse", "Store / warehouse code for the opening stock (created if new; blank = the only store)"),
+        ("qty_on_hand", "Opening stock quantity now on the shelf (optional; booked as an opening-stock receipt at unit_price)"),
+        ("bin", "Shelf / bin location (optional)"),
     ],
     "pm_plans": [
         ("asset_code", "Code of an existing asset; tasks of the same asset + frequency + trade become one PM plan"),
@@ -361,6 +365,8 @@ def validate_parts(db: Session, plant: Plant, rows: list[dict]) -> dict:
         (p.manufacturer or "").upper() + "|" + (p.oem_part_number or "").upper(): p.code
         for p in db.execute(select(Part).where(Part.plant_id == plant.id, Part.oem_part_number.is_not(None))).scalars()
     }
+    warehouses = {w.code.upper(): w for w in db.execute(select(Warehouse).where(Warehouse.plant_id == plant.id)).scalars()}
+    file_stores = {w for r in rows if (w := _s(r.get("warehouse")))}
     seen: dict[str, int] = {}
     out = []
     for i, r in enumerate(rows, start=2):
@@ -390,6 +396,18 @@ def validate_parts(db: Session, plant: Plant, rows: list[dict]) -> dict:
         if vals["min_qty"] and vals["max_qty"] and vals["min_qty"] > vals["max_qty"]:
             errs.append("min_qty exceeds max_qty")
         crit_spare = (_s(r.get("is_critical_spare")) or "no").lower() in {"yes", "y", "true", "1"}
+        qty = _num(r.get("qty_on_hand"), "qty_on_hand", errs)
+        if qty is not None and qty < 0:
+            errs.append("qty_on_hand cannot be negative")
+        wh_code = _s(r.get("warehouse"))
+        if qty and not wh_code:
+            stores = {w.code for w in warehouses.values()} | file_stores
+            if len(stores) <= 1:
+                wh_code = next(iter(stores), "MAIN")  # one store (or none yet: a store called MAIN is created)
+            else:
+                errs.append("warehouse is required for qty_on_hand (more than one store)")
+        if qty and wh_code and wh_code.upper() not in warehouses:
+            warns.append(f"new store '{wh_code}' will be created")
         out.append(
             {
                 "row": i,
@@ -399,6 +417,8 @@ def validate_parts(db: Session, plant: Plant, rows: list[dict]) -> dict:
                 "values": vals,
                 "lead_time_days": lt,
                 "is_critical_spare": crit_spare,
+                "qty_on_hand": qty or 0,
+                "warehouse": wh_code,
                 "raw": r,
                 "errors": errs,
                 "warnings": warns,
@@ -413,28 +433,42 @@ def commit_parts(db: Session, plant: Plant, rows: list[dict], user_id: uuid.UUID
     v = validate_parts(db, plant, rows)
     if v["invalid"]:
         raise ValueError("Import has validation errors; nothing was imported")
+    warehouses = {w.code.upper(): w for w in db.execute(select(Warehouse).where(Warehouse.plant_id == plant.id)).scalars()}
+    stocked = 0
     for rec in v["rows"]:
         vals = {k: (x or 0) for k, x in rec["values"].items()}
-        db.add(
-            Part(
-                plant_id=plant.id,
-                code=rec["code"],
-                description=rec["description"],
-                criticality=rec["criticality"],
-                oem_part_number=_s(rec["raw"].get("oem_part_number")),
-                manufacturer=_s(rec["raw"].get("manufacturer")),
-                uom=_s(rec["raw"].get("uom")) or "EA",
-                category=_s(rec["raw"].get("category")),
-                is_critical_spare=rec["is_critical_spare"],
-                lead_time_days=rec["lead_time_days"],
-                currency=plant.currency,
-                average_cost=vals["unit_price"],
-                created_by_id=user_id,
-                **vals,
-            )
+        part = Part(
+            plant_id=plant.id,
+            code=rec["code"],
+            description=rec["description"],
+            criticality=rec["criticality"],
+            oem_part_number=_s(rec["raw"].get("oem_part_number")),
+            manufacturer=_s(rec["raw"].get("manufacturer")),
+            uom=_s(rec["raw"].get("uom")) or "EA",
+            category=_s(rec["raw"].get("category")),
+            is_critical_spare=rec["is_critical_spare"],
+            lead_time_days=rec["lead_time_days"],
+            currency=plant.currency,
+            average_cost=vals["unit_price"],
+            created_by_id=user_id,
+            **vals,
         )
+        db.add(part)
+        db.flush()
+        if rec["qty_on_hand"] > 0:
+            key = rec["warehouse"].upper()
+            if key not in warehouses:
+                warehouses[key] = Warehouse(plant_id=plant.id, code=rec["warehouse"][:32], name=rec["warehouse"][:120])
+                db.add(warehouses[key])
+                db.flush()
+            bin_ = _s(rec["raw"].get("bin"))
+            if bin_:
+                inv.lock_stock(db, plant, part, warehouses[key]).bin = bin_[:40]
+                db.flush()
+            inv.receive(db, plant, part, warehouses[key], rec["qty_on_hand"], vals["unit_price"], user_id, "Opening stock (import)")
+            stocked += 1
     db.flush()
-    audit(db, "part.import", user_id=user_id, plant_id=plant.id, data={"created": len(v["rows"])})
+    audit(db, "part.import", user_id=user_id, plant_id=plant.id, data={"created": len(v["rows"]), "with_stock": stocked})
     return len(v["rows"])
 
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
+import { PartsImport } from "@/components/PartsImport";
 import { PartsUsedReport } from "@/components/PartsUsed";
 import { DataTable, PageHeader, Pager, StatusBadge } from "@/components/ui";
 import { post } from "@/lib/api";
@@ -31,7 +32,7 @@ function Inventory() {
   const pos = useQ<PO[]>("/inventory/purchase-orders");
   const val = useQ<{ total_value: number; items: { code: string; description: string; on_hand: number; average_cost: number; value: number }[] }>("/inventory/valuation");
   const aging = useQ<Aging>("/inventory/aging");
-  const [modal, setModal] = useState<"part" | "receipt" | "adjust" | "po" | "wh" | null>(null);
+  const [modal, setModal] = useState<"part" | "import" | "receipt" | "adjust" | "po" | "wh" | null>(null);
   const [pf, setPf] = useState({ code: "", description: "", oem_part_number: "", manufacturer: "", uom: "EA", criticality: "C", is_critical_spare: false,
     min_qty: 0 as number | string, max_qty: 0 as number | string, reorder_point: 0 as number | string, unit_price: 0 as number | string, lead_time_days: "" as number | string });
   const [tx, setTx] = useState({ part_id: null as string | null, warehouse_id: null as string | null, quantity: 1 as number | string, unit_cost: 0 as number | string, delta: 0 as number | string, reason: "", reference: "", po_line_id: null as string | null });
@@ -54,6 +55,7 @@ function Inventory() {
     <>
       <PageHeader title={t("nav.inventory")} actions={<>
         {can("inventory.manage") && <Button onClick={() => setModal("part")}>{t("inv.newPart")}</Button>}
+        {can("inventory.manage") && <Button variant="light" onClick={() => setModal("import")}>{t("common.import")}</Button>}
         {can("inventory.transact") && <Button variant="light" onClick={() => setModal("receipt")}>{t("inv.receive")}</Button>}
         {can("inventory.adjust") && <Button variant="light" onClick={() => setModal("adjust")}>{t("inv.adjust")}</Button>}
         {can("purchase.manage") && <Button variant="default" onClick={() => setModal("po")}>{t("inv.newPO")}</Button>}
@@ -117,6 +119,9 @@ function Inventory() {
           <Checkbox mt="lg" label={t("inv.critical")} checked={pf.is_critical_spare} onChange={(e) => setPf({ ...pf, is_critical_spare: e.currentTarget.checked })} />
         </SimpleGrid>
         <Button mt="md" disabled={!pf.code || !pf.description} onClick={() => createPart.mutate(undefined)}>{t("common.create")}</Button>
+      </Modal>
+      <Modal opened={modal === "import"} onClose={close} title={t("inv.importTitle")} size="lg">
+        <PartsImport onDone={close} />
       </Modal>
       <Modal opened={modal === "receipt" || modal === "adjust"} onClose={close} title={modal === "receipt" ? t("inv.receive") : t("inv.adjust")}>
         <Stack>

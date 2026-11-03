@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Guard } from "@/components/AppFrame";
 import { FailureCodeImport } from "@/components/FailureModes";
+import { PartsImport } from "@/components/PartsImport";
 import { PlanImport } from "@/components/PlanImport";
 import { DataTable, DeptMultiSelect, DeptSelect, PageHeader, Pager, StatusBadge, TradeInput } from "@/components/ui";
 import { api, del, download, patch, post, put } from "@/lib/api";
@@ -547,26 +548,6 @@ function HistoryImports() {
         countLabel={t("planImport.breakdowns")} help={t("planImport.historyHelp")} />
       <PlanImport kind="parts_history" title={t("planImport.partsHistory")} opened={open === "parts_history"} onClose={() => setOpen(null)}
         countLabel={t("planImport.matchedParts")} help={t("planImport.historyHelp")} />
-    </Stack>
-  );
-}
-
-function PartsImport() {
-  const { t } = useTranslation();
-  const [file, setFile] = useState<File | null>(null);
-  const [res, setRes] = useState<{ total: number; valid: number; invalid: number; errors: { row: number; errors: string[] }[]; warnings: { row: number; warnings: string[] }[] } | null>(null);
-  const fd = () => { const d = new FormData(); if (file) d.append("file", file); return d; };
-  const preview = useMut(() => api<NonNullable<typeof res>>("POST", "/imports/parts/preview", fd()), { success: false, onDone: setRes });
-  const commit = useMut(() => api("POST", "/imports/parts/commit", fd()), { onDone: () => { setFile(null); setRes(null); } });
-  return (
-    <Stack maw={700}>
-      <Button variant="subtle" w="fit-content" onClick={() => void download("/imports/templates/parts.xlsx")}>{t("asset.template")} (parts)</Button>
-      <FileInput label={t("common.file")} accept=".csv,.xlsx" clearable value={file} onChange={(f) => { setFile(f); setRes(null); }} />
-      <Group><Button disabled={!file} onClick={() => preview.mutate(undefined)}>{t("asset.preview")}</Button>
-        <Button color="teal" disabled={!res || res.invalid > 0} onClick={() => commit.mutate(undefined)}>{t("asset.commit")}</Button></Group>
-      {res && <Alert color={res.invalid ? "red" : "teal"}>{res.total} · {res.valid} {t("asset.valid")} · {res.invalid} {t("asset.invalid")}
-        {res.errors.map((e) => <div key={e.row}>Row {e.row}: {e.errors.join("; ")}</div>)}
-        {res.warnings.map((w) => <div key={`w${w.row}`}>⚠ Row {w.row}: {w.warnings.join("; ")}</div>)}</Alert>}
     </Stack>
   );
 }

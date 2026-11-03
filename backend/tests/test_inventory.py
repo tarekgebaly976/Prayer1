@@ -184,3 +184,24 @@ def test_aging_and_valuation_reports(world):
     a = store.ok("get", "/inventory/aging")
     assert a["excess"][0]["excess_qty"] == 2 and a["excess"][0]["value"] == 150.0
     assert a["no_movement_recorded"] == [] and a["slow_moving"] == []
+
+
+def test_parts_import_with_opening_stock(world):
+    store = world.api("store")
+    csv = (
+        "code,description,unit_price,warehouse,qty_on_hand,bin\n"
+        "OS1,bearing 6205,12.5,MAIN,8,A-01\n"
+        "OS2,v-belt,4,MAIN,,\n"
+        "OS3,seal kit,30,,3,\n"
+        "OS4,bad,1,MAIN,-2,\n"
+    )
+    files = lambda c: {"file": ("p.csv", c.encode(), "text/csv")}  # noqa: E731
+    p = store.ok("post", "/imports/parts/preview", files=files(csv))
+    assert p["invalid"] == 1 and p["errors"][0]["code"] == "OS4"
+    assert any("new store" in w for x in p["warnings"] for w in x["warnings"])
+    good = csv.replace("OS4,bad,1,MAIN,-2,\n", "")
+    assert store.ok("post", "/imports/parts/commit", files=files(good))["created"] == 3
+    parts = {x["code"]: x for x in store.ok("get", "/inventory/parts", params={"q": "OS"})["items"]}
+    assert float(parts["OS1"]["qty_on_hand"]) == 8 and float(parts["OS2"]["qty_on_hand"]) == 0
+    assert float(parts["OS3"]["qty_on_hand"]) == 3  # only one store: used without naming it
+    assert float(store.ok("get", "/inventory/valuation")["total_value"]) >= 8 * 12.5 + 3 * 30
