@@ -232,7 +232,20 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh mail-sync
 
 ---
 
-## 10. Checklist: a new paying customer
+## 10. Reset the main (Obeikan) system to examples
+
+Wipes all operational data (assets, PM, PdM, lubrication, work orders, requests, attachments …), keeps users,
+passwords and departments, adds a few invented examples (codes `EX-…`), and refreshes the test copy. A full backup is
+taken first, and a dry run checks everything before anything is wiped.
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh status
+```
+```
+ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/reset-to-examples.sh WIPE-ALL-DATA
+```
+To put everything back, use the `undo` line printed at the end (with the backup file name).
+
+## 11. Checklist: a new paying customer
 
 1. ☐ Written agreement (price, subscription period, support, who enters the data).
 2. ☐ A short name for the address + the customer's admin e-mail (+ `--trial 30` for a trial).
