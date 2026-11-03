@@ -52,3 +52,23 @@ Run exactly **one** worker replica per environment (a second replica is safe —
 ## Capacity (measured, not a production claim)
 See TEST_REPORT.md → Performance. Re-run `scripts/perf/load_test.py` against staging with production-like data
 before go-live.
+
+## Product instances on the shared server (from 2026-11)
+The Oracle Cloud server (Riyadh, A1.Flex 2 OCPU / 12 GB RAM / 45 GB disk, 4 GB swap) also runs the product website,
+the public demo and the customer instances. Commands: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md).
+
+| Scheduled task | When (Riyadh) | What |
+|---|---|---|
+| Customer backups | nightly 02:45 | verified backup of every customer, 14 days on the server, copy to Oracle Object Storage (`customers/<name>/`); log `/var/log/plantpulse-customers.log` |
+| Demo reload | nightly 03:00 | sample plant regenerated relative to "today" |
+| Demo password guard | every 10 min | shared demo password restored if a visitor changes it; lock-outs lifted |
+| Trial reminders | automatic | e-mail to the owner 7 days / 1 day before, on the day and weekly after a trial ends |
+
+* Health of every system: `sudo docker ps` (all `Up`); customers: `customer.sh list`; memory/disk: `free -h`, `df -h /`.
+* Every Caddy change is validated in a throw-away Caddy before the running one is reloaded.
+* Capacity measured 2026-11-03: ≈ 0.5 GB RAM and 1–3 GB disk per small customer ⇒ about 10 customers now; grow to
+  4 OCPU / 24 GB / 200 GB (free, 2-minute restart) at about 8 live customers ⇒ about 30–40.
+* Not yet in place (see [ROADMAP.md](ROADMAP.md)): external uptime monitoring (e.g. UptimeRobot) for the site, demo,
+  plant CMMS and each customer.
+* Oracle account: Pay As You Go, server within Always Free, budget alert €1/month. Do not create new instances,
+  volumes, load balancers or databases without review.

@@ -4,6 +4,11 @@
 Blocking items before production: cloud deployment in the target account with managed PostgreSQL/backups (L),
 real-device mobile testing, SSO or MFA for privileged users, and a penetration test.
 
+> **Update 2026-11-03.** The plant system has run on Oracle Cloud (Riyadh) since 2026-10-26, with nightly backups copied
+> off-server, and PlantPulse is now also offered as a product (website, public demo, one instance per customer). The
+> verdict above has not been re-assessed. Current state: [PROJECT_STATUS.md](PROJECT_STATUS.md); the product roadmap
+> that now leads planning: [ROADMAP.md](ROADMAP.md) (the technical list at the end of this page is kept for reference).
+
 ## Acceptance criteria
 
 | # | Criterion | Status | Evidence |

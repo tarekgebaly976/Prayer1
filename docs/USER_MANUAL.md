@@ -4,6 +4,10 @@ The interface is available in **English** and **Arabic** (right-to-left): use th
 top bar. Your choice is saved to your account. The coloured badge at the top shows whether you are **online**; the
 system needs a connection to save records — nothing is stored silently on the device.
 
+A coloured label in the top bar marks systems that are **not** your real plant: red **TEST** = the test copy used
+for trying new versions and training; blue **DEMO** = the public demo (https://demo.plantpulse-cmms.com) with sample
+data that is reset every night. Record real work only in the system without a label.
+
 Screenshots: `docs/screenshots/`.
 
 ## 1. Signing in

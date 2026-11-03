@@ -111,3 +111,32 @@ lubrication, e-mail outbox, KPI snapshots. See OPERATIONS.md for alerting.
 ## Data hygiene
 * Sample data lives only in the separate `DEMO` organisation created by `seed-demo`; never run it in production.
 * Assets are decommissioned (status), not deleted, to preserve history. Attachments are soft-deleted (retained for audit).
+
+## PlantPulse as a product (website, demo, customer instances)
+Since 2026-11 the same server also runs PlantPulse as a product for other plants. The plant's own CMMS
+(https://84-8-106-22.sslip.io and its test copy) is unchanged by this. Every command, step by step, is in the
+**Arabic operator guide: [PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md)**. Status: [PROJECT_STATUS.md](PROJECT_STATUS.md);
+plan: [ROADMAP.md](ROADMAP.md) and the checklist [ACTION_PLAN_2026-11.md](ACTION_PLAN_2026-11.md).
+
+| What | Address | Managed by | Notes |
+|---|---|---|---|
+| Product website | https://plantpulse-cmms.com | `scripts/site.sh` | EN/AR; "Try the demo" and "Contact us" forms; submissions: `site.sh requests` |
+| Public demo | https://demo.plantpulse-cmms.com | `scripts/demo.sh` | separate system, blue **DEMO** label, sample paper mill reloaded every night 03:00 Riyadh |
+| Customer instances | https://&lt;name&gt;.plantpulse-cmms.com | `scripts/customer.sh` | one separate PlantPulse per customer: own database, attachments, users, HTTPS |
+
+* **Website forms.** "Try the demo": the visitor receives the demo address and accounts by e-mail at once, in the
+  language they used; the owner is notified. "Contact us": the owner receives the request; the visitor gets a
+  confirmation with demo access. Mail is sent from `noreply@plantpulse-cmms.com` via Resend (SPF/DKIM/DMARC verified on
+  Cloudflare); replies go to `plantpulse.cmms@gmail.com`.
+* **Instance labels.** Red **TEST** = the plant's test copy; blue **DEMO** = the public demo. Neither is a real system.
+* **New customer.** `customer.sh new <name> <admin-email> <Company> [--trial 30] [--departments general|paper|none] [--lang ar|en]`.
+  Nothing is e-mailed to the customer until the owner has checked the system and previewed the welcome e-mail
+  (`welcome <name> --preview`, then `welcome <name>`).
+* **Trials.** The owner is reminded 7 days and 1 day before the end, on the end day and weekly after. Nothing stops
+  automatically: `activate` (paid), `extend <name> <days>` or `stop` (bilingual "paused" page, data kept; `start` resumes).
+* **Backups and updates.** Nightly verified backups per customer (02:45 Riyadh), 14 days on the server plus a copy in
+  Oracle Object Storage; `restore` takes a safety backup first. `launch-update-all` moves every running customer to a
+  new version. Safe update order: test copy → demo → customers → the plant's real system last.
+* **Capacity.** About 0.5 GB RAM per small customer ⇒ about 10 customers on the current VM (2 OCPU / 12 GB);
+  free upgrade to 4 OCPU / 24 GB ⇒ about 30–40. `customer.sh new` refuses when the server is short of memory.
+* Never put passwords or API keys (Resend `re_…`, pre-authenticated URLs) in documents, chats or screenshots.

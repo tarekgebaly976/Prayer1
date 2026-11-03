@@ -33,6 +33,18 @@ npm packages were pinned to releases at least two weeks old, **except Next.js 16
 because 16.0.0–16.4.0 are affected by critical advisories (GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr,
 GHSA-p3m5-59mp-jv5r). The image-optimisation endpoint is additionally disabled (`images.unoptimized`).
 
+## Product: one instance per customer (from 2026-11)
+* Each customer gets a **separate PlantPulse**: own database, attachments, settings and users, own address
+  `https://<name>.plantpulse-cmms.com` with automatic HTTPS. No customer can see another customer's data or the plant's.
+* The first administrator gets a random password; **nothing is e-mailed to a customer until the owner approves** the
+  welcome e-mail (`customer.sh welcome <name> --preview` first).
+* Memory limits per customer container; creation refused when the server is short of memory.
+* The public demo is a separate system (blue DEMO label) with sample data only and no e-mail from the app.
+* Website forms: honeypot field, rate limits, at most 3 e-mails per address per day.
+* Mail domain `plantpulse-cmms.com` verified with SPF, DKIM and DMARC (Resend, DNS on Cloudflare).
+* Secrets (Resend API key, Object Storage pre-authenticated URL, database passwords) stay on the server; never in
+  documents, chats or screenshots.
+
 ## Known security limitations / follow-ups
 1. CSP allows `'unsafe-inline'` scripts (Next.js bootstrap). Follow-up: nonce-based CSP via middleware.
 2. No SSO/MFA yet. For production, front the app with the corporate IdP (OIDC) or add TOTP MFA for admin roles.

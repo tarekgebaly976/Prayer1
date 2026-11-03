@@ -17,6 +17,17 @@ These are targets, not measured production figures. The restore drill below is t
 
 Secrets are **not** in backups; they live in the secret manager.
 
+### Current single-server setup (2026-11)
+| System | Backup | Off-server copy |
+|---|---|---|
+| Plant CMMS (real) | nightly | Oracle Object Storage (see "Off-host copy" below) |
+| Each customer instance | nightly 02:45 Riyadh, verified, kept 14 days in `/opt/plantpulse-backups/<name>` | Oracle Object Storage, `customers/<name>/` |
+| Public demo | not backed up — sample data regenerated every night | — |
+
+Customer restore: `customer.sh restore <name> <file>.dump --yes` (takes a safety backup first); `remove` takes a final
+backup. A customer restore drill on the server is still pending (ROADMAP item 12). Commands:
+[PLANTPULSE-GUIDE-AR.md](PLANTPULSE-GUIDE-AR.md) §3.
+
 ## Procedures
 
 ```bash
