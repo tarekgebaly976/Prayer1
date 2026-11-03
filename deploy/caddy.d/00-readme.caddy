@@ -1,0 +1,2 @@
+# Customer addresses, one file per customer (c-<name>.caddy), written by scripts/customer.sh.
+# This folder is mounted into Caddy at /etc/caddy/caddy.d and imported at the end of deploy/Caddyfile.

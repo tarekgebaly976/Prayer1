@@ -85,6 +85,7 @@ services:
       PRODUCT_DOMAIN: ${PRODUCT_DOMAIN:-plantpulse.localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy.d:/etc/caddy/caddy.d:ro  # customer addresses (scripts/customer.sh)
       - ./well-known:/srv/.well-known:ro
       - caddy_data:/data
     depends_on: [web, api]

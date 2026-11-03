@@ -98,3 +98,30 @@ demo.{$PRODUCT_DOMAIN:plantpulse.localhost} {
 		reverse_proxy plantpulse-demo-web:3000
 	}
 }
+
+# Customer instances (scripts/customer.sh): <name>.<PRODUCT_DOMAIN> -> that customer's own containers. Each customer has
+# a small file in deploy/caddy.d (c-<name>.caddy) that uses this block; customers are added without restarting Caddy.
+(customer) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	request_body {
+		max_size 30MB
+	}
+	handle /api/* {
+		reverse_proxy plantpulse-c-{args[0]}-api:8000
+	}
+	handle {
+		reverse_proxy plantpulse-c-{args[0]}-web:3000
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+import caddy.d/*.caddy

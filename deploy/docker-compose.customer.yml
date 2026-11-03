@@ -1,0 +1,92 @@
+# One customer's own PlantPulse at https://<name>.<PRODUCT_DOMAIN>: its own database, attachments and settings
+# (deploy/customers/<name>.env), sharing nothing with other customers except the server and Caddy, which reaches it
+# over the "edge" network as plantpulse-c-<name>-api / -web. All customers run the plantpulse-app-* images, built by
+# scripts/customer.sh build (or update-all).
+# Managed by scripts/customer.sh (new | list | update | backup | restore | remove | update-all); do not start by hand.
+
+x-app-env: &app-env
+  CMMS_ENVIRONMENT: production
+  CMMS_DATABASE_URL: postgresql+psycopg://cmms_app:${APP_DB_PASSWORD}@db:5432/cmms
+  CMMS_MIGRATION_DATABASE_URL: postgresql+psycopg://cmms_owner:${OWNER_DB_PASSWORD}@db:5432/cmms
+  CMMS_COOKIE_SECURE: "true"
+  CMMS_STORAGE_BACKEND: local
+  CMMS_STORAGE_LOCAL_PATH: /app/var/storage
+  CMMS_PUBLIC_URL: https://${CUSTOMER_DOMAIN}
+  CMMS_SMTP_HOST: ${SMTP_HOST:-}
+  CMMS_SMTP_PORT: ${SMTP_PORT:-587}
+  CMMS_SMTP_USER: ${SMTP_USER:-}
+  CMMS_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  CMMS_SMTP_FROM: ${SMTP_FROM:-}
+
+services:
+  db:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cmms
+      POSTGRES_USER: cmms_owner
+      POSTGRES_PASSWORD: ${OWNER_DB_PASSWORD:?run scripts/customer.sh}
+      CMMS_APP_DB_PASSWORD: ${APP_DB_PASSWORD:?run scripts/customer.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmms_owner -d cmms"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 768m
+
+  migrate:
+    image: plantpulse-app-api
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-env
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    image: plantpulse-app-api
+    restart: unless-stopped
+    environment: *app-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 768m
+    networks:
+      default: {}
+      edge: { aliases: ["plantpulse-c-${CUSTOMER}-api"] }
+
+  worker:
+    image: plantpulse-app-api
+    command: ["python", "-m", "app.worker"]
+    healthcheck: { disable: true }  # background jobs only; the image's check probes the web API
+    restart: unless-stopped
+    environment: *app-env
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 512m
+
+  web:
+    image: plantpulse-app-web
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://api:8000
+    depends_on: [api]
+    mem_limit: 512m
+    networks:
+      default: {}
+      edge: { aliases: ["plantpulse-c-${CUSTOMER}-web"] }
+
+networks:
+  default: {}
+  edge:
+    name: papermill-cmms-edge
+    external: true
+
+volumes:
+  pgdata:
+  storage:

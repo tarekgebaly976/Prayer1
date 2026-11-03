@@ -101,11 +101,24 @@ caddy_current() {
   have_env="$("${REAL[@]}" exec -T caddy printenv PRODUCT_DOMAIN 2>/dev/null | tr -d '\r' || true)"
   same_file=0
   "${REAL[@]}" exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - deploy/Caddyfile && same_file=1
+  "${REAL[@]}" exec -T caddy test -d /etc/caddy/caddy.d 2>/dev/null || same_file=0   # customer folder mounted
   [[ "$have_env" == "$want_env" && $same_file == 1 ]]
+}
+
+# Check deploy/Caddyfile (and deploy/caddy.d) in a throw-away Caddy before the running one is touched: a mistake in
+# the file must never take the sites down. Used here and by scripts/customer.sh.
+validate_caddy() {
+  mkdir -p deploy/caddy.d
+  local img; img="$(grep -m1 'image: caddy:' deploy/docker-compose.yml | awk '{print $2}')"
+  docker run --rm -e "CMMS_DOMAIN=$(getenv CMMS_DOMAIN deploy/.env)" -e "PRODUCT_DOMAIN=$DOMAIN" \
+    -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/deploy/caddy.d:/etc/caddy/caddy.d:ro" \
+    "${img:-caddy:2.10.2-alpine}" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-validate.log 2>&1 \
+    || { echo "The Caddy configuration has an error, so Caddy was NOT changed:"; tail -5 /tmp/caddy-validate.log; return 1; }
 }
 
 update_caddy() {
   if caddy_current; then echo "Caddy already serves https://$DOMAIN"; return; fi
+  validate_caddy || exit 1
   log "Restarting Caddy so it serves https://$DOMAIN (the CMMS keeps running; 2-3 seconds without HTTPS)"
   "${REAL[@]}" up -d --no-deps --no-build --force-recreate caddy
 }
@@ -216,6 +229,11 @@ case "${1:-start}" in
     "${SITE[@]}" exec -T site python /app/server.py test-mail \
       && echo "Test e-mail sent. Look in $(getenv CONTACT_TO "$SENV") (also Spam)." \
       || { echo "Sending failed (details above): is the domain verified in Resend, and the key right?"; exit 1; } ;;
+  caddy-reload)  # used by scripts/customer.sh: pick up deploy/caddy.d without a restart, after a check
+    ensure_domain
+    if ! caddy_current; then update_caddy; exit 0; fi
+    validate_caddy || exit 1
+    "${REAL[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null && echo "Caddy reloaded." ;;
   caddy) ensure_domain; update_caddy ;;  # used by scripts/demo.sh after it adds demo.<domain>
   stop) "${SITE[@]}" stop; echo "Website stopped (https://$(getenv PRODUCT_DOMAIN deploy/.env) answers 502). Requests are kept." ;;
   status) "${SITE[@]}" ps; echo "Address: https://$(getenv PRODUCT_DOMAIN deploy/.env)" ;;

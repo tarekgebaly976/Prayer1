@@ -22,3 +22,6 @@ backups/
 frontend/test-results/
 frontend/playwright-report/
 frontend/next-env.d.ts.bak
+# Customer instances (scripts/customer.sh): secrets and generated Caddy files stay on the server
+deploy/customers/
+deploy/caddy.d/c-*.caddy
