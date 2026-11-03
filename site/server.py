@@ -114,14 +114,18 @@ def send_mail(req: dict) -> bool:
     access = req.get("kind") == "demo-access"
     msg = EmailMessage()
     what = "demo access" if access else "demo request"
-    msg["Subject"] = f"PlantPulse {what}: {req['company']} ({req['name']})"
+    # The owner tells the two kinds apart at a glance in the inbox (Arabic first, the owner's language).
+    if access:
+        msg["Subject"] = f"🟢 جرّب الـ Demo – Demo access: {req['company']} ({req['name']})"
+    else:
+        msg["Subject"] = f"📞 طلب تواصل – Contact request: {req['company']} ({req['name']})"
     msg["From"] = formataddr(("PlantPulse website", sender_address()))
     msg["To"] = to
     msg["Reply-To"] = formataddr((req["name"], req["email"]))
     msg["Message-ID"] = make_msgid(domain="plantpulse-cmms.com")
     lines = [
-        "Someone received the demo sign-in details from the PlantPulse website (Try the demo)."
-        if access else "New demo request from the PlantPulse website",
+        "🟢 Try the demo: this visitor already received the demo sign-in by e-mail. Nothing to do; follow up in 1-2 days."
+        if access else "📞 Contact us: this visitor wants to talk. Reply to this e-mail or call within one working day.",
         "",
         f"Name:       {req['name']}",
         f"Company:    {req['company']}",
