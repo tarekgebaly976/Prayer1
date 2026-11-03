@@ -351,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.json(200, {"ok": True})
 
 
-def send_welcome(c: dict) -> None:
+def send_welcome(c: dict, preview: bool = False) -> None:
     """Welcome e-mail for a new customer's first administrator (scripts/customer.sh new / welcome). Raises on failure.
     c: name, email, company, url, password, lang ("ar" or "en")."""
     if c.get("lang") == "ar":
@@ -398,6 +398,15 @@ def send_welcome(c: dict) -> None:
             "",
             "PlantPulse – maintenance management for industrial plants",
         ]
+    if preview:  # show exactly what would be sent, send nothing
+        print(f"From:     PlantPulse <{sender_address()}>")
+        print(f"To:       {c['email']}")
+        print(f"Reply-To: {os.environ.get('CONTACT_TO', '')}")
+        print(f"Subject:  {subject}")
+        print("-" * 60)
+        print("\n".join(body))
+        print("-" * 60)
+        return
     _send_to_visitor({"name": c["company"], "email": c["email"]}, subject, body)
 
 
@@ -410,6 +419,9 @@ def main() -> None:
         sys.exit(0 if ok else 1)
     if len(sys.argv) > 1 and sys.argv[1] == "welcome":  # JSON on stdin, from scripts/customer.sh
         c = json.loads(sys.stdin.read())
+        if c.get("preview"):
+            send_welcome(c, preview=True)
+            sys.exit(0)
         if not os.environ.get("SITE_SMTP_HOST"):
             print("No mail server set for the website: welcome e-mail not sent.")
             sys.exit(1)

@@ -6,11 +6,14 @@
 #   sudo bash scripts/customer.sh new <name> <admin-email> ["Company name"] [options]
 #        options: --plant "Plant name"  --plant-code CODE  --departments general|paper|none
 #                 --currency SAR  --timezone Asia/Riyadh  --lang ar|en (welcome e-mail, default ar)
-#                 --no-welcome (no e-mail to the administrator)  --no-mail (the system sends no e-mail at all)
+#                 --no-mail (the system sends no e-mail at all)
+#        Nothing is e-mailed to the customer yet: check the system, then send the welcome e-mail yourself (below).
 #        e.g.     sudo bash scripts/customer.sh new acme it@acme.com "Acme Paper Co" --departments paper
 #   sudo bash scripts/customer.sh list
 #   sudo bash scripts/customer.sh show <name>               address, admin e-mail and first password
-#   sudo bash scripts/customer.sh welcome <name> [--lang en]   send the welcome e-mail (again) to the administrator
+#   sudo bash scripts/customer.sh welcome <name> --preview  show the welcome e-mail, send nothing
+#   sudo bash scripts/customer.sh welcome <name>            after your check: send it to the administrator
+#                                                           (add --lang en / --lang ar to change the language)
 #   sudo bash scripts/customer.sh reset-password <name> <e-mail>   new random password for that user
 #   sudo bash scripts/customer.sh backup <name>             now; all customers are also backed up every night
 #   sudo bash scripts/customer.sh restore <name> <file.dump>
@@ -106,7 +109,7 @@ caddy_add() {  # caddy_add <name>: route <name>.<domain> to the customer, checke
 
 new() {
   local name="${1:-}" email="${2:-}" org="" plant="Main plant" pcode="MAIN" depts="general" cur="SAR" tz="Asia/Riyadh" mail=1
-  local lang=ar welcome_mail=1
+  local lang=ar
   [[ -n "$name" && "$email" == *@* ]] || { sed -n '6,10p' "$0"; exit 2; }
   shift 2
   # Company and plant names may be several words without quotes (quotes get lost through ssh): every word up to
@@ -119,8 +122,7 @@ new() {
       --departments) depts="$2"; shift 2 ;;
       --currency) cur="$2"; shift 2 ;;
       --timezone) tz="$2"; shift 2 ;;
-      --no-mail) mail=0; welcome_mail=0; shift ;;
-      --no-welcome) welcome_mail=0; shift ;;
+      --no-mail) mail=0; shift ;;
       --lang) lang="$2"; shift 2 ;;
       *) echo "Unknown option $1"; exit 2 ;;
     esac
@@ -169,24 +171,32 @@ new() {
   log "Publishing https://$name.$dom"
   caddy_add "$name" || true
   install_cron
-  if [[ $welcome_mail == 1 ]]; then log "Welcome e-mail to $email"; welcome "$name" || true; fi
-  log "Ready"
+  log "Ready – nothing has been sent to the customer yet"
   show "$name"
   echo "The certificate for the address is issued on first use; the first page load can take ~20 seconds."
-  echo "The administrator should change the password after signing in (profile menu > Change password)."
+  echo
+  echo "Next: 1) open the address and sign in with the details above to check it"
+  echo "      2) see the welcome e-mail:   sudo bash scripts/customer.sh welcome $name --preview"
+  echo "      3) send it when you approve: sudo bash scripts/customer.sh welcome $name"
 }
 
 # welcome <name> [en|ar]: e-mail the administrator the address and first password, through the website's mail sender.
-welcome() {
+welcome() {  # welcome <name> <lang or ""> <preview 0|1>
   need "$1"; local f; f="$(cenv "$1")"
-  local lang="${2:-$(getenv WELCOME_LANG "$f")}"
-  W_NAME="$1" W_EMAIL="$(getenv ADMIN_EMAIL "$f")" W_COMPANY="$(getenv ORG_NAME "$f")" W_URL="https://$(getenv CUSTOMER_DOMAIN "$f")" \
+  local lang="${2:-$(getenv WELCOME_LANG "$f")}" preview="${3:-0}"
+  W_PREVIEW="$preview" W_NAME="$1" W_EMAIL="$(getenv ADMIN_EMAIL "$f")" W_COMPANY="$(getenv ORG_NAME "$f")" W_URL="https://$(getenv CUSTOMER_DOMAIN "$f")" \
   W_PW="$(getenv INITIAL_ADMIN_PASSWORD "$f")" W_LANG="${lang:-ar}" python3 -c '
 import json, os
 print(json.dumps({"name": os.environ["W_NAME"], "email": os.environ["W_EMAIL"], "company": os.environ["W_COMPANY"],
-                  "url": os.environ["W_URL"], "password": os.environ["W_PW"], "lang": os.environ["W_LANG"]}))' \
+                  "url": os.environ["W_URL"], "password": os.environ["W_PW"], "lang": os.environ["W_LANG"],
+                  "preview": os.environ["W_PREVIEW"] == "1"}))' \
   | docker compose -p plantpulse-site -f deploy/docker-compose.site.yml --env-file deploy/.env.site exec -T site python /app/server.py welcome \
   || { echo "Welcome e-mail not sent (website mail not set up?). Send the details above yourself."; return 1; }
+  if [[ "$preview" == 0 ]]; then
+    sed -i '/^WELCOME_SENT=/d' "$f"; echo "WELCOME_SENT=$(date -Is)" >> "$f"
+  else
+    echo "Nothing was sent. To send it: sudo bash scripts/customer.sh welcome $1${2:+ --lang $2}"
+  fi
 }
 
 show() {
@@ -196,6 +206,7 @@ show() {
   echo "Admin:      $(getenv ADMIN_EMAIL "$f")"
   echo "Password:   $(getenv INITIAL_ADMIN_PASSWORD "$f")   (first password; useless once changed)"
   echo "Created:    $(getenv CREATED "$f")"
+  echo "Welcome:    $(w="$(getenv WELCOME_SENT "$f")"; echo "${w:-not sent yet (customer.sh welcome $1 --preview)}")"
   echo "E-mail:     $([[ -n "$(getenv SMTP_HOST "$f")" ]] && echo "on, from $(getenv SMTP_FROM "$f")" || echo off)"
 }
 
@@ -281,7 +292,10 @@ case "${1:-list}" in
   new) shift; new "$@" ;;
   list) list ;;
   show) show "${2:-}" ;;
-  welcome) l=""; [[ "${3:-}" == --lang ]] && l="${4:-}"; welcome "${2:-}" "$l" ;;
+  welcome)
+    n="${2:-}"; shift 2 || true; l=""; pv=0
+    while [[ $# -gt 0 ]]; do case "$1" in --lang) l="${2:-}"; shift 2 ;; --preview) pv=1; shift ;; *) shift ;; esac; done
+    welcome "$n" "$l" "$pv" ;;
   reset-password)
     need "${2:-}"; [[ "${3:-}" == *@* ]] || { echo "Usage: sudo bash scripts/customer.sh reset-password <name> <e-mail>"; exit 2; }
     pw="$(new_password)"

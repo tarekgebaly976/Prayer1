@@ -44,12 +44,26 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh new alsafi it@als
 | `--departments none` | بدون أقسام، العميل يضيفها بنفسه |
 | `--plant Mill No 2` | اسم المصنع (الافتراضي Main plant) |
 | `--lang en` | إيميل الترحيب بالإنجليزي (الافتراضي عربي) |
-| `--no-welcome` | لا ترسل إيميل ترحيب (ستسلّم البيانات بنفسك) |
 | `--currency USD` / `--timezone Asia/Dubai` | الافتراضي SAR و Asia/Riyadh |
 
-**ماذا يحدث:** خلال 2-3 دقائق يُنشأ النظام، ويصل للمسؤول **إيميل ترحيب** من `noreply@plantpulse-cmms.com`
-فيه العنوان وكلمة السر الأولى وخطوات البداية، وتظهر نفس البيانات على شاشتك.
-أول فتح للعنوان قد يأخذ ~20 ثانية (إصدار شهادة HTTPS).
+**ماذا يحدث:** خلال 2-3 دقائق يُنشأ النظام وتظهر بياناته على شاشتك (العنوان، الإيميل، كلمة السر الأولى).
+**لا يُرسل أي شيء للعميل** حتى توافق أنت. أول فتح للعنوان قد يأخذ ~20 ثانية (إصدار شهادة HTTPS).
+
+**ثم 3 خطوات:**
+
+1. **راجع النظام بنفسك:** افتح العنوان وادخل بالبيانات التي ظهرت، تأكد من اسم الشركة والمصنع والأقسام.
+2. **شاهد إيميل الترحيب بدون إرسال:**
+   ```
+   ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi --preview
+   ```
+3. **عند الموافقة، أرسله:**
+   ```
+   ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi
+   ```
+   (لتغيير اللغة: أضف `--lang en` أو `--lang ar` في آخر السطر.)
+
+الإيميل يخرج من `noreply@plantpulse-cmms.com` وفيه العنوان وكلمة السر الأولى وخطوات البداية، والرد يصل إلى
+`plantpulse.cmms@gmail.com`. أمر `show` يوضح هل أُرسل ومتى.
 
 **بعدها:** تأكد أن العميل دخل وغيّر كلمة السر. إذا لم يصله الإيميل (شركات كثيرة تحجز الإيميلات من دومين جديد)،
 اطلب منه النظر في Junk / Quarantine أو أرسل له البيانات بنفسك.
@@ -61,8 +75,9 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh new alsafi it@als
 | المطلوب | الأمر |
 |---|---|
 | قائمة العملاء وحالتهم والذاكرة المتاحة | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh list` |
-| بيانات عميل (العنوان، الإيميل، كلمة السر الأولى) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh show alsafi` |
-| إعادة إرسال إيميل الترحيب | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi` |
+| بيانات عميل (العنوان، الإيميل، كلمة السر الأولى، هل أُرسل الترحيب) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh show alsafi` |
+| معاينة إيميل الترحيب (بدون إرسال) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi --preview` |
+| إرسال إيميل الترحيب (أو إعادته) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh welcome alsafi` |
 | مستخدم نسي كلمة السر | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com` |
 | نسخة احتياطية الآن | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh backup alsafi` |
 | إيقاف مؤقت (مثلاً لم يدفع) | `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh stop alsafi` |
@@ -167,8 +182,9 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh mail-sync
 
 1. ☐ اتفاق مكتوب (السعر، مدة الاشتراك، الدعم، من يُدخل البيانات).
 2. ☐ اسم قصير للعنوان + إيميل مسؤول عند العميل.
-3. ☐ `customer.sh new …` ← تأكد من وصول إيميل الترحيب.
-4. ☐ العميل دخل وغيّر كلمة السر.
-5. ☐ استيراد الأصول وخطط الصيانة من قوالب Excel (مساعدة منك في الأيام الأولى).
-6. ☐ تدريب قصير: المخطط، المشرفين، الفنيين (الموبايل).
-7. ☐ تأكد أن النسخ الاحتياطي يعمل: `customer.sh backup الاسم`.
+3. ☐ `customer.sh new …` ← ادخل وراجع النظام بنفسك.
+4. ☐ `customer.sh welcome الاسم --preview` ثم `customer.sh welcome الاسم` ← تأكد من وصول الإيميل.
+5. ☐ العميل دخل وغيّر كلمة السر.
+6. ☐ استيراد الأصول وخطط الصيانة من قوالب Excel (مساعدة منك في الأيام الأولى).
+7. ☐ تدريب قصير: المخطط، المشرفين، الفنيين (الموبايل).
+8. ☐ تأكد أن النسخ الاحتياطي يعمل: `customer.sh backup الاسم`.
