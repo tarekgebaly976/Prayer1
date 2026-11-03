@@ -13,7 +13,7 @@ and reports. Web application for desktop, tablet and phone (installable PWA), En
 
 > **Status:** feature-complete for milestones 1–4 and most of milestone 5, verified by automated tests on a real
 > PostgreSQL database, browser end-to-end tests, a containerised HTTPS deployment, and a backup/restore drill.
-> **It has not been deployed to a public cloud** (no cloud credentials were available). See
+> Running on Oracle Cloud since 2026-10-26 (plant system), and as a product since 2026-11 (website, demo, customers). See
 > [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) and [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## PlantPulse as a product (live)
