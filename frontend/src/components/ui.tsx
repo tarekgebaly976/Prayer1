@@ -1,23 +1,27 @@
 "use client";
 
-import { ActionIcon, Autocomplete, Badge, Button, Center, Checkbox, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
+import { ActionIcon, Autocomplete, Badge, Button, Center, Checkbox, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Skeleton, Stack, Table, Text, ThemeIcon, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
 import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
-import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronRight, IconInbox, IconSitemap } from "@tabler/icons-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQ } from "@/lib/hooks";
 import type { AssetNode, Department, Member, Page } from "@/lib/types";
 
+/** Status colours carry one meaning each: grey = not started / paused / not needed, yellow = waiting for someone,
+ *  blue = approved / planned, orange = being worked on / warning, red = problem / emergency, green = done / OK. */
+const STATUS_GROUPS: Record<string, string[]> = {
+  gray: ["triage", "draft", "not_started", "skipped", "not_required", "unknown", "cancelled", "on_hold", "deferred", "standby"],
+  yellow: ["awaiting_approval", "awaiting_review", "submitted", "pending", "deferral_requested", "cancellation_requested", "requested", "partial"],
+  blue: ["approved", "planned", "scheduled", "generated", "ordered", "active", "wo_created", "confirmed"],
+  orange: ["in_progress", "under_maintenance", "acknowledged", "warning"],
+  red: ["rejected", "missed", "critical", "open", "delayed", "not_ready", "out_of_service", "emergency"],
+  green: ["completed", "closed", "accepted", "done", "normal", "resolved", "ready", "in_service", "received", "fulfilled"],
+};
 const STATUS_COLORS: Record<string, string> = {
-  triage: "gray", awaiting_approval: "yellow", approved: "blue", planned: "cyan", scheduled: "indigo", in_progress: "orange",
-  on_hold: "grape", awaiting_review: "violet", completed: "teal", closed: "green", cancelled: "dark", submitted: "yellow",
-  accepted: "green", rejected: "red", generated: "blue", deferral_requested: "yellow", deferred: "grape", cancellation_requested: "yellow",
-  pending: "yellow", done: "green", skipped: "gray", missed: "red", normal: "green", warning: "orange", critical: "red", unknown: "gray",
-  open: "red", acknowledged: "orange", wo_created: "blue", resolved: "green", draft: "gray", confirmed: "green", delayed: "red",
-  ready: "green", not_ready: "red", partial: "yellow", not_required: "gray", in_service: "green", under_maintenance: "orange",
-  out_of_service: "red", standby: "blue", P1: "red", P2: "orange", P3: "blue", P4: "gray", A: "red", B: "orange", C: "gray",
-  requested: "yellow", ordered: "blue", received: "green", active: "blue", fulfilled: "green", not_started: "gray", emergency: "red",
+  ...Object.fromEntries(Object.entries(STATUS_GROUPS).flatMap(([c, v]) => v.map((k) => [k, c]))),
+  P1: "red", P2: "orange", P3: "blue", P4: "gray", A: "red", B: "orange", C: "gray",
 };
 
 export function StatusBadge({ value, ...rest }: { value: string | null | undefined } & BadgeProps) {
@@ -42,7 +46,33 @@ export function PageHeader({ title, actions, children }: { title: string; action
 
 export function Loading() {
   const { t } = useTranslation();
-  return <Center p="xl"><Loader size="sm" /><Text ms="sm" c="dimmed">{t("app.loading")}</Text></Center>;
+  // Placeholder lines instead of a spinner: the page keeps its shape while data arrives.
+  return (
+    <Stack gap={10} p="xs" role="status" aria-label={t("app.loading")} data-testid="loading">
+      <Skeleton h={14} w="40%" radius="sm" /><Skeleton h={12} radius="sm" /><Skeleton h={12} w="85%" radius="sm" />
+    </Stack>
+  );
+}
+
+/** Friendly "nothing here" block (icon + sentence) for empty lists. */
+export function EmptyState({ text, icon: Icon = IconInbox }: { text: string; icon?: typeof IconInbox }) {
+  return (
+    <Stack align="center" gap={6} py="xl" px="md" className="pp-empty" data-testid="empty-state">
+      <ThemeIcon variant="light" color="gray" size={44} radius="xl"><Icon size={24} stroke={1.6} /></ThemeIcon>
+      <Text c="dimmed" size="sm" ta="center">{text}</Text>
+    </Stack>
+  );
+}
+
+function TableSkeleton({ cols }: { cols: number }) {
+  const { t } = useTranslation();
+  return (
+    <Stack gap={8} className="pp-table" p="md" role="status" aria-label={t("app.loading")} data-testid="loading">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Group key={i} gap="md" wrap="nowrap">{Array.from({ length: Math.min(cols, 6) }, (_, j) => <Skeleton key={j} h={14} radius="sm" style={{ flex: j === 1 ? 2 : 1 }} />)}</Group>
+      ))}
+    </Stack>
+  );
 }
 
 export function ErrorText({ error }: { error: unknown }) {
@@ -64,8 +94,8 @@ export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKe
   const { t } = useTranslation();
   // Phones: every row becomes a card (first column as its heading, the others as label / value), no sideways scrolling.
   const phone = useMediaQuery("(max-width: 48em)");
-  if (!rows) return <Loading />;
-  if (rows.length === 0) return <Text c="dimmed" p="md">{empty ?? t("common.noData")}</Text>;
+  if (!rows) return <TableSkeleton cols={columns.length} />;
+  if (rows.length === 0) return <EmptyState text={empty ?? t("common.noData")} />;
   const idOf = (r: T, i: number) => (rowKey ? rowKey(r, i) : ("id" in r && typeof r.id === "string" ? r.id : String(i)));
   const sel = new Set(selected ?? []);
   const ids = rows.map(idOf);

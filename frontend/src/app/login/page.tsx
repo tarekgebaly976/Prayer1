@@ -41,7 +41,7 @@ export default function LoginPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/icon.svg" alt="" width={48} height={48} />
               <div>
-                <Title order={2} c="brand.7" lh={1.1}>{t("app.name")}</Title>
+                <Title order={2} c="var(--pp-strong)" lh={1.1}>{t("app.name")}</Title>
                 <Text c="dimmed" size="sm">{t("app.tagline")}</Text>
               </div>
             </Group>

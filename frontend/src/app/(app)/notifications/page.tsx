@@ -1,10 +1,11 @@
 "use client";
 
+import { IconBellOff } from "@tabler/icons-react";
 import { Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loading, PageHeader, Pager } from "@/components/ui";
+import { EmptyState, Loading, PageHeader, Pager } from "@/components/ui";
 import { post } from "@/lib/api";
 import { fmtDate, useMut, useQ } from "@/lib/hooks";
 import type { Notification, Page } from "@/lib/types";
@@ -22,7 +23,7 @@ export default function Notifications() {
       <PageHeader title={`${t("nav.notifications")} (${q.data.unread} ${t("notif.unread")})`}
         actions={<Button variant="light" onClick={() => readAll.mutate(undefined)}>{t("notif.markAll")}</Button>} />
       <Stack gap="xs">
-        {q.data.items.length === 0 && <Text c="dimmed">{t("common.noData")}</Text>}
+        {q.data.items.length === 0 && <EmptyState text={t("common.noData")} icon={IconBellOff} />}
         {q.data.items.map((n) => (
           <Card key={n.id} withBorder padding="sm" style={{ cursor: n.link ? "pointer" : undefined, opacity: n.read_at ? 0.65 : 1 }}
             onClick={() => { if (!n.read_at) read.mutate(n.id); if (n.link) router.push(n.link); }}>

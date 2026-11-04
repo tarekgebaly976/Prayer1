@@ -158,3 +158,15 @@ test("KPI dashboard shows unavailable KPIs with their reason and drill-down", as
   await page.getByTestId("kpi-overdue_work_orders").click();
   await expect(page.getByText("Formula:")).toBeVisible();
 });
+
+test("dark mode switches on, survives a reload and switches back", async ({ page }) => {
+  await login(page, "manager");
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-mantine-color-scheme", "light");
+  await page.getByRole("button", { name: "Dark mode" }).click();
+  await expect(html).toHaveAttribute("data-mantine-color-scheme", "dark");
+  await page.reload(); // remembered on this device
+  await expect(html).toHaveAttribute("data-mantine-color-scheme", "dark");
+  await page.getByRole("button", { name: "Light mode" }).click();
+  await expect(html).toHaveAttribute("data-mantine-color-scheme", "light");
+});

@@ -15,10 +15,12 @@ const FONT = "'Inter Variable', 'IBM Plex Sans Arabic', system-ui, -apple-system
 const theme = createTheme({
   colors: {
     brand: ["#eef3f8", "#dbe4ee", "#b4c7da", "#89a7c5", "#6589b0", "#4c74a2", "#2f5a85", "#17324D", "#122a41", "#0b1d2e"],
+    // Dark mode in the brand's navy instead of Mantine's neutral grey (body = 7, borders = 4, text = 0).
+    dark: ["#dbe4ee", "#b4c2d0", "#8d9cad", "#66788c", "#2a3b4e", "#223244", "#1c2a3a", "#172331", "#101a24", "#0b131b"],
     accent: ["#fff7e6", "#ffecc4", "#ffdc8f", "#fdcb57", "#f9bb34", "#F5A623", "#de9312", "#c97f00", "#a06500", "#7a4c00"],
   },
   primaryColor: "brand",
-  primaryShade: { light: 7, dark: 4 },
+  primaryShade: { light: 7, dark: 6 },
   fontFamily: FONT,
   headings: { fontFamily: FONT, fontWeight: "700" },
   defaultRadius: "md",

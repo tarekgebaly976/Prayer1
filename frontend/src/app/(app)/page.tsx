@@ -32,7 +32,7 @@ function Stat({ label, value, href, color, icon: Icon, alert }: {
         <Text size="sm" c="dimmed" fw={500} lh={1.3} lineClamp={2}>{label}</Text>
         <ThemeIcon variant="light" color={on ? color : "gray"} size={30} radius="md" style={{ flexShrink: 0 }}><Icon size={17} stroke={1.8} /></ThemeIcon>
       </Group>
-      <Text fz={{ base: 26, sm: 32 }} fw={800} lh={1.1} mt={6} c={on && alert ? `${color}.7` : on ? "brand.7" : "gray.5"}>{value}</Text>
+      <Text fz={{ base: 26, sm: 32 }} fw={800} lh={1.1} mt={6} c={on && alert ? `${color}.7` : on ? "var(--pp-strong)" : "gray.5"}>{value}</Text>
     </Card>
   );
 }
@@ -125,7 +125,7 @@ function KpiStrip({ today }: { today: string }) {
             return (
               <div key={code} data-testid={`dash-kpi-${code}`}>
                 <Text size="xs" c="dimmed" lineClamp={1}>{t(label)}</Text>
-                <Text fz={22} fw={800} c="brand.7" lh={1.2}>
+                <Text fz={22} fw={800} c="var(--pp-strong)" lh={1.2}>
                   {k?.available ? fmtNum(k.value, 1) : "—"} {k?.available && <Text span size="sm" c="dimmed" fw={500}>{k.unit}</Text>}
                 </Text>
               </div>
@@ -164,7 +164,7 @@ export default function Dashboard() {
       <Group gap="sm" mb="lg">
           {can("request.create") && <Button component={Link} href="/requests?new=1" color="red" leftSection={<IconAlertTriangle size={18} />} className="tap-target">{t("req.new")}</Button>}
           {can("wo.create") && <Button component={Link} href="/work-orders/new" leftSection={<IconPlus size={18} />} className="tap-target">{t("wo.new")}</Button>}
-          <Button component={Link} href="/scan" variant="white" color="brand" leftSection={<IconQrcode size={18} />} className="tap-target pp-btn-white">{t("nav.scan")}</Button>
+          <Button component={Link} href="/scan" variant="default" leftSection={<IconQrcode size={18} />} className="tap-target">{t("nav.scan")}</Button>
       </Group>
       {mine && work}
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 5 }} mb="lg" spacing={{ base: "xs", sm: "md" }}>

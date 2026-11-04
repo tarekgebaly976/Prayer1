@@ -76,6 +76,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * Phones (phase 3): bottom bar (Dashboard, My work, big red "new request" button, Scan QR, Notifications with
   counts); every table becomes one card per row (no sideways scrolling); work order actions stay pinned above the
   bottom bar; My work cards show priority colour, asset, due date (red when overdue) and safety flag.
+* Phase 4: dark mode in the brand's navy (moon / sun button in the header, remembered per device); status colours
+  with one meaning each (grey not started / paused, yellow waiting, blue planned, orange in work, red problem, green
+  done); loading placeholders instead of spinners; empty lists show an icon and a sentence.
 * Roll-out: demo first (`git pull` + `demo.sh launch-update`), customers and the plant only after approval.
 
 ### Spare parts import (2026-11-03)

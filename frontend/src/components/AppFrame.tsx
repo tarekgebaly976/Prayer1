@@ -1,10 +1,10 @@
 "use client";
 
-import { ActionIcon, AppShell, Avatar, Badge, Box, Burger, Button, Group, Indicator, Menu, Modal, NavLink, PasswordInput, ScrollArea, Select, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, AppShell, Avatar, Badge, Box, useComputedColorScheme, useMantineColorScheme, Burger, Button, Group, Indicator, Menu, Modal, NavLink, PasswordInput, ScrollArea, Select, Stack, Text, Tooltip } from "@mantine/core";
 import { useDisclosure, useNetwork } from "@mantine/hooks";
 import {
   IconAlertTriangle, IconBell, IconBox, IconCalendarTime, IconChartBar, IconClipboardList, IconDashboard, IconDroplet, IconHeartRateMonitor,
-  IconKey, IconLanguage, IconLogout, IconPlus, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
+  IconKey, IconLanguage, IconLogout, IconMoon, IconPlus, IconSun, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -70,6 +70,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const net = useNetwork();
   const notif = useQ<{ unread: number }>("/notifications", { limit: 1, unread: true }, { refetchInterval: 60_000 });
   const counts = useQ<NavCounts>("/dashboard/summary", undefined, { refetchInterval: 60_000 });
+  const { setColorScheme } = useMantineColorScheme();
+  const dark = useComputedColorScheme("light", { getInitialValueInEffect: true }) === "dark";
 
   useEffect(() => { if (!loading && !me) router.replace("/login"); }, [loading, me, router]);
   useEffect(() => close(), [pathname, close]);
@@ -86,7 +88,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/icon.svg" alt="" width={32} height={32} style={{ display: "block" }} />
               <Stack gap={0} visibleFrom="xs">
-                <Text fw={800} size="lg" lh={1.1} c="brand.7">{t("app.name")}</Text>
+                <Text fw={800} size="lg" lh={1.1} c="var(--pp-strong)">{t("app.name")}</Text>
                 <Text size="xs" c="dimmed" lh={1.2} truncate maw={260}>{plant.plant_name}</Text>
               </Stack>
             </Group></Link>
@@ -104,6 +106,10 @@ export function AppFrame({ children }: { children: ReactNode }) {
             <Indicator disabled={!notif.data?.unread} label={notif.data?.unread} size={16} color="red">
               <ActionIcon variant="subtle" component={Link} href="/notifications" aria-label={t("nav.notifications")}><IconBell size={20} /></ActionIcon>
             </Indicator>
+            <Tooltip label={dark ? t("app.lightMode") : t("app.darkMode")}>
+              <ActionIcon variant="subtle" aria-label={dark ? t("app.lightMode") : t("app.darkMode")} data-testid="color-scheme"
+                onClick={() => setColorScheme(dark ? "light" : "dark")}>{dark ? <IconSun size={20} /> : <IconMoon size={20} />}</ActionIcon>
+            </Tooltip>
             <Menu>
               <Menu.Target><ActionIcon variant="subtle" aria-label={t("app.language")}><IconLanguage size={20} /></ActionIcon></Menu.Target>
               <Menu.Dropdown>
