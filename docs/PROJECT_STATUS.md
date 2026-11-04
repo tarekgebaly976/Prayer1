@@ -63,7 +63,7 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
   Always Free; protects it from idle reclamation); budget alert at €1/month.
 * Every Caddy change is validated in a throw-away Caddy before the running one is touched.
 
-### App look (2026-11-03) – on the public demo first
+### App look (2026-11-03/04) – live
 * Same brand as the website: navy `#17324D` + amber `#F5A623`, self-hosted fonts (Inter, IBM Plex Sans Arabic), logo in
   the header, light-grey page with white cards, branded sign-in page.
 * Sidebar in navy, grouped (Daily work / Maintenance / Assets & resources / Analysis & admin) with live counts
@@ -79,7 +79,8 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * Phase 4: dark mode in the brand's navy (moon / sun button in the header, remembered per device); status colours
   with one meaning each (grey not started / paused, yellow waiting, blue planned, orange in work, red problem, green
   done); loading placeholders instead of spinners; empty lists show an icon and a sentence.
-* Roll-out: demo first (`git pull` + `demo.sh launch-update`), customers and the plant only after approval.
+* **Live everywhere since 2026-11-04** (version `8c8bb6a`): public demo, plant test copy and the real plant CMMS
+  (`install-server.sh`); no customers yet, new ones are created from this version. No database change in this update.
 
 ### Spare parts import (2026-11-03)
 * Import button on the Inventory page (template, preview, errors.csv); optional warehouse / qty_on_hand / bin columns
