@@ -104,9 +104,8 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * A paused customer page and trial reminders on the server (tested with stand-ins only).
 * E-mail deliverability to corporate mail systems: messages are delivered but some (e.g. Proofpoint) hold mail from
   the new domain; reputation builds over weeks. Ask customers' IT to allow `plantpulse-cmms.com`.
-* Two e2e tests fail on a fresh local run with and without the design change (`user-admin` edit user, `workflow` KPI
-  "Not available"; `pdm-points` bulk priorities sometimes too); they look data-dependent and need a look. The e2e run
-  needs raised per-IP rate limits because every test comes from one IP (now set in CI and docs/TESTING.md).
+* e2e: all 27 pass (2026-11-04). The run needs raised per-IP rate limits because every test comes from one IP (set
+  in CI and docs/TESTING.md).
 * Customer restore on the server (scripted; drill pending). Real phones and QR scanning by customers.
 * The €93 card authorisation from the Oracle upgrade (2026-11-03) should be released by the bank; check it.
 

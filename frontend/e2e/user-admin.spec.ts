@@ -13,12 +13,14 @@ test("administrator edits a user from the Users list", async ({ page }) => {
   const original = await name.inputValue();
   await name.fill(`${original} (edited)`);
   await dialog.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("cell", { name: `${original} (edited)` })).toBeVisible();
+  // The Users list shows name, e-mail and the Edit button in one cell: look for the name inside the user's row.
+  const viewer = page.getByRole("row", { name: /viewer@demo\.example\.com/ });
+  await expect(viewer.getByText(`${original} (edited)`, { exact: true })).toBeVisible();
 
   await page.getByRole("row", { name: /viewer@demo\.example\.com/ }).getByRole("button", { name: "Edit" }).click();
   await page.getByRole("dialog").getByLabel("Name").fill(original);
   await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("cell", { name: original, exact: true })).toBeVisible();
+  await expect(viewer.getByText(original, { exact: true })).toBeVisible();
 });
 
 test("administrator gives a user several departments and clears them from the users list", async ({ page }) => {
