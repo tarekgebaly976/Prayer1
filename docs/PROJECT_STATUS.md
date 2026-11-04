@@ -70,6 +70,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
   (new requests, emergencies, overdue lubrication, PM approvals, critical alerts) and the user card at the bottom.
 * Dashboard cards with icons and a coloured edge when something needs attention; tables as white cards, dates and
   WO numbers no longer split over two lines, status badges in normal case.
+* Dashboard (phase 2): "Needs attention" list (open work orders by priority, Mine / All, overdue dates in red),
+  work orders opened vs completed per week (new `GET /dashboard/activity`), 6-month KPIs (PM compliance, MTBF, MTTR,
+  availability). Technicians see their own work first; on phones the cards are compact.
 * Roll-out: demo first (`git pull` + `demo.sh launch-update`), customers and the plant only after approval.
 
 ### Spare parts import (2026-11-03)
@@ -95,8 +98,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * A paused customer page and trial reminders on the server (tested with stand-ins only).
 * E-mail deliverability to corporate mail systems: messages are delivered but some (e.g. Proofpoint) hold mail from
   the new domain; reputation builds over weeks. Ask customers' IT to allow `plantpulse-cmms.com`.
-* Three e2e tests fail on a fresh local run with and without the design change (`pdm-points` bulk priorities,
-  `user-admin` edit user, `workflow` KPI "Not available"); they look data-dependent and need a look.
+* Two e2e tests fail on a fresh local run with and without the design change (`user-admin` edit user, `workflow` KPI
+  "Not available"; `pdm-points` bulk priorities sometimes too); they look data-dependent and need a look. The e2e run
+  needs raised per-IP rate limits because every test comes from one IP (now set in CI and docs/TESTING.md).
 * Customer restore on the server (scripted; drill pending). Real phones and QR scanning by customers.
 * The €93 card authorisation from the Oracle upgrade (2026-11-03) should be released by the bank; check it.
 

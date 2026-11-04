@@ -23,7 +23,7 @@ export const en = {
     changePassword: "Change password", currentPassword: "Current password", newPassword: "New password", repeatPassword: "Repeat new password",
     passwordRule: "At least 12 characters, 3 of: lowercase, uppercase, digit, symbol", passwordMismatch: "The two new passwords do not match",
     passwordChanged: "Password changed. Other devices have been signed out." },
-  dash: { myOpen: "My open work", open: "Open work orders", emergencies: "Open emergencies", overdue: "Overdue", awaitingApproval: "Awaiting approval",
+  dash: { attention: "Needs attention", mine: "Mine", all: "All", allClear: "Nothing open – all clear", viewAll: "View all", due: "Due", activity: "Work orders per week", opened: "Opened", completed: "Completed", last6: "Last 6 months", pmCompliance: "PM compliance", mtbf: "MTBF", mttr: "MTTR", availability: "Availability", myOpen: "My open work", open: "Open work orders", emergencies: "Open emergencies", overdue: "Overdue", awaitingApproval: "Awaiting approval",
     awaitingReview: "Awaiting review", newRequests: "New requests", pmApprovals: "PM approvals pending", lubeOverdue: "Overdue lubrication",
     critical: "Critical alerts", warnings: "Warning alerts", quick: "Quick actions" },
   status: { triage: "Triage", awaiting_approval: "Awaiting approval", approved: "Approved", planned: "Planned", scheduled: "Scheduled",

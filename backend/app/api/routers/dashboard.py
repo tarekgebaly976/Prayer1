@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -74,4 +76,36 @@ def summary(ctx: Ctx = Depends(get_ctx), db: Session = Depends(get_db, scope="fu
         ).all()
         d = {s.value: n for s, n in rows}
         out["open_alerts"] = {"critical": d.get(ConditionStatus.CRITICAL.value, 0), "warning": d.get(ConditionStatus.WARNING.value, 0)}
+    return out
+
+
+@router.get("/activity")
+def activity(
+    weeks: int = Query(8, ge=1, le=26),
+    ctx: Ctx = Depends(get_ctx),
+    db: Session = Depends(get_db, scope="function"),
+) -> list[dict]:
+    """Work orders opened and completed per week (Monday to Sunday, plant time), oldest first, for the dashboard chart."""
+    if not ctx.has("wo.view"):
+        return []
+    today = plant_today(ctx.plant)
+    first = today - timedelta(days=today.weekday() + 7 * (weeks - 1))
+    tz = ctx.plant.timezone
+
+    def per_week(col) -> dict:
+        wk = func.date_trunc("week", func.timezone(tz, col))
+        rows = db.execute(
+            select(wk, func.count())
+            .select_from(WorkOrder)
+            .where(WorkOrder.plant_id == ctx.plant_id, ctx.dept_where(WorkOrder.department_id), col.is_not(None))
+            .where(func.timezone(tz, col) >= first)
+            .group_by(wk)
+        ).all()
+        return {w.date(): n for w, n in rows}
+
+    opened, done = per_week(WorkOrder.created_at), per_week(WorkOrder.completed_at)
+    out = []
+    for i in range(weeks):
+        ws = first + timedelta(days=7 * i)
+        out.append({"week": ws.isoformat(), "opened": opened.get(ws, 0), "completed": done.get(ws, 0)})
     return out

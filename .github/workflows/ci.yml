@@ -93,6 +93,9 @@ jobs:
       CMMS_MIGRATION_DATABASE_URL: postgresql+psycopg://cmms_owner:dev_owner_pw@localhost:5432/cmms
       CMMS_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD || 'Demo-Passw0rd!2026' }}
       E2E_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD || 'Demo-Passw0rd!2026' }}
+      # All browser tests come from one IP (127.0.0.1): the per-IP limits for real users would cut the suite short.
+      CMMS_RATE_LIMIT_PER_MINUTE: "5000"
+      CMMS_LOGIN_RATE_LIMIT_PER_MINUTE: "1000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

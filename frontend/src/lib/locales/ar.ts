@@ -26,7 +26,7 @@ export const ar: Dict = {
     changePassword: "تغيير كلمة المرور", currentPassword: "كلمة المرور الحالية", newPassword: "كلمة المرور الجديدة", repeatPassword: "أعد كتابة كلمة المرور الجديدة",
     passwordRule: "12 حرفًا على الأقل، و3 مما يلي: حرف صغير، حرف كبير، رقم، رمز", passwordMismatch: "كلمتا المرور الجديدتان غير متطابقتين",
     passwordChanged: "تم تغيير كلمة المرور. تم تسجيل الخروج من الأجهزة الأخرى." },
-  dash: { myOpen: "أعمالي المفتوحة", open: "أوامر العمل المفتوحة", emergencies: "الأعطال الطارئة المفتوحة", overdue: "متأخرة", awaitingApproval: "بانتظار الاعتماد",
+  dash: { attention: "تحتاج متابعة", mine: "الخاصة بي", all: "الكل", allClear: "لا يوجد شيء مفتوح – كل شيء تمام", viewAll: "عرض الكل", due: "الاستحقاق", activity: "أوامر العمل أسبوعياً", opened: "فُتحت", completed: "اكتملت", last6: "آخر 6 أشهر", pmCompliance: "الالتزام بالصيانة الوقائية", mtbf: "MTBF", mttr: "MTTR", availability: "الجاهزية", myOpen: "أعمالي المفتوحة", open: "أوامر العمل المفتوحة", emergencies: "الأعطال الطارئة المفتوحة", overdue: "متأخرة", awaitingApproval: "بانتظار الاعتماد",
     awaitingReview: "بانتظار المراجعة", newRequests: "طلبات جديدة", pmApprovals: "اعتمادات الصيانة الوقائية المعلقة", lubeOverdue: "تزييت متأخر",
     critical: "تنبيهات حرجة", warnings: "تنبيهات تحذيرية", quick: "إجراءات سريعة" },
   status: { triage: "فرز", awaiting_approval: "بانتظار الاعتماد", approved: "معتمد", planned: "مخطط", scheduled: "مجدول",

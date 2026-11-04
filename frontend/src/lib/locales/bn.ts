@@ -27,7 +27,7 @@ export const bn: Dict = {
     changePassword: "পাসওয়ার্ড পরিবর্তন", currentPassword: "বর্তমান পাসওয়ার্ড", newPassword: "নতুন পাসওয়ার্ড", repeatPassword: "নতুন পাসওয়ার্ড আবার লিখুন",
     passwordRule: "কমপক্ষে ১২ অক্ষর, এর মধ্যে ৩ ধরনের: ছোট হাতের, বড় হাতের, সংখ্যা, চিহ্ন", passwordMismatch: "দুটি নতুন পাসওয়ার্ড মেলেনি",
     passwordChanged: "পাসওয়ার্ড পরিবর্তন হয়েছে। অন্যান্য ডিভাইস থেকে সাইন আউট করা হয়েছে।" },
-  dash: { myOpen: "আমার খোলা কাজ", open: "খোলা ওয়ার্ক অর্ডার", emergencies: "খোলা জরুরি কাজ", overdue: "মেয়াদোত্তীর্ণ", awaitingApproval: "অনুমোদনের অপেক্ষায়",
+  dash: { attention: "মনোযোগ প্রয়োজন", mine: "আমার", all: "সব", allClear: "কিছু খোলা নেই – সব ঠিক আছে", viewAll: "সব দেখুন", due: "নির্ধারিত তারিখ", activity: "সাপ্তাহিক ওয়ার্ক অর্ডার", opened: "খোলা হয়েছে", completed: "সম্পন্ন", last6: "গত ৬ মাস", pmCompliance: "PM সম্মতি", mtbf: "MTBF", mttr: "MTTR", availability: "প্রাপ্যতা", myOpen: "আমার খোলা কাজ", open: "খোলা ওয়ার্ক অর্ডার", emergencies: "খোলা জরুরি কাজ", overdue: "মেয়াদোত্তীর্ণ", awaitingApproval: "অনুমোদনের অপেক্ষায়",
     awaitingReview: "পর্যালোচনার অপেক্ষায়", newRequests: "নতুন অনুরোধ", pmApprovals: "PM অনুমোদন বাকি", lubeOverdue: "মেয়াদোত্তীর্ণ লুব্রিকেশন",
     critical: "গুরুতর সতর্কবার্তা", warnings: "সতর্কবার্তা", quick: "দ্রুত কাজ" },
   status: { triage: "যাচাই", awaiting_approval: "অনুমোদনের অপেক্ষায়", approved: "অনুমোদিত", planned: "পরিকল্পিত", scheduled: "নির্ধারিত",

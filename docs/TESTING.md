@@ -24,7 +24,7 @@ cd frontend && npm run lint && npm run typecheck && npm run build && npm audit -
 Needs the API seeded with demo data and the web app running:
 ```bash
 cd backend && CMMS_DEMO_PASSWORD='Demo-Passw0rd!2026' .venv/bin/python -m app.cli seed-demo
-.venv/bin/uvicorn app.main:app --port 8000 &
+.venv/bin/uvicorn app.main:app --port 8000 &   # with CMMS_RATE_LIMIT_PER_MINUTE=5000 CMMS_LOGIN_RATE_LIMIT_PER_MINUTE=1000 (all tests share one IP)
 cd ../frontend && npm run build && BACKEND_URL=http://127.0.0.1:8000 npx next start -p 3000 &
 npx playwright test                                   # E2E_PASSWORD overrides the demo password
 # against the HTTPS Compose stack:

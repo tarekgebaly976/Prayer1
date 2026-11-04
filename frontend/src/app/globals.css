@@ -31,3 +31,6 @@ body { background: var(--mantine-color-body); -webkit-font-smoothing: antialiase
 
 /* Sign-in page */
 .pp-login { min-height: 100vh; background: radial-gradient(1200px 600px at 85% -10%, #2f5a85 0%, transparent 60%), linear-gradient(160deg, #17324D 0%, #0b1d2e 100%); }
+.pp-row { display: block; padding: 10px 8px; border-radius: 8px; border-bottom: 1px solid var(--mantine-color-default-border); }
+.pp-row:hover { background: var(--pp-page-bg); }
+.pp-btn-white { border: 1px solid var(--mantine-color-default-border); }

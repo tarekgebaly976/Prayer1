@@ -149,3 +149,16 @@ def test_new_request_notifies_triagers(world):
     items = sup.get("/notifications").json()["items"]
     assert any(i["kind"] == "work_request" and i["severity"] == "critical" for i in items)
     assert sup.get("/dashboard/summary").json()["new_requests"] == 1
+
+
+def test_dashboard_activity_counts_opened_work_orders_per_week(world):
+    prod, sup = world.api("production"), world.api("mech_sup")
+    line = mk_asset(world.api("planner"), world, "PM1")
+    req = prod.ok("post", "/work-requests", {"asset_id": line["id"], "title": "Felt guide squeal"}, status=201)
+    sup.ok("post", f"/work-requests/{req['id']}/triage", {"accept": True, "type": "corrective", "priority": "P3"})
+    weeks = sup.get("/dashboard/activity").json()
+    assert len(weeks) == 8 and weeks[-1]["opened"] == 1 and weeks[-1]["completed"] == 0
+    assert sum(w["opened"] for w in weeks[:-1]) == 0
+    assert weeks[0]["week"] < weeks[-1]["week"]
+    assert len(sup.get("/dashboard/activity", params={"weeks": 4}).json()) == 4
+    assert sup.get("/dashboard/activity", params={"weeks": 99}).status_code == 422
