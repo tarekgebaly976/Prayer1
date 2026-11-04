@@ -26,7 +26,7 @@ function Transition({ wo, allowed }: { wo: WODetail["work_order"]; allowed: stri
   if (!allowed.length) return null;
   return (
     <>
-      <Group gap="xs" wrap="wrap">
+      <Group gap="xs" wrap="wrap" className="pp-actions" data-testid="wo-actions">
         {allowed.map((s) => (
           <Button key={s} size="sm" variant={s === "cancelled" ? "outline" : "filled"} color={s === "cancelled" ? "red" : undefined}
             onClick={() => setTo(s)} data-testid={`to-${s}`} className="tap-target">{t("wo.moveTo")}: {t(`status.${s}`)}</Button>

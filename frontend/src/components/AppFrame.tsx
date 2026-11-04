@@ -1,10 +1,10 @@
 "use client";
 
-import { ActionIcon, AppShell, Avatar, Badge, Burger, Button, Group, Indicator, Menu, Modal, NavLink, PasswordInput, ScrollArea, Select, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, AppShell, Avatar, Badge, Box, Burger, Button, Group, Indicator, Menu, Modal, NavLink, PasswordInput, ScrollArea, Select, Stack, Text, Tooltip } from "@mantine/core";
 import { useDisclosure, useNetwork } from "@mantine/hooks";
 import {
   IconAlertTriangle, IconBell, IconBox, IconCalendarTime, IconChartBar, IconClipboardList, IconDashboard, IconDroplet, IconHeartRateMonitor,
-  IconKey, IconLanguage, IconLogout, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
+  IconKey, IconLanguage, IconLogout, IconPlus, IconQrcode, IconSettings, IconSitemap, IconTool, IconToolsKitchen, IconUserCheck, IconWifi, IconWifiOff,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -152,9 +152,33 @@ export function AppFrame({ children }: { children: ReactNode }) {
           </Group>
         </AppShell.Section>
       </AppShell.Navbar>
-      <AppShell.Main className="pp-main">{children}</AppShell.Main>
+      <AppShell.Main className="pp-main pp-has-bottom-nav">{children}</AppShell.Main>
+      <BottomNav pathname={pathname} unread={notif.data?.unread ?? 0} myOpen={counts.data?.my_open_work ?? 0} />
       <ChangePassword opened={pwOpen} onClose={pw.close} />
     </AppShell>
+  );
+}
+
+/** Phones and tablets: the four things a technician does most, always one tap away; the full menu stays in the burger. */
+function BottomNav({ pathname, unread, myOpen }: { pathname: string; unread: number; myOpen: number }) {
+  const { t } = useTranslation();
+  const { can } = useSession();
+  const item = (href: string, label: string, Icon: typeof IconDashboard, n = 0) => (
+    <Link href={href} data-active={(href === "/" ? pathname === "/" : pathname.startsWith(href)) || undefined} aria-label={label}>
+      <Indicator disabled={!n} label={n} size={16} color="red" offset={2}><Icon size={24} stroke={1.7} /></Indicator>
+      <span style={{ maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </Link>
+  );
+  return (
+    <Box hiddenFrom="md" component="nav" className="pp-bottom-nav" data-testid="bottom-nav" aria-label="shortcuts">
+      {item("/", t("nav.dashboard"), IconDashboard)}
+      {can("wo.view") && item("/my-work", t("nav.myWork"), IconUserCheck, myOpen)}
+      {can("request.create") && (
+        <Link href="/requests?new=1" className="pp-fab" aria-label={t("req.new")}><span className="pp-fab-circle"><IconPlus size={28} stroke={2.2} /></span></Link>
+      )}
+      {can("asset.view") && item("/scan", t("nav.scan"), IconQrcode)}
+      {item("/notifications", t("nav.notifications"), IconBell, unread)}
+    </Box>
   );
 }
 

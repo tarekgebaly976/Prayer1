@@ -71,7 +71,7 @@ function List() {
         { key: "p", label: t("common.priority"), render: (w) => <StatusBadge value={w.priority} /> },
         { key: "s", label: t("common.status"), render: (w) => <StatusBadge value={w.status} /> },
         { key: "d", label: t("common.dueDate"), render: (w) => fmtDate(w.due_date) },
-        { key: "c", label: t("wo.actualCost"), render: (w) => fmtMoney(w.actual_cost, plant?.currency ?? "SAR") },
+        { key: "c", label: t("wo.actualCost"), hideOnMobile: true, render: (w) => fmtMoney(w.actual_cost, plant?.currency ?? "SAR") },
       ]} />
       <Pager page={data.data} setPage={(p) => setOffset((p - 1) * 50)} />
       <PlanImport kind="work_orders" title={t("planning.importWoTitle")} opened={imp} onClose={() => setImp(false)} help={t("planning.importWoHelp")} countLabel={t("planning.importWoCount")} />

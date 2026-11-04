@@ -73,6 +73,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * Dashboard (phase 2): "Needs attention" list (open work orders by priority, Mine / All, overdue dates in red),
   work orders opened vs completed per week (new `GET /dashboard/activity`), 6-month KPIs (PM compliance, MTBF, MTTR,
   availability). Technicians see their own work first; on phones the cards are compact.
+* Phones (phase 3): bottom bar (Dashboard, My work, big red "new request" button, Scan QR, Notifications with
+  counts); every table becomes one card per row (no sideways scrolling); work order actions stay pinned above the
+  bottom bar; My work cards show priority colour, asset, due date (red when overdue) and safety flag.
 * Roll-out: demo first (`git pull` + `demo.sh launch-update`), customers and the plant only after approval.
 
 ### Spare parts import (2026-11-03)

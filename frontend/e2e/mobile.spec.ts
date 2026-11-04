@@ -5,6 +5,12 @@ test("mobile shell, offline indicator and PWA assets", async ({ page, context })
   await login(page, "tech1");
   await expect(page.getByRole("button", { name: "menu" })).toBeVisible(); // burger on small screens
   await expect(page.getByTestId("net-status")).toBeVisible();
+  // bottom bar: the technician's shortcuts, one tap away
+  const bar = page.getByTestId("bottom-nav");
+  await expect(bar.getByRole("link", { name: "My work" })).toBeVisible();
+  await expect(bar.getByRole("link", { name: "New work request" })).toBeVisible();
+  await bar.getByRole("link", { name: "Scan QR" }).click();
+  await expect(page).toHaveURL(/\/scan/);
   await context.setOffline(true);
   await expect(page.getByTestId("net-status")).toHaveAttribute("data-variant", "light");
   await page.getByTestId("net-status").hover();
@@ -21,7 +27,8 @@ test("mobile shell, offline indicator and PWA assets", async ({ page, context })
 test("condition monitoring point opens full screen on a phone to record a reading", async ({ page }) => {
   await login(page, "reliability");
   await page.goto("/pdm");
-  await page.getByRole("cell", { name: "TMP-DR1-DS" }).click();
+  // tables are cards on a phone
+  await page.getByTestId("table-cards").getByText("TMP-DR1-DS", { exact: true }).click();
   const dlg = page.getByRole("dialog");
   await expect(dlg.getByTestId("reading-input")).toBeInViewport();
   await dlg.getByTestId("reading-input").fill("60");

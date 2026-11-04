@@ -1,7 +1,7 @@
 "use client";
 
 import { ActionIcon, Autocomplete, Badge, Button, Center, Checkbox, CloseButton, Group, Loader, Modal, MultiSelect, Pagination, Paper, ScrollArea, Select, Stack, Table, Text, Title, Tooltip, UnstyledButton, type BadgeProps } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
+import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { IconChevronDown, IconChevronRight, IconSitemap } from "@tabler/icons-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -62,6 +62,8 @@ export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKe
   selected?: string[]; onSelect?: (ids: string[]) => void;
 }) {
   const { t } = useTranslation();
+  // Phones: every row becomes a card (first column as its heading, the others as label / value), no sideways scrolling.
+  const phone = useMediaQuery("(max-width: 48em)");
   if (!rows) return <Loading />;
   if (rows.length === 0) return <Text c="dimmed" p="md">{empty ?? t("common.noData")}</Text>;
   const idOf = (r: T, i: number) => (rowKey ? rowKey(r, i) : ("id" in r && typeof r.id === "string" ? r.id : String(i)));
@@ -69,6 +71,32 @@ export function DataTable<T extends object>({ rows, columns, onRow, empty, rowKe
   const ids = rows.map(idOf);
   const all = ids.length > 0 && ids.every((x) => sel.has(x));
   const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); onSelect?.([...n]); };
+  if (phone) {
+    const [head, ...rest] = columns.filter((c) => !c.hideOnMobile);
+    return (
+      <Stack gap="xs" data-testid="table-cards">
+        {rows.map((r, i) => {
+          const id = idOf(r, i);
+          return (
+            <Paper key={id} withBorder p="sm" className={onRow ? "pp-card-row pp-clickable" : "pp-card-row"} onClick={onRow ? () => onRow(r) : undefined}>
+              <Group justify="space-between" wrap="nowrap" gap="xs" mb={rest.length ? 6 : 0}>
+                <Text fw={700} size="sm" style={{ minWidth: 0 }} component="div">{head ? keepTogether(head.render(r)) : null}</Text>
+                {onSelect && <Checkbox aria-label="select" checked={sel.has(id)} onChange={() => toggle(id)} onClick={(e) => e.stopPropagation()} />}
+              </Group>
+              <div className="pp-card-grid">
+                {rest.map((c) => (
+                  <div key={c.key} className={c.label ? undefined : "pp-card-wide"}>
+                    {c.label ? <Text size="xs" c="dimmed" lh={1.3}>{c.label}</Text> : null}
+                    <Text size="sm" component="div" lh={1.4}>{keepTogether(c.render(r))}</Text>
+                  </div>
+                ))}
+              </div>
+            </Paper>
+          );
+        })}
+      </Stack>
+    );
+  }
   return (
     <ScrollArea type="auto" className="pp-table">
       <Table striped highlightOnHover={!!onRow} verticalSpacing="sm" horizontalSpacing="md" miw={600} stripedColor="var(--pp-page-bg)">
