@@ -91,6 +91,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
   e-mail. Token stored only as a SHA-256 digest (migration 0016, table `password_resets`); link address from
   `CMMS_PUBLIC_URL`, never from the request. Off without e-mail, and always on the public demo ("ask your administrator").
 * Fixed with it: public pages (`/privacy`, reset pages) no longer bounce to the sign-in page when opened directly.
+* `CMMS_EMAIL_NOTIFICATIONS=false` keeps alerts and daily summaries in the app while reset e-mails still go out;
+  `scripts/main-mail.sh reset-only | all | off | status` sets the Obeikan system's mail from the website's Resend sender.
+  Obeikan: e-mail off until `main-mail.sh reset-only` is run (users use personal e-mail addresses).
 
 ### Spare parts import (2026-11-03)
 * Import button on the Inventory page (template, preview, errors.csv); optional warehouse / qty_on_hand / bin columns

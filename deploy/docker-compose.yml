@@ -16,6 +16,7 @@ x-api-env: &api-env
   CMMS_SMTP_USER: ${CMMS_SMTP_USER:-}
   CMMS_SMTP_PASSWORD: ${CMMS_SMTP_PASSWORD:-}
   CMMS_SMTP_FROM: ${CMMS_SMTP_FROM:-}
+  CMMS_EMAIL_NOTIFICATIONS: ${CMMS_EMAIL_NOTIFICATIONS:-true}  # false: only password-reset e-mails (scripts/main-mail.sh)
   CMMS_PUBLIC_URL: https://${CMMS_DOMAIN:-localhost}
 
 services:

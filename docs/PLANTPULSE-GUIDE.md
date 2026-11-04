@@ -161,6 +161,12 @@ The sign-in page has a **"Forgot password?"** link: the user types their e-mail 
   - customer: `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com`
   - Obeikan: `ssh -t ubuntu@84.8.106.22 "cd /opt/cmms && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api python -m app.cli reset-password --email user@company.com"`
 - Always off on the public demo (its accounts are shared by every visitor).
+- **E-mail on the Obeikan system** (same sender as the website, via Resend):
+  ```
+  ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/main-mail.sh reset-only
+  ```
+  `reset-only` = password links only (alerts and daily summaries stay in the app) · `all` = every e-mail (emergencies,
+  critical alerts, daily summary) · `off` = no e-mail · `status` = what it does now.
 - E-mail not arriving? The user's Junk / Quarantine, or its status at https://resend.com/emails .
 
 ---

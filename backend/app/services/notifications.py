@@ -76,7 +76,7 @@ def notify(
         )
         if res.first() is not None:
             created += 1
-            if email:
+            if email and settings.email_notifications:
                 user = db.get(User, uid)
                 if user:
                     db.add(

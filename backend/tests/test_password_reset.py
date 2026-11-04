@@ -114,3 +114,42 @@ def test_off_without_mail_link_address_or_on_the_demo(world, mail_on, monkeypatc
     email = world.users["tech"].email
     assert anon.post("/auth/forgot-password", {"email": email}).status_code == 204
     assert _mails(email) == []
+
+
+def test_reset_only_mail_keeps_alerts_in_the_app(world, mail_on, monkeypatch):
+    """CMMS_EMAIL_NOTIFICATIONS=false (scripts/main-mail.sh reset-only): alerts stay in the app, reset e-mails still go."""
+    from app.models.system import Notification
+    from app.services.notifications import notify
+
+    monkeypatch.setattr(mail_on, "email_notifications", False)
+    sup = world.users["mech_sup"]
+    with SessionLocal() as db, db.begin():
+        notify(
+            db,
+            world.plant.id,
+            [sup.id],
+            kind="emergency",
+            severity="critical",
+            title="Emergency breakdown WO-1",
+            dedupe_key="t1",
+            email=True,
+        )
+    with SessionLocal() as db:
+        assert db.execute(select(Notification).where(Notification.user_id == sup.id)).scalars().first() is not None  # in the app
+    assert _mails(sup.email) == []  # but no e-mail
+    _anon().post("/auth/forgot-password", {"email": sup.email})
+    assert [m.subject for m in _mails(sup.email)] == ["[PlantPulse] Reset your password"]
+
+    monkeypatch.setattr(mail_on, "email_notifications", True)  # "all": the same alert is e-mailed
+    with SessionLocal() as db, db.begin():
+        notify(
+            db,
+            world.plant.id,
+            [sup.id],
+            kind="emergency",
+            severity="critical",
+            title="Emergency breakdown WO-2",
+            dedupe_key="t2",
+            email=True,
+        )
+    assert any("WO-2" in m.subject for m in _mails(sup.email))

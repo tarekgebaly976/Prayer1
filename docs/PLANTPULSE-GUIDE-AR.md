@@ -144,6 +144,12 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh restore alsafi /o
   - عميل: `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com`
   - Obeikan: `ssh -t ubuntu@84.8.106.22 "cd /opt/cmms && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api python -m app.cli reset-password --email user@company.com"`
 - مقفول دائماً في الـ Demo (الحسابات مشتركة بين كل الزوار).
+- **تشغيل الإيميل على Obeikan** (نفس مُرسِل الموقع عبر Resend):
+  ```
+  ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/main-mail.sh reset-only
+  ```
+  `reset-only` = روابط كلمة السر فقط (التنبيهات والملخص اليومي تبقى داخل البرنامج) · `all` = كل الإيميلات
+  (طوارئ، تنبيهات حرجة، ملخص يومي) · `off` = إيقاف · `status` = الحالة الآن.
 - لم يصل الإيميل؟ Junk / Quarantine عند المستخدم، أو حالته في https://resend.com/emails .
 
 ---

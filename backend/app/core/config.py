@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_starttls: bool = True
+    # False: alerts and daily summaries stay inside the app (no e-mail); password-reset e-mails still go out.
+    email_notifications: bool = True
 
     scheduler_enabled: bool = True
     # Shown as a red banner on every page, e.g. "TEST copy": marks a test installation so nobody mistakes it for the real one.
