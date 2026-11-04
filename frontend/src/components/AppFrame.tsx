@@ -159,7 +159,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         </AppShell.Section>
       </AppShell.Navbar>
       <AppShell.Main className="pp-main pp-has-bottom-nav">{children}</AppShell.Main>
-      <BottomNav pathname={pathname} unread={notif.data?.unread ?? 0} myOpen={counts.data?.my_open_work ?? 0} />
+      {!opened && <BottomNav pathname={pathname} unread={notif.data?.unread ?? 0} myOpen={counts.data?.my_open_work ?? 0} />}
       <ChangePassword opened={pwOpen} onClose={pw.close} />
     </AppShell>
   );

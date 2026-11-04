@@ -45,7 +45,7 @@ body { background: var(--mantine-color-body); -webkit-font-smoothing: antialiase
 .pp-card-wide { grid-column: 1 / -1; }
 
 /* Phones: bottom navigation for the shop floor, room for it at the end of every page */
-.pp-bottom-nav { position: fixed; inset-inline: 0; bottom: 0; z-index: 200; height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+.pp-bottom-nav { position: fixed; inset-inline: 0; bottom: 0; z-index: 100; /* below dialogs (200), like the header */ height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--pp-surface); border-top: 1px solid var(--mantine-color-default-border); box-shadow: 0 -4px 16px rgba(23, 50, 77, .08); display: flex; align-items: stretch; }
 .pp-bottom-nav a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #5b6b7b; text-decoration: none; font-size: 11px; font-weight: 600; min-width: 0; }
 .pp-bottom-nav a[data-active] { color: var(--pp-strong); }
@@ -57,7 +57,7 @@ body { background: var(--mantine-color-body); -webkit-font-smoothing: antialiase
   .pp-main.pp-has-bottom-nav { padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
   body:has(.pp-bottom-nav) [data-testid="instance-banner"] { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
   /* Work order actions stay at hand above the bottom bar */
-  .pp-actions { position: fixed; inset-inline: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 150; background: var(--pp-actions-bg); backdrop-filter: blur(6px);
+  .pp-actions { position: fixed; inset-inline: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 99; background: var(--pp-actions-bg); backdrop-filter: blur(6px);
     padding: 8px var(--mantine-spacing-md); border-top: 1px solid var(--mantine-color-default-border); box-shadow: 0 -4px 12px rgba(23, 50, 77, .06); max-height: 40vh; overflow-y: auto; }
   body:has(.pp-actions) .pp-main.pp-has-bottom-nav { padding-bottom: calc(190px + env(safe-area-inset-bottom)) !important; }
   body:has(.pp-actions) [data-testid="instance-banner"] { display: none; }

@@ -37,6 +37,9 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * E-mail from `PlantPulse <noreply@plantpulse-cmms.com>` via Resend (domain verified: SPF, DKIM, DMARC); replies go
   to `plantpulse.cmms@gmail.com`.
 
+* 2026-11-04: the 11 phone screenshots show the new app look (`site/public/img/v4/`), made with
+  `scripts/site-screenshots.js` from a local copy with the demo's sample plant (rerun it after the next design change).
+
 ### Product: public demo
 * Own database and images, blue **DEMO** label, no e-mail from the app, reset every night.
 * A living sample plant – a **general manufacturing plant** (production line with mixer, hydraulic press, drying oven
