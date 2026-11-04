@@ -133,6 +133,21 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh restore alsafi /o
 
 ---
 
+## نسيت كلمة السر (للمستخدمين)
+
+في صفحة الدخول رابط **"نسيت كلمة السر؟"**: المستخدم يكتب إيميله ← يصله رابط يعمل **مرة واحدة ولمدة 30 دقيقة** ←
+يختار كلمة سر جديدة. بعدها يُسجَّل خروجه من كل الأجهزة، ويُفك أي قفل على الحساب، ويصله إيميل "تم تغيير كلمة السر".
+
+- الرد دائماً واحد سواء كان الإيميل مسجلاً أم لا (لا أحد يعرف من عنده حساب)، وأقصى 3 روابط لكل حساب في الساعة.
+- يعمل فقط إذا كان الإيميل مفعّلاً في النظام. إذا ظهرت للمستخدم رسالة **"اطلب من مسؤول النظام"** فالإيميل مقفول:
+  الـ admin يغيّر كلمة السر من **Admin ← Users ← Edit ← Reset password**، أو أنت من Cloud Shell:
+  - عميل: `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com`
+  - Obeikan: `ssh -t ubuntu@84.8.106.22 "cd /opt/cmms && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api python -m app.cli reset-password --email user@company.com"`
+- مقفول دائماً في الـ Demo (الحسابات مشتركة بين كل الزوار).
+- لم يصل الإيميل؟ Junk / Quarantine عند المستخدم، أو حالته في https://resend.com/emails .
+
+---
+
 ## 4. التحديثات (نسخة جديدة من البرنامج)
 
 الترتيب الآمن دائماً: **جرّب أولاً ← ثم العملاء ← ثم Obeikan**.

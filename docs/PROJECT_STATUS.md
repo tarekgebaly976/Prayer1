@@ -85,6 +85,13 @@ departments kept). The data from before the wipe is **kept permanently** in `/op
 * **Live everywhere since 2026-11-04** (version `8c8bb6a`): public demo, plant test copy and the real plant CMMS
   (`install-server.sh`); no customers yet, new ones are created from this version. No database change in this update.
 
+### Forgot password (2026-11-04)
+* "Forgot password?" on the sign-in page: e-mailed link, single use, 30 minutes, at most 3 per account and hour, same
+  answer for any address, new link cancels the old one; afterwards signed out everywhere, lock-out lifted, confirmation
+  e-mail. Token stored only as a SHA-256 digest (migration 0016, table `password_resets`); link address from
+  `CMMS_PUBLIC_URL`, never from the request. Off without e-mail, and always on the public demo ("ask your administrator").
+* Fixed with it: public pages (`/privacy`, reset pages) no longer bounce to the sign-in page when opened directly.
+
 ### Spare parts import (2026-11-03)
 * Import button on the Inventory page (template, preview, errors.csv); optional warehouse / qty_on_hand / bin columns
   are booked as opening stock.

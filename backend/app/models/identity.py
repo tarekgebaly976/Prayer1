@@ -124,6 +124,19 @@ class LoginAttempt(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class PasswordReset(Base):
+    """A "forgot password" link: single use, short-lived, stored only as a SHA-256 digest of the token in the link."""
+
+    __tablename__ = "password_resets"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = fk("users.id", ondelete="CASCADE", index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ip: Mapped[str | None] = mapped_column(String(64))
+
+
 class Skill(Base):
     __tablename__ = "user_skills"
     __table_args__ = (UniqueConstraint("user_id", "skill"),)

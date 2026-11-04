@@ -43,3 +43,23 @@ test("change password rejects a wrong current password", async ({ page }) => {
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(/current password is incorrect/i)).toBeVisible();
 });
+
+test("public pages open without signing in; forgot password says to ask the administrator when e-mail is off", async ({ page }) => {
+  await page.goto("/privacy"); // linked from the store listing: must not bounce to the sign-in page
+  await expect(page.getByRole("heading", { name: /Privacy policy/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/privacy$/);
+
+  await page.goto("/login");
+  await page.getByTestId("forgot-link").click();
+  await expect(page).toHaveURL(/\/forgot-password$/);
+  // The test API has no mail server: no self-service reset, the page sends people to their administrator.
+  await expect(page.getByTestId("reset-unavailable")).toBeVisible();
+
+  await page.goto("/reset-password?token=not-a-real-token-but-long-enough&lang=ar");
+  await expect(page).toHaveURL(/\/reset-password/);
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl"); // the link's language
+  await page.getByLabel(/كلمة المرور الجديدة/).first().fill("Another-Passw0rd!");
+  await page.getByLabel(/أعد كتابة/).fill("Another-Passw0rd!");
+  await page.getByRole("button", { name: "حفظ كلمة السر الجديدة" }).click();
+  await expect(page.getByTestId("reset-bad-link")).toBeVisible();
+});

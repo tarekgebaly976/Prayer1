@@ -148,6 +148,23 @@ ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh restore alsafi /o
 
 ---
 
+## Forgot password (for users)
+
+The sign-in page has a **"Forgot password?"** link: the user types their e-mail → gets a link that works **once, for
+30 minutes** → chooses a new password. They are then signed out on every device, any lock-out is lifted, and a
+"password was changed" e-mail is sent.
+
+- The answer is always the same whether or not the address has an account (nobody can find out who has one); at most
+  3 links per account per hour.
+- Works only where the system can send e-mail. If the user sees **"ask your administrator"**, e-mail is off there:
+  the administrator sets a password in **Admin → Users → Edit → Reset password**, or you from Cloud Shell:
+  - customer: `ssh ubuntu@84.8.106.22 sudo bash /opt/cmms/scripts/customer.sh reset-password alsafi user@alsafi.com`
+  - Obeikan: `ssh -t ubuntu@84.8.106.22 "cd /opt/cmms && sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api python -m app.cli reset-password --email user@company.com"`
+- Always off on the public demo (its accounts are shared by every visitor).
+- E-mail not arriving? The user's Junk / Quarantine, or its status at https://resend.com/emails .
+
+---
+
 ## 5. Updates (a new version of the software)
 
 Always in this safe order: **test first → then customers → then Obeikan**.

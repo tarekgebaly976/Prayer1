@@ -88,7 +88,9 @@ def create_app() -> FastAPI:
         ip = request.client.host if request.client else "?"
         path = request.url.path
         if path.startswith(API) and not path.startswith(f"{API}/health"):
-            lim = login_limiter if path == f"{API}/auth/login" else limiter
+            # Sign-in and the "forgot password" pair share the strict per-IP limit.
+            strict = path in (f"{API}/auth/login", f"{API}/auth/forgot-password", f"{API}/auth/reset-password")
+            lim = login_limiter if strict else limiter
             if not lim.allow(ip):
                 return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429, headers={"Retry-After": "60"})
         start = time.perf_counter()
@@ -141,7 +143,8 @@ def create_app() -> FastAPI:
     @app.get(f"{API}/meta", tags=["health"])
     def meta() -> dict:
         """Public facts the sign-in page needs before anyone is logged in."""
-        return {"instance_label": get_settings().instance_label}
+        s = get_settings()
+        return {"instance_label": s.instance_label, "password_reset": s.password_reset_enabled}
 
     @app.get(f"{API}/health/ready", tags=["health"])
     def ready() -> JSONResponse:

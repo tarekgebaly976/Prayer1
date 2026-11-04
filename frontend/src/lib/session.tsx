@@ -20,6 +20,8 @@ interface SessionValue {
 
 const Ctx = createContext<SessionValue | null>(null);
 const PLANT_KEY = "cmms.plant"; // UI preference only (an id, not a credential)
+/** Reachable without signing in: never sent to the sign-in page. */
+export const PUBLIC_PATHS = ["/login", "/privacy", "/forgot-password", "/reset-password"];
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -41,7 +43,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setApiContext({ onUnauthorized: () => { setMe(null); router.replace("/login"); } });
+    // Pages for people who are not signed in stay where they are (an e-mailed reset link, the privacy policy …).
+    const isPublic = () => PUBLIC_PATHS.some((p) => window.location.pathname === p || window.location.pathname.startsWith(`${p}/`));
+    setApiContext({ onUnauthorized: () => { setMe(null); if (!isPublic()) router.replace("/login"); } });
     get<Me>("/auth/me").then(adopt).catch(() => setMe(null)).finally(() => setLoading(false));
   }, [adopt, router]);
 

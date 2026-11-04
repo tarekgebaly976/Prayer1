@@ -1,6 +1,7 @@
 "use client";
 
-import { Alert, Button, Center, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Button, Center, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,6 +49,7 @@ export default function LoginPage() {
             {error && <Alert color="red" data-testid="login-error">{error}</Alert>}
             <TextInput label={t("auth.email")} type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.currentTarget.value)} name="email" />
             <PasswordInput label={t("auth.password")} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.currentTarget.value)} name="password" />
+            <Anchor component={Link} href="/forgot-password" size="sm" mt={-8} ta="end" data-testid="forgot-link">{t("auth.forgot")}</Anchor>
             <Button type="submit" loading={busy} fullWidth className="tap-target">{t("auth.submit")}</Button>
             <Text size="xs" c="dimmed">{t("auth.sessionNote")}</Text>
             <Text size="xs" ta="center"><a href="/privacy" style={{ color: "inherit" }}>Privacy policy / سياسة الخصوصية</a></Text>

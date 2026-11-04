@@ -130,6 +130,6 @@ def test_meta_is_public_and_carries_the_instance_label(world, monkeypatch):
     from app.core.config import get_settings
 
     anon = make_client()
-    assert anon.get("/api/v1/meta").json() == {"instance_label": ""}
+    assert anon.get("/api/v1/meta").json() == {"instance_label": "", "password_reset": False}  # no mail server in tests
     monkeypatch.setattr(get_settings(), "instance_label", "TEST")
-    assert anon.get("/api/v1/meta").json() == {"instance_label": "TEST"}
+    assert anon.get("/api/v1/meta").json() == {"instance_label": "TEST", "password_reset": False}

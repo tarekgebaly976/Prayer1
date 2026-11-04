@@ -20,6 +20,7 @@ from app.core.security import (
 from app.models.identity import LoginAttempt, Membership, User, UserSession
 from app.models.tenancy import Plant
 from app.schemas.common import In
+from app.services import password_reset as pwreset
 from app.services.common import audit, role_permissions, utcnow
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -228,3 +229,28 @@ def set_locale(body: LocaleIn, p: Principal = Depends(get_principal)) -> None:
     if body.locale not in LOCALES:
         raise HTTPException(422, "Unsupported locale")
     p.user.locale = body.locale
+
+
+class ForgotIn(In):
+    email: str = Field(min_length=3, max_length=254)
+
+
+@router.post("/forgot-password", status_code=204)
+def forgot_password(body: ForgotIn, request: Request, db: Session = Depends(get_db, scope="function")) -> None:
+    """Always 204: the answer never tells whether the address has an account. The e-mail goes out by the outbox."""
+    pwreset.request_reset(db, body.email, client_ip(request))
+
+
+class ResetIn(In):
+    token: str = Field(min_length=20, max_length=200)
+    new_password: str = Field(min_length=1, max_length=1024)
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password(body: ResetIn, request: Request, db: Session = Depends(get_db, scope="function")) -> None:
+    try:
+        pwreset.complete_reset(db, body.token, body.new_password, client_ip(request))
+    except pwreset.InvalidLink as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This link is invalid, already used or expired. Ask for a new one.") from e
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
