@@ -45,6 +45,34 @@ GHSA-p3m5-59mp-jv5r). The image-optimisation endpoint is additionally disabled (
 * Secrets (Resend API key, Object Storage pre-authenticated URL, database passwords) stay on the server; never in
   documents, chats or screenshots.
 
+## Server network security (Oracle Cloud) – checked 2026-11-04
+Checked by the owner on the live server (Oracle console + Cloud Shell, read-only). Nothing was changed.
+
+**Oracle Security List** (`Default Security List for vcn-20261025-1650`, VCN `10.0.0.0/16`), ingress rules:
+
+| Port / protocol | Source | Purpose |
+|---|---|---|
+| TCP 22 | 0.0.0.0/0 | SSH (administration from Cloud Shell, whose address changes) |
+| TCP 80 | 0.0.0.0/0 | HTTP, redirected to HTTPS by Caddy |
+| TCP 443 | 0.0.0.0/0 | HTTPS (plant CMMS, website, demo, customers) |
+| ICMP | 0.0.0.0/0 | Oracle default (network error messages) |
+| ICMP (2 rules) | 10.0.0.0/16 | Oracle default, inside the VCN only |
+
+No Network Security Groups are used. No other port is open.
+
+**On the server:**
+* SSH: `passwordauthentication no` (key only), `permitrootlogin without-password` (root never by password; Oracle's
+  Ubuntu image directs root to the `ubuntu` user).
+* Host firewall (iptables): `deploy/install-server.sh` opens TCP 80/443 on top of the Oracle image rules (SSH only)
+  and saves them with `iptables-persistent`. The live rule list was not captured in this check.
+* Listening ports: 22 (SSH), 80/443 (Caddy), 53 on `127.0.0.54` only (local DNS), 111 (`rpcbind`, an OS service).
+  Port 111 is **not reachable from the internet** (not in the Security List).
+* PostgreSQL publishes no port; only Caddy publishes 80/443 (`deploy/docker-compose.yml`).
+* Cloudflare is **DNS only** (no proxy / WAF in front of the server).
+
+Optional hardening (not urgent): `PermitRootLogin no`; stop `rpcbind` (port 111) if nothing uses it; Cloudflare
+proxy/WAF if traffic grows. Re-check this section after any change to the Security List or the installer.
+
 ## Known security limitations / follow-ups
 1. CSP allows `'unsafe-inline'` scripts (Next.js bootstrap). Follow-up: nonce-based CSP via middleware.
 2. No SSO/MFA yet. For production, front the app with the corporate IdP (OIDC) or add TOTP MFA for admin roles.
