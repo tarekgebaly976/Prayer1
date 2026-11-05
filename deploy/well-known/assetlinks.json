@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.plantpulse.app",
+      "sha256_cert_fingerprints": [
+        "12:44:CB:C0:8A:87:35:05:81:B1:5C:AD:96:94:D6:17:58:02:3C:24:38:FD:F3:12:57:AA:D6:52:A1:5E:31:B4"
+      ]
+    }
+  }
+]
